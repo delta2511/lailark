@@ -1,0 +1,62 @@
+{
+  "hosting": {
+    "public": "lailark-site",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "**/.DS_Store"
+    ],
+    "cleanUrls": true,
+    "trailingSlash": false,
+    "redirects": [
+      {
+        "source": "/batch/1",
+        "destination": "/batch/001",
+        "type": 301
+      },
+      {
+        "source": "/batch/01",
+        "destination": "/batch/001",
+        "type": 301
+      },
+      {
+        "source": "/batch",
+        "destination": "/",
+        "type": 302
+      }
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(jpg|jpeg|png|svg|ico|mp4)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=2592000, immutable"
+          }
+        ]
+      }
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

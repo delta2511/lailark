@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lailark-site",
+      "runtimeExecutable": "firebase",
+      "runtimeArgs": ["emulators:start", "--only", "hosting", "--project", "lailark"],
+      "port": 5002
+    }
+  ]
+}

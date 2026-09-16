@@ -1,0 +1,48 @@
+rules_version = '2';
+
+// Lailark Kitchen — Firestore security rules.
+//
+// Default posture is deny. Anything not named here is unreachable from the
+// public internet. The Firebase console and the Admin SDK bypass these rules,
+// so Sumayya can always read everything from the console.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── notify ────────────────────────────────────────────────────────────
+    // The "tell me when a batch opens" list. WRITE-ONLY from the public:
+    // anyone may add themselves, nobody may read the list back. It holds
+    // phone numbers, so a public read would be a scrapeable contact dump.
+    //
+    // The field allowlist and the size caps are what bound abuse: no
+    // arbitrary documents, no large payloads, no edits or deletes after
+    // the fact.
+    match /notify/{doc} {
+      allow read, update, delete: if false;
+
+      allow create: if request.resource.data.keys().hasOnly(['contact', 'source', 'createdAt'])
+                    && request.resource.data.contact is string
+                    && request.resource.data.contact.size() >= 6
+                    && request.resource.data.contact.size() <= 120
+                    && request.resource.data.source is string
+                    && request.resource.data.source in ['index', 'batch-001']
+                    && request.resource.data.createdAt is timestamp;
+    }
+
+    // ── config ────────────────────────────────────────────────────────────
+    // Public, read-only switches the site reads at page load. Only the one
+    // named document is exposed, and writes are console-only (the Admin SDK
+    // bypasses these rules), so nothing on the public internet can flip a
+    // switch. Currently holds: notifyCtaVisible (bool) — shows/hides the
+    // "tell me when a batch opens" WhatsApp link on the homepage.
+    match /config/site {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── everything else ───────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
