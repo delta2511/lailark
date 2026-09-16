@@ -167,3 +167,36 @@ break.
   (`shared: "0.0.0"`). The site's money entry point is `site/lib/money.js` over
   `formatINR`, tested with `node --test` (`site/tests-unit/`), not yet used by a page
   until M3. Status: open.
+- A30 (M1.6, 16 Sep): the Auth emulator (firebase-tools 15.30) ignores fixed test phone
+  codes and issues a random OTP every time, so "OTP 123456" in CLAUDE.md §8 holds only
+  inside Playwright, where `admin/tests/emulator.ts` swaps in the code the emulator
+  issued. By hand against the emulator, read the code in the Emulator UI Auth tab
+  (http://127.0.0.1:4000/auth) or the emulator log. Real projects need test phone
+  numbers configured in the Firebase console if Shefin wants a fixed OTP on staging.
+  Status: open.
+- A31 (M1.6, 16 Sep): an unknown number is refused inside the admin after Firebase Auth
+  signs it in (Auth creates a user for any number; the app sees no `role` claim, shows
+  "This number is not on the Lailark admin list. If it should be, ask Shefin." and signs
+  out). Blocking sign-in before the account exists needs Identity Platform, which is
+  paid, so it is not used. Rules deny everything to a token without a role (M1.8).
+  Status: open.
+- A32 (M1.6, 16 Sep): `setRole` authorises on the caller's `role` custom claim alone
+  (an Owner claim with no `users` doc still works), refuses to demote the last Owner,
+  merges rather than replaces custom claims, and revokes refresh tokens on every role
+  change. `onCall` verifies tokens without a revocation check, so a demoted Owner's
+  already-issued token keeps power for up to an hour; App Check and stricter checks are
+  M5.9. `name` is capped at 80 characters and stored as typed. `active: true` is always
+  written; deactivating a user is left to the Settings users screen (M5.8). Status: open.
+- A33 (M1.6, 16 Sep): the admin Playwright run builds an emulator-pointed bundle into
+  `admin/dist-test` (gitignored) so `admin/dist` is always the deployable build, starts
+  only the auth and firestore emulators, and seeds the two users in its global setup.
+  PWA icons are rasterised from `site/public/assets/lark.svg` by Playwright's Chromium
+  (`admin/scripts/make-icons.mjs`), ink on paper, no image dependency. Status: open.
+- A34 (M1.6, 16 Sep): the production Firebase web config (public by design) is committed
+  in `admin/src/firebase-config.ts`; the storage bucket is `lailark.firebasestorage.app`.
+  The staging config is a `TODO(Q2)` placeholder. `VITE_FIREBASE_PROJECT` picks the
+  project at build time. Status: open.
+- A35 (M1.6, 16 Sep): `firestore.rules` gained a self-read rule on `users/{uid}` so the
+  signed-in screen can show a name; M1.8 replaces it with the full matrix. The admin
+  bundle is one 636 kB chunk (190 kB gzipped), nearly all Firebase SDK; M1.7 may split
+  Firestore off the sign-in path. Status: open.

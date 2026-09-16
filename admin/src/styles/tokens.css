@@ -1,0 +1,21 @@
+/*
+ * Lailark design tokens. Sales flow doc section 10.
+ *
+ * Hard rule: Rust is a number colour, never a button or a heading. Leaf only
+ * ever touches a claim. M1.7 grows this into the full token set; M1.6 needs
+ * the six colours and the three font stacks.
+ */
+:root {
+  --ink: #17150f;
+  --paper: #faf8f4;
+  --rust: #a34a28;
+  --leaf: #2f5d3a;
+  --grey: #6e665a;
+  --hairline: #e4ddd0;
+
+  --font-heading: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --tap: 48px;
+}

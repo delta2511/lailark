@@ -40,6 +40,17 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── users ─────────────────────────────────────────────────────────────
+    // A signed-in admin may read their own users document, and only their own,
+    // so the app can show their name next to the role. Nothing on the client
+    // may write it: roles are set by the `setRole` callable through the Admin
+    // SDK, which bypasses these rules. M1.8 replaces this with the full role
+    // matrix (brief section 17.12).
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
     // ── everything else ───────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;

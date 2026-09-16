@@ -1,0 +1,129 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+}
+
+.screen {
+  max-width: 26rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.wordmark {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  margin: 1rem 0 0;
+}
+
+.lede {
+  color: var(--grey);
+  margin: 0;
+}
+
+label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--grey);
+  margin-bottom: 0.4rem;
+}
+
+input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.7rem 0.85rem;
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+}
+
+input:focus {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+button {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.75rem 1rem;
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  color: var(--paper);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+button[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.quiet {
+  color: var(--ink);
+  background: transparent;
+  border-color: var(--hairline);
+}
+
+.notice {
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--ink);
+  padding: 0.85rem 1rem;
+  border-radius: 6px;
+}
+
+.notice p {
+  margin: 0;
+}
+
+.error {
+  color: var(--ink);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.who {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+.role {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.85rem;
+  color: var(--grey);
+}
+
+.hairline {
+  height: 1px;
+  background: var(--hairline);
+  border: 0;
+  margin: 0.5rem 0;
+}
+
+.spacer {
+  flex: 1;
+}
