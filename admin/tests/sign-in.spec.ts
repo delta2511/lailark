@@ -31,7 +31,9 @@ async function signIn(page: Page, phone: string): Promise<void> {
  */
 const EMULATOR_GAP = "/v2/recaptchaConfig";
 
-test("the Owner number signs in and sees Owner", async ({ page }) => {
+test("the Owner number signs in and lands on Today, with Owner in Settings", async ({
+  page,
+}) => {
   const crashes: string[] = [];
   const failed: string[] = [];
   page.on("pageerror", (error) => crashes.push(error.message));
@@ -43,17 +45,26 @@ test("the Owner number signs in and sees Owner", async ({ page }) => {
 
   await signIn(page, OWNER_PHONE);
 
-  await expect(page.getByTestId("signed-in")).toHaveText("Signed in as Shefin");
+  await expect(page.getByTestId("screen-today")).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/");
+
+  await page.getByTestId("tab-more").click();
+  await page.getByTestId("more-row-settings").click();
+
+  await expect(page.getByTestId("signed-in")).toHaveText("Shefin");
   await expect(page.getByTestId("role")).toHaveText("Owner");
-  await expect(page.getByText("+91 77361 10087")).toBeVisible();
+  await expect(page.getByTestId("phone")).toHaveText("+91 77361 10087");
+
   expect(crashes, `uncaught errors: ${crashes.join(" | ")}`).toEqual([]);
   expect(failed, `failed requests: ${failed.join(" | ")}`).toEqual([]);
 });
 
-test("the Kitchen number signs in and sees Kitchen", async ({ page }) => {
+test("the Kitchen number signs in and sees Kitchen in Settings", async ({ page }) => {
   await signIn(page, KITCHEN_PHONE);
+  await expect(page.getByTestId("screen-today")).toBeVisible();
 
-  await expect(page.getByTestId("signed-in")).toHaveText("Signed in as Sumayya");
+  await page.goto("/more/settings");
+  await expect(page.getByTestId("signed-in")).toHaveText("Sumayya");
   await expect(page.getByTestId("role")).toHaveText("Kitchen");
 });
 
@@ -63,24 +74,23 @@ test("a number that is not on the list is refused, kindly, and ends signed out",
   await signIn(page, STRANGER_PHONE);
 
   await expect(page.getByTestId("denied")).toHaveText(COPY.notAllowed);
-  await expect(page.getByTestId("role")).toHaveCount(0);
+  await expect(page.getByTestId("app-shell")).toHaveCount(0);
   await expect(page.getByLabel(COPY.phoneLabel)).toBeVisible();
 
   // Signed out for real, not just hidden: nothing is left in the SDK's store.
   const reloaded = await page.reload();
   expect(reloaded?.ok()).toBe(true);
   await expect(page.getByLabel(COPY.phoneLabel)).toBeVisible();
-  await expect(page.getByTestId("role")).toHaveCount(0);
+  await expect(page.getByTestId("app-shell")).toHaveCount(0);
 });
 
 test("the session survives a reload (ST4: sessions persist)", async ({ page }) => {
   await signIn(page, OWNER_PHONE);
-  await expect(page.getByTestId("role")).toHaveText("Owner");
+  await expect(page.getByTestId("screen-today")).toBeVisible();
 
   await page.reload();
 
-  await expect(page.getByTestId("signed-in")).toHaveText("Signed in as Shefin");
-  await expect(page.getByTestId("role")).toHaveText("Owner");
+  await expect(page.getByTestId("screen-today")).toBeVisible();
   await expect(page.getByLabel(COPY.phoneLabel)).toHaveCount(0);
 });
 
@@ -93,8 +103,12 @@ test("a non Indian number is turned away before any code is sent", async ({ page
   await expect(page.getByLabel(COPY.codeLabel)).toHaveCount(0);
 });
 
-test("the sign out button ends the session", async ({ page }) => {
+test("the sign out button in Settings ends the session", async ({ page }) => {
   await signIn(page, KITCHEN_PHONE);
+  await expect(page.getByTestId("screen-today")).toBeVisible();
+
+  await page.getByTestId("tab-more").click();
+  await page.getByTestId("more-row-settings").click();
   await expect(page.getByTestId("role")).toHaveText("Kitchen");
 
   await page.getByRole("button", { name: COPY.signOut }).click();

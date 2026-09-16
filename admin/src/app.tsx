@@ -1,4 +1,3 @@
-import type { Role } from "@lailark/shared";
 import {
   RecaptchaVerifier,
   onAuthStateChanged,
@@ -10,18 +9,13 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 
-import { COPY, roleLabel } from "./copy";
+import { COPY } from "./copy";
 import { auth, db } from "./firebase";
 import { cleanOtp, formatIndianMobile, parseIndianMobile } from "./phone";
-import { roleFromClaims } from "./session";
+import { roleFromClaims, type Session } from "./session";
+import { Shell } from "./shell/Shell";
 
 type Step = "loading" | "phone" | "otp" | "signedIn";
-
-interface Session {
-  readonly name: string;
-  readonly role: Role;
-  readonly phone: string;
-}
 
 const RECAPTCHA_ID = "recaptcha";
 
@@ -179,24 +173,7 @@ export function App() {
   }
 
   if (step === "signedIn" && session) {
-    return (
-      <main class="screen">
-        <h1 class="wordmark">{COPY.signInTitle}</h1>
-        <hr class="hairline" />
-        <p class="who" data-testid="signed-in">
-          Signed in as {session.name}
-        </p>
-        <p class="role" data-testid="role">
-          {roleLabel(session.role)}
-        </p>
-        <p class="lede">{session.phone}</p>
-        <div class="spacer" />
-        <button class="quiet" type="button" onClick={() => void leave()}>
-          {COPY.signOut}
-        </button>
-        <div id={RECAPTCHA_ID} />
-      </main>
-    );
+    return <Shell session={session} onSignOut={() => void leave()} />;
   }
 
   return (

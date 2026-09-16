@@ -6,6 +6,13 @@
  */
 import { ROLES, type Role } from "@lailark/shared";
 
+/** The signed-in admin user, as the shell and its screens need it. */
+export interface Session {
+  readonly name: string;
+  readonly role: Role;
+  readonly phone: string;
+}
+
 /** The claim, if it is one of the three roles. Anything else is not admin. */
 export function roleFromClaims(claims: unknown): Role | null {
   if (typeof claims !== "object" || claims === null) return null;

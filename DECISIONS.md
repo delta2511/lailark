@@ -208,3 +208,15 @@ break.
   because the CLI matcher only does basename matching; `lib/` and `vendor/` upload,
   `.secret.local` never does. No lockfile inside `functions/`, so Cloud Build runs
   `npm install`. Status: open.
+- A37 (M1.7, 16 Sep): the admin has one look, paper ground and ink type, with
+  `color-scheme: light`; no dark mode (the site honours `prefers-color-scheme`, the
+  admin is a tool used in kitchen light). Status: open.
+- A38 (M1.7, 16 Sep): the offline pill answers "can this device reach the network"
+  from the browser's `online`/`offline` events, not from Firestore metadata; Firestore's
+  persistent cache stays on. Money under More is hidden for Kitchen and a Kitchen deep
+  link to `/more/money` lands on `/more`. Unknown admin paths render Today (closed set
+  of screens, no 404 page). The router is the admin's own over the History API.
+  Status: open.
+- A39 (M1.7, 16 Sep): admin empty-state and More-row wording is the builder's (admin
+  wording may be assumed); the Firebase SDK is split into its own chunk (616 kB, 181 kB
+  gzipped) so the shell code (27 kB) is cached separately. Status: open.

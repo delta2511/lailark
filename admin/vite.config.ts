@@ -50,6 +50,18 @@ export default defineConfig({
     outDir: "dist",
     assetsDir: "assets",
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Firebase is most of the bundle (A35) and does not change with the
+        // shell; its own chunk lets a browser cache it across shell updates.
+        manualChunks(id: string): string | undefined {
+          if (id.includes("node_modules/firebase") || id.includes("node_modules/@firebase")) {
+            return "firebase";
+          }
+          return undefined;
+        },
+      },
+    },
   },
   server: {
     port: 5175,
