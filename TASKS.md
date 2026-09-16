@@ -76,7 +76,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       temp copy of the packaged `functions/` installs with `npm ci --omit=dev` and loads
       `lib/index.js`; `firebase deploy --only functions --project staging` succeeds once
       staging exists (Q1, Q2), else recorded as skipped.
-- [ ] M1.7 [sonnet] Admin shell. Bottom bar Today, Sell, Batches, Orders, More (brief
+- [x] M1.7 [sonnet] Admin shell. (70afdcf; installability proven locally, staging URL pending Q2) Bottom bar Today, Sell, Batches, Orders, More (brief
       §17.1). Empty states for each, "More" lists Concerns, Products, Customers, Agent,
       Money, Settings. Design tokens from Flow §10 as CSS variables. Large tap targets.
       Offline-ready: Firestore persistence enabled, an "offline" pill when the network
