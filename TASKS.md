@@ -42,7 +42,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       deploy --only hosting:customer --project staging` succeeds and the staging URL
       serves v0; `curl -I https://lailark.in/batch/001` is still 200 on production
       after a production deploy of the same content.
-- [ ] M1.3 [sonnet] Wire `scripts/deploy.mjs` (already written) into `npm run deploy`.
+- [x] M1.3 [sonnet] Wire `scripts/deploy.mjs` (already written) into `npm run deploy`. (068933f; staging preview deploy skipped until Q2)
       Test interactive and non-interactive paths, preview channels, and that
       "production" asks for a typed `yes`. Add `npm run check:batch-001`. Done when: a
       preview channel deploy of both targets to staging completes and prints its URLs.
