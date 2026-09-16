@@ -22,7 +22,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
 `lailark` on Blaze, budget alert set, `lailark-staging` created with Firestore in
 `asia-south1` and Phone Auth enabled, Firebase CLI logged in on the Mac.
 
-- [ ] M1.1 [sonnet] Repo restructure into workspaces. Root `package.json` with
+- [x] M1.1 [sonnet] Repo restructure into workspaces. (ed52360) Root `package.json` with
       workspaces `site`, `admin`, `functions`, `shared`. Move `lailark-site/` into
       `site/` as the seed of the Next.js app: the v0 pages become `site/public/batch/001/index.html`
       (byte-identical, served as a static file) and the home page becomes a Next.js page
