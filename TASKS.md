@@ -66,7 +66,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       numbers in CLAUDE.md §9 seeded as Owner and Kitchen by a seed script. Sign-in
       denied for any other number with a kind message. Done when: Playwright signs in
       as each number against the emulator (OTP 123456) and sees their role.
-- [ ] M1.6a [sonnet] Functions deploy packaging. Added by the orchestrator on 16 Sep
+- [x] M1.6a [sonnet] Functions deploy packaging. (0e395a5; staging deploy skipped until Q1, Q2) Added by the orchestrator on 16 Sep
       after M1.5: `@lailark/shared` is a private workspace package, so `firebase deploy
       --only functions` cannot `npm install` it in the cloud build. Add a functions
       predeploy (in `firebase.json` or `scripts/deploy.mjs`) that builds `shared/` and
