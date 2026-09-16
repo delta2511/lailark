@@ -373,7 +373,7 @@ One screen, top to bottom, big buttons, done in under a minute at the door.
      line can be tied to a batch so jars still leave the count.
    - Quantity. Price prefilled from the batch.
 3. **Amount.** The total shows large. **Kitchen role** sells at list price, and may give a
-   discount up to the cap in Settings (₹50 at launch) with a reason. **Owner** can change
+   discount up to the cap the Owner has set in Settings, with a reason (no cap set means no kitchen discount). **Owner** can change
    any price or give any discount, with a short reason. A standard jar can never be sold
    above ₹649 MRP.
 4. **Fulfilment.** Handed over now · Ship to an address · Collect later.
@@ -440,7 +440,7 @@ between, the draft is flagged rather than saved. Cash in hand is recorded either
 | Counter sale at list price, cash or UPI | ✓ | ✓ |
 | Payment link | ✓ | ✓ |
 | Custom line | ✓ | ✓, at an amount set by the owner in Products |
-| Discount up to the Settings cap (₹50), with reason | ✓ | ✓ |
+| Discount up to the cap set in Settings, with reason | ✓ | ✓ |
 | Discount beyond the cap, price change, part payment | ✓ | |
 | Override the per-person limit | ✓ | |
 | Void a sale entered by mistake (same day, before the bill is sent) | ✓ | ✓ |

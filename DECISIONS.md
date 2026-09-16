@@ -39,7 +39,7 @@ confirm or replace at the next milestone break.
 | D14 | Cash on delivery | **No.** Prepaid only | |
 | D15 | Two batches of one product open at once | **Only after the first is cooking** (recommendation accepted by silence) | Enforced with a clear message in admin |
 | D16 | Combining shipments across batches | **Within 3 days** of each other, suggested not forced (recommendation accepted by silence) | |
-| D17 | Kitchen discount rights at the counter | **Yes, a small fixed amount**: Kitchen may discount up to a cap with a reason. **Cap ₹50 at launch** (A: the amount is Claude's assumption, Shefin said "yes" to the small-amount option without a figure) | Cap lives in Settings. Owner unlimited with reason |
+| D17 | Kitchen discount rights at the counter | **Yes**: Kitchen may discount up to a cap, with a reason. **The cap is set by the Owner in the admin Settings screen**, not in code. It ships empty (no kitchen discount) until the Owner sets it | Owner unlimited with reason |
 
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
@@ -57,7 +57,8 @@ The orchestrator appends here. Format: `A<n> (task id, date): what was assumed, 
 Status: open | confirmed | replaced by <what>`. Shefin reviews these at every milestone
 break.
 
-- A1 (setup, 16 Sep): Kitchen discount cap ₹50. Status: open.
+- A1 (setup, 16 Sep): Kitchen discount cap ₹50. Status: replaced by D17, the cap is set in
+  admin Settings by the Owner, no default in code.
 - A2 (setup, 16 Sep): `_incoming/` (raw photos and logo drops) is gitignored; assets
   that ship go into `site/public/assets/` or `admin/public/`. Status: open.
 - A3 (setup, 16 Sep): the business docs that were loose in the folder root
