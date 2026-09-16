@@ -65,3 +65,23 @@ break.
   (`Lailark_Master_Brief.md`, compliance roadmap, costing, sodium report, label panel,
   nutrition calculator) move to `docs/business/`. Nothing else changes in them. Status:
   open.
+- A4 (M1.1, 16 Sep): `admin/`, `functions/`, `shared/` hold placeholder `package.json`
+  files (`@lailark/<x>`, version 0.0.0, no scripts) so the root workspaces list resolves
+  before M1.4, M1.5 and M1.6 create the real packages. Status: open.
+- A5 (M1.1, 16 Sep): `site/` is plain JavaScript (App Router, `.js`), not TypeScript.
+  CLAUDE.md mandates TypeScript for `admin/` and `functions/` only; skipping it here
+  avoids extra dependencies. It imports the compiled `shared/` package from M1.5.
+  Status: open.
+- A6 (M1.1, 16 Sep): root `npm run dev` runs only the site dev server until the
+  emulators (M1.4) and the admin app (M1.6) exist; those tasks extend it to the
+  "emulators + site + admin" form in CLAUDE.md §7. Status: open.
+- A7 (M1.1, 16 Sep): the home page keeps the v0 inline fetch of `config/site` from
+  `firestore.googleapis.com` (the `notifyCtaVisible` switch, CLAUDE.md §9 says keep it
+  working) even though ST1 allows no external request other than Razorpay. It is the
+  one foreign origin the site tests allow. M3.2 rebuilds the home page and can retire
+  it. Status: open.
+- A8 (M1.1, 16 Sep): the home page now carries the jar video background described in
+  `docs/strategy/home-background-video.md` (veil, poster, reduced-motion fallback),
+  because TASKS.md M1.1 asks for "the same HTML and the video background". The v0 page
+  as deployed on 15 Sep did not have the video, only the jar photo, which is kept too.
+  Status: open.

@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "lailark-site",
+    "public": "site/out",
     "ignore": [
       "firebase.json",
       "**/.*",
