@@ -32,7 +32,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       Done when: `npm run build` in `site/` produces `out/` and `diff` of
       `out/batch/001/index.html` against the old file is empty; home page renders the
       same copy.
-- [ ] M1.2 [opus] Firebase config for two hosting sites. Create the admin site
+- [x] M1.2 [opus] Firebase config for two hosting sites. (d74c8dc) Create the admin site
       (`firebase hosting:sites:create lailark-admin` on both projects). `firebase.json`
       becomes the array form with targets `customer` (public `site/out`, the existing
       redirects and headers, `/api/**` rewrite to the functions) and `admin` (public
