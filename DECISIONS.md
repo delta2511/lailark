@@ -103,3 +103,14 @@ break.
   live on lailark.in: same copy as v0, now rendered by Next.js with the jar video
   background (A8). `/batch/001` is byte-identical to before, verified by curl and cmp
   before, on a preview channel, and after. Status: open.
+- A14 (M1.3, 16 Sep): `deploy.mjs` treats a workspace as deployable when its
+  `package.json` has a `build` script, so the placeholder `admin/` is refused with
+  "admin/ is not set up yet (M1.6)" until M1.6. Status: open.
+- A15 (M1.3, 16 Sep): `LAILARK_DEPLOY_DRY_RUN=1` makes `deploy.mjs` print every command
+  (builds included) instead of running it and skips the network check; the script tests
+  use it so they never touch Firebase. Status: open.
+- A16 (M1.3, 16 Sep): the production live gate accepts only the exact typed `yes`
+  (whitespace trimmed, no case folding); a closed or exhausted stdin exits 1 with
+  "no answer on stdin, stopped." rather than continuing. `check:batch-001` compares
+  bytes against `site/public/batch/001/index.html` and checks the two 301s; `--project
+  staging` points at `https://lailark-staging.web.app`. Status: open.
