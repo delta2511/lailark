@@ -1,3 +1,5 @@
+import { SHARED_VERSION } from "@lailark/shared";
+
 import { getProjectId } from "../lib/project";
 
 /**
@@ -43,7 +45,7 @@ export function handleApiRequest(req: ApiRequestLike, res: ApiResponseLike): voi
     res
       .status(200)
       .set("Cache-Control", "no-store")
-      .json({ ok: true, project: getProjectId() });
+      .json({ ok: true, project: getProjectId(), shared: SHARED_VERSION });
     return;
   }
 

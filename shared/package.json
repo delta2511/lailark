@@ -1,5 +1,44 @@
 {
   "name": "@lailark/shared",
   "version": "0.0.0",
-  "private": true
+  "private": true,
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "types": "./dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build:cjs && npm run build:esm && npm run build:dist-pkg",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:dist-pkg": "node scripts/write-dist-package-json.mjs",
+    "prepare": "npm run build",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "dev": "npm run build:dist-pkg && tsc -p tsconfig.esm.json --watch"
+  },
+  "devDependencies": {
+    "eslint": "9.39.5",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0",
+    "vitest": "5.0.1"
+  }
 }

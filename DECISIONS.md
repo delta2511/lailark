@@ -131,3 +131,39 @@ break.
   rewritten responses, so `firebase.json` carries a `/api/**` rule with `Cache-Control:
   no-store` after the `**` no-cache rule. M3.3's `/api/counts` (15 s CDN cache) needs its
   own rule after that one. Status: open.
+- A22 (M1.5, 16 Sep): `@lailark/shared` builds twice (ESM to `dist/esm`, CJS to
+  `dist/cjs`) behind an `exports` map, with `main`/`types` on the CJS build for the
+  node10 resolver `functions/` uses; a `prepare` script builds it on `npm install`; the
+  root workspaces order is `shared, functions, site, admin` so it builds first. Zero
+  runtime dependencies. Status: open.
+- A23 (M1.5, 16 Sep): `Paise` is a plain `number` alias (a brand buys nothing in the
+  JavaScript site); `assertPaise` rejects non-integers at runtime. Timestamps are typed
+  structurally (`{seconds, nanoseconds}`, satisfied by both Firebase SDKs, no Firebase
+  dependency in shared). Calendar dates are `YYYY-MM-DD` strings; "today" is the
+  Asia/Kolkata calendar date. Status: open.
+- A24 (M1.5, 16 Sep): `formatINR` prints `₹649`, `₹649.50` only when there are paise,
+  Indian grouping (`₹1,00,000`) hand-rolled so output never depends on the machine's
+  locale, negatives as `-₹599`. Status: open.
+- A25 (M1.5, 16 Sep): payment statuses are `created, authorized, captured,
+  partlyRefunded, refunded`; refunds themselves live in `refunds/{id}` with
+  `refundedAmount` on `orders.payment`. Status: open.
+- A26 (M1.5, 16 Sep): batch numbers pad to at least 3 digits and grow past 999;
+  `parseBatchNo` accepts only the canonical spelling. Document serials pad to 4 and grow
+  past 9999. `counters/{series}` ids use dashes (`LK-26-27`), document ids
+  `LK-26-27-0001`, display `LK/26-27/0001`; prefixes are a parameter with the §13.3
+  defaults. Status: open.
+- A27 (M1.5, 16 Sep): sale stop is counted back from the printed best before:
+  `bestBefore - max(ceil(shelfLifeDays x 0.30), 45) - transitDays`, all four inputs in
+  `settings/shelfLife` with defaults 180, 0.30, 45, 7 (brief §6.2). Batch 001: best
+  before 4 Mar 2027, sale stop 2 Jan 2027 (120 days after packing), warning 19 Dec
+  2026. Best before adds calendar months and clamps to the month end (31 Aug + 6 = 28
+  Feb). Status: open.
+- A28 (M1.5, 16 Sep): `bottled -> soldOut` is a legal batch transition for a pot with no
+  surplus, next to `bottled -> inStock`. No order transition table is shipped because
+  §9.1's "Concern" next-states name a concerns document, not an order state; only the
+  terminal, paid and concern-raising sets are exported. `canTransitionBatch` returns
+  false, never throws, on unknown strings. Status: open.
+- A29 (M1.5, 16 Sep): `/api/health` also reports the shared package version
+  (`shared: "0.0.0"`). The site's money entry point is `site/lib/money.js` over
+  `formatINR`, tested with `node --test` (`site/tests-unit/`), not yet used by a page
+  until M3. Status: open.

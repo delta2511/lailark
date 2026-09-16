@@ -66,6 +66,16 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       numbers in CLAUDE.md §9 seeded as Owner and Kitchen by a seed script. Sign-in
       denied for any other number with a kind message. Done when: Playwright signs in
       as each number against the emulator (OTP 123456) and sees their role.
+- [ ] M1.6a [sonnet] Functions deploy packaging. Added by the orchestrator on 16 Sep
+      after M1.5: `@lailark/shared` is a private workspace package, so `firebase deploy
+      --only functions` cannot `npm install` it in the cloud build. Add a functions
+      predeploy (in `firebase.json` or `scripts/deploy.mjs`) that builds `shared/` and
+      packs it into `functions/` (for example `npm pack` into `functions/vendor/` with a
+      `file:` dependency, restored after deploy) so a deploy from a clean checkout works
+      while the emulator, tests and CI keep resolving the workspace link. Done when: a
+      temp copy of the packaged `functions/` installs with `npm ci --omit=dev` and loads
+      `lib/index.js`; `firebase deploy --only functions --project staging` succeeds once
+      staging exists (Q1, Q2), else recorded as skipped.
 - [ ] M1.7 [sonnet] Admin shell. Bottom bar Today, Sell, Batches, Orders, More (brief
       §17.1). Empty states for each, "More" lists Concerns, Products, Customers, Agent,
       Money, Settings. Design tokens from Flow §10 as CSS variables. Large tap targets.

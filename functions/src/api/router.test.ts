@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { SHARED_VERSION } from "@lailark/shared";
 import { handleApiRequest, type ApiResponseLike } from "./router";
 
 function createResponse() {
@@ -22,21 +23,29 @@ function createResponse() {
 }
 
 describe("handleApiRequest", () => {
-  it("returns 200 + {ok:true, project} for GET /api/health (hosting rewrite shape)", () => {
+  it("returns 200 + {ok:true, project, shared} for GET /api/health (hosting rewrite shape)", () => {
     const res = createResponse();
     handleApiRequest({ path: "/api/health", method: "GET" }, res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ ok: true, project: expect.any(String) });
+    expect(res.body).toEqual({
+      ok: true,
+      project: expect.any(String),
+      shared: SHARED_VERSION,
+    });
     expect(res.headers["Cache-Control"]).toBe("no-store");
   });
 
-  it("returns 200 + {ok:true, project} for GET /health (direct function URL shape)", () => {
+  it("returns 200 + {ok:true, project, shared} for GET /health (direct function URL shape)", () => {
     const res = createResponse();
     handleApiRequest({ path: "/health", method: "GET" }, res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ ok: true, project: expect.any(String) });
+    expect(res.body).toEqual({
+      ok: true,
+      project: expect.any(String),
+      shared: SHARED_VERSION,
+    });
   });
 
   it("returns 404 for an unknown path", () => {
