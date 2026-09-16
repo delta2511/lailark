@@ -63,6 +63,15 @@
               "value": "public, max-age=2592000, immutable"
             }
           ]
+        },
+        {
+          "source": "/api/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-store"
+            }
+          ]
         }
       ]
     },

@@ -114,3 +114,20 @@ break.
   "no answer on stdin, stopped." rather than continuing. `check:batch-001` compares
   bytes against `site/public/batch/001/index.html` and checks the two 301s; `--project
   staging` points at `https://lailark-staging.web.app`. Status: open.
+- A17 (M1.4, 16 Sep): `functions/` is CommonJS (no `type: module`, tsc `module: commonjs`),
+  the best-trodden path for the Functions emulator and discovery. `engines.node: "22"`
+  in `functions/package.json` is what the CLI reads for the runtime; no `runtime` field
+  in `firebase.json`. Status: open.
+- A18 (M1.4, 16 Sep): TypeScript pinned to 5.9.x (typescript-eslint 8 does not support
+  TS 7) and ESLint pinned to 9.39.5 in every workspace to match `site/`
+  (eslint-config-next needs 9). Vitest 5 for functions unit tests. Status: open.
+- A19 (M1.4, 16 Sep): `DEFAULT_MAX_INSTANCES = 3` in `functions/src/lib/options.ts`,
+  used by `api`; later functions pass their own value when a task calls for more.
+  Status: open.
+- A20 (M1.4, 16 Sep): the `api` router strips one leading `/api` segment so both the
+  Hosting rewrite path (`/api/health`) and the direct function URL work; no Express.
+  Status: open.
+- A21 (M1.4, 16 Sep): Firebase Hosting header rules win over headers a function sets on
+  rewritten responses, so `firebase.json` carries a `/api/**` rule with `Cache-Control:
+  no-store` after the `**` no-cache rule. M3.3's `/api/counts` (15 s CDN cache) needs its
+  own rule after that one. Status: open.
