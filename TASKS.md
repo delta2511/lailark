@@ -51,7 +51,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       `api` mounted at `/api/*` with `/api/health` returning `{ok:true, project}`.
       Emulator runs it. Done when: `curl localhost:5001/.../api/health` and the hosting
       emulator's `/api/health` both return ok.
-- [ ] M1.5 [opus] Shared package. `shared/` with the Firestore document types from brief
+- [x] M1.5 [opus] Shared package. (31b7bf7) `shared/` with the Firestore document types from brief
       §18.1, the batch and order state enums (brief §8.1, §9.1), money helpers (paise
       integers, `formatINR`), batch maths (`bookable = floor(planned*0.9)`, `half =
       ceil(bookable/2)`, `perPersonLimit = max(1, floor(bookable/4))`, best-before,
