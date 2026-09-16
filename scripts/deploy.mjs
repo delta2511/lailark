@@ -177,6 +177,31 @@ async function main() {
   const withFunctions = Boolean(arg("functions"));
   const withRules = Boolean(arg("rules"));
 
+  // firebase-tools only runs a target's postdeploy hook once predeploy, prepare, deploy,
+  // and release have all succeeded: deploy/index.js chains them inside one try with no
+  // catch (only a finally for telemetry), so a failure at any stage skips straight past
+  // postdeploy. functions.postdeploy (firebase.json) restores functions/package.json to
+  // the workspace link and deletes functions/vendor/ after functions.predeploy packed
+  // @lailark/shared into it — if a `firebase deploy --only functions` below fails
+  // partway through, that hook never runs and the repo is left mid-pack. Arm a
+  // process-exit safety net so this script restores regardless of success or failure.
+  // pack-shared.mjs --restore is idempotent, so restoring twice (once from a successful
+  // postdeploy hook, once here) is harmless.
+  if (withFunctions) {
+    if (DRY_RUN) {
+      console.log(
+        "\n(dry run) would restore functions/package.json via scripts/pack-shared.mjs --restore on exit, success or failure",
+      );
+    } else {
+      process.on("exit", () => {
+        spawnSync(process.execPath, [resolve(ROOT, "scripts", "pack-shared.mjs"), "--restore"], {
+          stdio: "inherit",
+          cwd: ROOT,
+        });
+      });
+    }
+  }
+
   if (project === "production" && mode === "live") {
     // Raw (not ask()): the production gate must match the literal string "yes", not
     // any case-folded variant — "YES" or "Yes" must stop, not proceed.

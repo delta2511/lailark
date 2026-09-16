@@ -5,6 +5,7 @@ site/out/
 admin/dist/
 admin/dist-test/
 functions/lib/
+functions/vendor/
 shared/dist/
 *.tsbuildinfo
 

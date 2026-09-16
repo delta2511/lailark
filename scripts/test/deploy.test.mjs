@@ -203,6 +203,25 @@ test("(e) --functions --rules in preview mode deploys the hosting preview then f
   assert.match(stdout, /firebase deploy --project staging --only functions,firestore:rules,storage/);
 });
 
+test("(f) --functions prints the restore-on-exit safety net note (dry run), --rules alone does not", () => {
+  const withFunctions = runDeploy(
+    ["--target", "customer", "--project", "production", "--live", "--functions"],
+    { input: "yes\n" },
+  );
+  assert.equal(withFunctions.status, 0);
+  assert.match(
+    withFunctions.stdout,
+    /\(dry run\) would restore functions\/package\.json via scripts\/pack-shared\.mjs --restore on exit, success or failure/,
+  );
+
+  const rulesOnly = runDeploy(
+    ["--target", "customer", "--project", "production", "--live", "--rules"],
+    { input: "yes\n" },
+  );
+  assert.equal(rulesOnly.status, 0);
+  assert.doesNotMatch(rulesOnly.stdout, /would restore functions\/package\.json/);
+});
+
 test("--target both --project staging --preview fails fast on the admin message before any firebase call", (t) => {
   const adminPkg = JSON.parse(readFileSync(resolve(ROOT, "admin", "package.json"), "utf8"));
   if (adminPkg.scripts && adminPkg.scripts.build) {

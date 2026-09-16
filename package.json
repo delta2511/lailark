@@ -19,6 +19,8 @@
     "dev": "npm run dev --workspace site",
     "emulators": "firebase emulators:start",
     "deploy": "node scripts/deploy.mjs",
+    "pack:shared": "node scripts/pack-shared.mjs",
+    "pack:shared:restore": "node scripts/pack-shared.mjs --restore",
     "check:batch-001": "node scripts/check-batch-001.mjs",
     "seed:users": "node functions/scripts/seed-users.mjs",
     "emulators:hosting": "firebase emulators:start --only hosting,auth,functions"

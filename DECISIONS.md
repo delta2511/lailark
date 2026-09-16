@@ -200,3 +200,11 @@ break.
   signed-in screen can show a name; M1.8 replaces it with the full matrix. The admin
   bundle is one 636 kB chunk (190 kB gzipped), nearly all Firebase SDK; M1.7 may split
   Firestore off the sign-in path. Status: open.
+- A36 (M1.6a, 16 Sep): functions deploy packs `shared/` into `functions/vendor/*.tgz`
+  with a `file:` dependency via `functions.predeploy` in `firebase.json`, and
+  `postdeploy` restores the workspace link; `scripts/deploy.mjs` also restores on exit
+  when `--functions` is passed because firebase-tools skips postdeploy after a failed
+  deploy. `functions.ignore` uses basename globs (`*.test.ts`, `*.local`, `scripts`)
+  because the CLI matcher only does basename matching; `lib/` and `vendor/` upload,
+  `.secret.local` never does. No lockfile inside `functions/`, so Cloud Build runs
+  `npm install`. Status: open.
