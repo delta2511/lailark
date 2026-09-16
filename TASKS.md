@@ -46,7 +46,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       Test interactive and non-interactive paths, preview channels, and that
       "production" asks for a typed `yes`. Add `npm run check:batch-001`. Done when: a
       preview channel deploy of both targets to staging completes and prints its URLs.
-- [ ] M1.4 [sonnet] Functions scaffold. TypeScript, `firebase-functions` v2, region
+- [x] M1.4 [sonnet] Functions scaffold. (f4ab8ed) TypeScript, `firebase-functions` v2, region
       `asia-south1`, `maxInstances` on every export, ESLint, Vitest. One HTTP function
       `api` mounted at `/api/*` with `/api/health` returning `{ok:true, project}`.
       Emulator runs it. Done when: `curl localhost:5001/.../api/health` and the hosting
