@@ -58,7 +58,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       sale-stop date), and the bill number series helpers (`LK/26-27/0001`, resets 1
       April). Unit tests for every helper, including the table in brief §7.1. Done when:
       tests pass and `site`, `admin`, `functions` all import from it.
-- [ ] M1.6 [opus] Admin auth and roles. Vite + Preact + TypeScript scaffold in `admin/`,
+- [x] M1.6 [opus] Admin auth and roles. (2026fb3; emulator OTP via test helper, see A30) Vite + Preact + TypeScript scaffold in `admin/`,
       `vite-plugin-pwa` with a manifest (name "Lailark", ink and paper colours). Phone
       sign-in with Firebase Phone Auth (reCAPTCHA invisible). `users/{uid}` doc and a
       callable `setRole` that only an existing Owner (or a bootstrap secret on an empty
