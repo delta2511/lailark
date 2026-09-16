@@ -1,41 +1,55 @@
-# Lailark Kitchen — Project Log
+# Lailark
 
-This folder is the working record for Lailark Kitchen (artisan oil-based pickle brand, Kunnamangalam, Kozhikode).
+The code and the working record for Lailark Kitchen: an artisan oil-pickle brand from a
+home kitchen in Kunnamangalam, Kozhikode. Batches of 15 to 40 jars, sold on
+[lailark.in](https://lailark.in), at the door, and on WhatsApp.
 
-## Contents
-- **Lailark_Master_Brief.md** — full brand, product, pricing, competitive and go-to-market reference. The consolidated strategy.
-- **Lailark_Compliance_Roadmap.md** — FSSAI licence assessment and the licence/registration path by phase (domestic, scale, export).
-- **Lailark_PrawnsDates_Pickle_Costing.md** — batch 009 recipe, measured yield, costing and pricing.
-- **Lailark_Nutrition_Calculator.xlsx** — ingredient database, per-100 g calculation and label panel. Batch 009 is loaded.
-- **Sodium_Benchmark_Report_Indian_Pickles.md** — where Lailark sits against Indian and Kerala pickle sodium levels, and the coming FSSAI front-of-pack rules.
-- **Label_Detail_Panel_PrawnsDates_Pickle.md** — print-ready label copy for the 200 g jar.
-- **lailark-site/** — the live website. Two static pages, no build step.
-- **lailark-site-v0-handoff.md** — build spec for the site: copy, routing, hard constraints.
-- **lailark-design-research.md** — reference sites and design direction.
-- **firebase.json / .firebaserc / firestore.rules** — hosting and database config.
+## What is in here
 
-## Snapshot
-- Product: artisan oil-based pickles, made from home, FSSAI registered.
-- **Made so far: one batch. Prawns & Dates Pickle, batch 009, 04/09/2026, 4,600 g finished, 23 jars.** Beef, squid, konjac and a plain prawns pickle are planned SKUs, not made.
-- Unit economics on batch 009: ₹159 all-in per 200 g jar (~₹795/kg). MRP ₹649, introductory ₹499.
-- Channels: own website + WhatsApp + Instagram. No marketplaces. Storefront platform still undecided; the site today is a holding page, not a shop.
-- Target buyer: Gulf / NRI premium. Start market: UAE / Gulf, Aramex shipping.
-- Brand: kraft + black primary, black + gold for gifting. Handwritten note in every order.
+| Path | What |
+|---|---|
+| `CLAUDE.md` | How Claude Code works in this repo: rules, orchestration, git, tests. Read first |
+| `TASKS.md` | The build, as five milestones of single tasks |
+| `DECISIONS.md` | Every decision made and every assumption logged. Overrides the docs |
+| `QUESTIONS.md` | Open questions for Shefin, answered at milestone breaks |
+| `docs/strategy/` | The specs: sales flow, admin and billing brief, story and voice, label rules, v0 handoff |
+| `docs/business/` | Brand brief, compliance roadmap, costing, nutrition calculator, sodium benchmark |
+| `docs/milestones/` | Test notes written at each milestone break |
+| `site/` | Customer site, Next.js static export → lailark.in (created in M1.1) |
+| `admin/` | Admin PWA, Preact → separate Hosting site (created in M1.6) |
+| `functions/` | Cloud Functions, TypeScript, asia-south1 (created in M1.4) |
+| `shared/` | Types and helpers shared by all three (created in M1.5) |
+| `scripts/deploy.mjs` | `npm run deploy`: customer / admin / both, staging / production, live / preview |
+| `lailark-site/` | The live v0 static site, two pages. Moves into `site/` in M1.1 |
 
 ## Infrastructure
 
-Everything runs on **Firebase, project `lailark`**. There is no other host and no other
-database.
+Everything runs on Firebase, project `lailark` (production) and `lailark-staging`.
 
-- **Hosting:** live at https://lailark.web.app since 2026-09-15. Deploy with
-  `firebase deploy --only hosting` from this folder. Never run `firebase init`, which
-  overwrites `lailark-site/index.html` with a placeholder.
-- **Database:** Cloud Firestore, `(default)`, Native mode, region `asia-south1` (Mumbai).
-  The region is permanent. Rules are in `firestore.rules` and are deny-by-default, so every
-  new collection needs an explicit `match` block or it is unreachable.
-- **Domain:** `lailark.in` is **not yet connected**. The QR on every jar encodes
-  `https://lailark.in/batch/001`, so until the custom domain is added in Firebase and the
-  parked `A @` record at GoDaddy is replaced, a scan fails. No jars get printed until the
-  certificate reads Active and the URL loads on a phone over mobile data.
+- **Hosting.** `https://lailark.in` (custom domain connected 15 Sep 2026) and
+  `https://lailark.web.app`. Deploy with `npm run deploy`. Never run `firebase init`.
+- **Database.** Cloud Firestore, `(default)`, Native mode, `asia-south1` (Mumbai). Rules
+  in `firestore.rules`, deny by default.
+- **The QR on every batch 001 jar encodes `https://lailark.in/batch/001`.** That page
+  must resolve, unchanged, forever. Every deploy checks it.
 
-Last updated: 2026-09-15.
+## Snapshot (16 Sep 2026)
+
+- Made so far: one batch. Prawns and dates, batch 001, packed 4 Sep 2026, 22 jars of
+  200 g. Squid, beef and koorka are the other launch heroes, not yet made.
+- Unit economics on batch 001: about ₹160 all-in per jar. MRP ₹649. Open batch ₹599.
+- Channels: own site, WhatsApp, the kitchen door. No marketplaces.
+- Brand: warm black and paper, following the printed label. Handwritten note in every
+  box.
+
+## Working on it
+
+```
+npm install
+npm run dev        # emulators + site + admin
+npm test
+npm run deploy
+```
+
+Development runs in Claude Code with the protocol in `CLAUDE.md`. Shefin tests at five
+milestone breaks; between them the build runs on its own.

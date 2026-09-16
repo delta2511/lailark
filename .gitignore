@@ -1,0 +1,41 @@
+# dependencies and builds
+node_modules/
+site/.next/
+site/out/
+admin/dist/
+functions/lib/
+shared/dist/
+*.tsbuildinfo
+
+# firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+database-debug.log
+pubsub-debug.log
+*-debug.log
+emulator-data/
+
+# secrets: never
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+service-account*.json
+
+# tests
+test-results/
+playwright-report/
+coverage/
+
+# raw media drops (assets that ship are copied into site/public or admin/public)
+_incoming/
+
+# os and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
