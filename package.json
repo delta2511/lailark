@@ -17,6 +17,7 @@
     "lint": "npm run lint --workspaces --if-present",
     "dev": "npm run dev --workspace site",
     "emulators": "firebase emulators:start",
-    "deploy": "node scripts/deploy.mjs"
+    "deploy": "node scripts/deploy.mjs",
+    "emulators:hosting": "firebase emulators:start --only hosting,auth,functions"
   }
 }

@@ -1,62 +1,175 @@
 {
-  "hosting": {
-    "public": "site/out",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**",
-      "**/.DS_Store"
-    ],
-    "cleanUrls": true,
-    "trailingSlash": false,
-    "redirects": [
-      {
-        "source": "/batch/1",
-        "destination": "/batch/001",
-        "type": 301
-      },
-      {
-        "source": "/batch/01",
-        "destination": "/batch/001",
-        "type": 301
-      },
-      {
-        "source": "/batch",
-        "destination": "/",
-        "type": 302
-      }
-    ],
-    "headers": [
-      {
-        "source": "**",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache"
-          },
-          {
-            "key": "X-Content-Type-Options",
-            "value": "nosniff"
-          },
-          {
-            "key": "Referrer-Policy",
-            "value": "strict-origin-when-cross-origin"
+  "hosting": [
+    {
+      "target": "customer",
+      "public": "site/out",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**",
+        "**/.DS_Store"
+      ],
+      "cleanUrls": true,
+      "trailingSlash": false,
+      "redirects": [
+        {
+          "source": "/batch/1",
+          "destination": "/batch/001",
+          "type": 301
+        },
+        {
+          "source": "/batch/01",
+          "destination": "/batch/001",
+          "type": 301
+        },
+        {
+          "source": "/batch",
+          "destination": "/",
+          "type": 302
+        }
+      ],
+      "rewrites": [
+        {
+          "source": "/api/**",
+          "function": {
+            "functionId": "api",
+            "region": "asia-south1"
           }
-        ]
-      },
-      {
-        "source": "**/*.@(jpg|jpeg|png|svg|ico|mp4)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=2592000, immutable"
-          }
-        ]
-      }
-    ]
-  },
+        }
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            }
+          ]
+        },
+        {
+          "source": "**/*.@(jpg|jpeg|png|svg|ico|mp4)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=2592000, immutable"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "target": "admin",
+      "public": "admin/dist",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**",
+        "**/.DS_Store"
+      ],
+      "cleanUrls": true,
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            }
+          ]
+        },
+        {
+          "source": "/assets/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=31536000, immutable"
+            }
+          ]
+        },
+        {
+          "source": "/index.html",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        },
+        {
+          "source": "/sw.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        },
+        {
+          "source": "/manifest.webmanifest",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        }
+      ]
+    }
+  ],
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "functions": {
+    "source": "functions",
+    "codebase": "default"
+  },
+  "emulators": {
+    "singleProjectMode": true,
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "functions": {
+      "port": 5001
+    },
+    "hosting": {
+      "port": 5010
+    },
+    "storage": {
+      "port": 9199
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    }
   }
 }

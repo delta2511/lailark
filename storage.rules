@@ -1,0 +1,18 @@
+rules_version = '2';
+
+// Lailark Cloud Storage rules.
+//
+// Deny everything. This is a skeleton: M1.8 writes the real rules alongside the
+// Firestore rules (owner and kitchen read/write under their own paths, nothing
+// public, no client writes to anything money-related).
+//
+// Until then no client SDK may read or write Storage. Functions use the Admin SDK,
+// which bypasses these rules, so server-side work is unaffected.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

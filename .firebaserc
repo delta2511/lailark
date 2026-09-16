@@ -1,5 +1,28 @@
 {
   "projects": {
-    "default": "lailark"
+    "default": "lailark",
+    "staging": "lailark-staging"
+  },
+  "targets": {
+    "lailark": {
+      "hosting": {
+        "customer": [
+          "lailark"
+        ],
+        "admin": [
+          "lailark-admin"
+        ]
+      }
+    },
+    "lailark-staging": {
+      "hosting": {
+        "customer": [
+          "lailark-staging"
+        ],
+        "admin": [
+          "lailark-staging-admin"
+        ]
+      }
+    }
   }
 }

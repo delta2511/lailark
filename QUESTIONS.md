@@ -16,6 +16,12 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
   emulators only and staging is set up at the M1 break. Meanwhile: `.firebaserc` will
   carry the `staging` alias and every staging deploy is skipped with a note until it
   exists.
+- Q3 (M1.2, 16 Sep): `www.lailark.in` is printed on the label but has no certificate:
+  DNS points at Firebase, plain HTTP redirects to `https://www.lailark.in/`, and HTTPS
+  fails with a certificate name mismatch, so a browser shows a security warning. Fix is
+  in the Firebase console only (Hosting, site `lailark`, Add custom domain,
+  `www.lailark.in`, choose redirect to `lailark.in`), then the two DNS records it asks
+  for at GoDaddy. Nothing in the repo can do this. Meanwhile: unchanged.
 
 ## Answered
 

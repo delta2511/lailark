@@ -85,3 +85,21 @@ break.
   because TASKS.md M1.1 asks for "the same HTML and the video background". The v0 page
   as deployed on 15 Sep did not have the video, only the jar photo, which is kept too.
   Status: open.
+- A9 (M1.2, 16 Sep): staging Hosting site ids are assumed as `lailark-staging` (customer)
+  and `lailark-staging-admin` (admin) in `.firebaserc`; neither exists until the staging
+  project does (Q2). If either id is taken when created, `.firebaserc` needs one edit.
+  Status: open.
+- A10 (M1.2, 16 Sep): the hosting emulator listens on 5010 (customer) and 5015 (admin,
+  auto-assigned), not 5000, because macOS AirPlay Receiver holds port 5000 on the Mac
+  and functions keep 5001. Firestore 8080, Auth 9099, Storage 9199, UI 4000.
+  Status: open.
+- A11 (M1.2, 16 Sep): admin hosting headers assume Vite's defaults: long immutable cache
+  on `/assets/**`, no-cache on `/index.html`, `/sw.js`, `/manifest.webmanifest`. M1.6
+  confirms the names when the admin build exists. Status: open.
+- A12 (M1.2, 16 Sep): root `npm run emulators:hosting` (hosting, auth, functions) added
+  next to the full-suite `npm run emulators`, for local site work without Firestore.
+  Status: open.
+- A13 (M1.2, 16 Sep): the production redeploy that M1.2 requires put the M1.1 home page
+  live on lailark.in: same copy as v0, now rendered by Next.js with the jar video
+  background (A8). `/batch/001` is byte-identical to before, verified by curl and cmp
+  before, on a preview channel, and after. Status: open.
