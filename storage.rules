@@ -2,15 +2,103 @@ rules_version = '2';
 
 // Lailark Cloud Storage rules.
 //
-// Deny everything. This is a skeleton: M1.8 writes the real rules alongside the
-// Firestore rules (owner and kitchen read/write under their own paths, nothing
-// public, no client writes to anything money-related).
+// Nothing here is public. Not one path. A jar photo is not a secret, but a
+// bill PDF is, and a bucket with one public prefix is one rename away from a
+// public bill, so the whole bucket is behind the same `role` custom claim the
+// Firestore rules use. Public images the customer site shows are checked into
+// `site/public/` and served by Hosting, not from this bucket.
 //
-// Until then no client SDK may read or write Storage. Functions use the Admin SDK,
-// which bypasses these rules, so server-side work is unaffected.
+// Functions use the Admin SDK, which bypasses these rules, so everything the
+// server generates (PDFs, courier labels, exports) is written past this file.
+//
+//   documents/**   bills, receipts, refund notes   read Owner, Viewer    server writes
+//   batches/**     kitchen photos                  read any role         write Owner, Kitchen
+//   products/**    catalogue images                read any role         write Owner
+//   shipments/**   courier labels                  read Owner, Kitchen   server writes
+//   exports/**     CSV and PDF exports             read Owner, Viewer    server writes
+//   anything else  denied
+//
+// Uploads are capped at 8 MB and must declare an image content type. A phone
+// photo off a modern camera is 2 to 5 MB, so 8 MB leaves room without letting
+// a mis-set field upload a video into the batch folder.
 
 service firebase.storage {
   match /b/{bucket}/o {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // '' for a signed-out caller and for a signed-in one with no claim, so no
+    // comparison below can throw on a missing key.
+    function role() {
+      return (signedIn() && ('role' in request.auth.token)) ? request.auth.token.role : '';
+    }
+
+    function isOwner() {
+      return role() == 'owner';
+    }
+
+    function isKitchen() {
+      return role() == 'kitchen';
+    }
+
+    function isViewer() {
+      return role() == 'viewer';
+    }
+
+    function isAdmin() {
+      return isOwner() || isKitchen() || isViewer();
+    }
+
+    function isStaff() {
+      return isOwner() || isKitchen();
+    }
+
+    /** May see Money: brief 17.12 row "See Money". */
+    function seesMoney() {
+      return isOwner() || isViewer();
+    }
+
+    /** 8 MB, and an image. `request.resource` is null on a delete, so a
+        delete never satisfies this and no client deletes anything. */
+    function isImageUnder8Mb() {
+      return request.resource != null
+             && request.resource.size <= 8 * 1024 * 1024
+             && request.resource.contentType.matches('image/.*');
+    }
+
+    /** Bills, receipts, refund notes, credit notes. Money: 17.12. */
+    match /documents/{allPaths=**} {
+      allow read: if seesMoney();
+      allow write: if false;
+    }
+
+    /** Kitchen photos: the batch updates and the bottling shots. */
+    match /batches/{allPaths=**} {
+      allow read: if isAdmin();
+      allow write: if isStaff() && isImageUnder8Mb();
+    }
+
+    /** Catalogue images. Prices and products are the Owner's. */
+    match /products/{allPaths=**} {
+      allow read: if isAdmin();
+      allow write: if isOwner() && isImageUnder8Mb();
+    }
+
+    /** Courier labels, fetched from Shiprocket by a function and printed by
+        whoever is packing. Not money, so Viewer does not need them. */
+    match /shipments/{allPaths=**} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    /** Book-keeping exports. Money, so Owner and Viewer (the CA). */
+    match /exports/{allPaths=**} {
+      allow read: if seesMoney();
+      allow write: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

@@ -41,6 +41,12 @@ confirm or replace at the next milestone break.
 | D16 | Combining shipments across batches | **Within 3 days** of each other, suggested not forced (recommendation accepted by silence) | |
 | D17 | Kitchen discount rights at the counter | **Yes**: Kitchen may discount up to a cap, with a reason. **The cap is set by the Owner in the admin Settings screen**, not in code. It ships empty (no kitchen discount) until the Owner sets it | Owner unlimited with reason |
 
+## Answered at the M1 break (17 Sep 2026, S)
+
+| # | Decision | Detail |
+|---|---|---|
+| D18 | `lailark` is on the **Blaze** plan | Answers Q1. Functions and Storage can deploy to production |
+
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
 Admin is the master POS for every sale. Shipping free at launch with a switch. Launch
@@ -220,3 +226,34 @@ break.
 - A39 (M1.7, 16 Sep): admin empty-state and More-row wording is the builder's (admin
   wording may be assumed); the Firebase SDK is split into its own chunk (616 kB, 181 kB
   gzipped) so the shell code (27 kB) is cached separately. Status: open.
+- A40 (M1.8, 17 Sep): `PROTECTED_BATCH_FIELDS` (14: bestBefore, bookableJars,
+  bottledJars, fullApprovedAt, fullReachedAt, halfApprovedAt, halfReachedAt, heldJars,
+  paidCount, perPersonLimit, pnl, saleStopOn, state, writtenOff) are written by no client,
+  the Owner included. `KITCHEN_BATCH_FIELDS` (10: cookedOn, costs, landedOn, packedOn,
+  source, updatedAt, updatedBy, weightCleaned, weightCooked, weightRaw) are the only batch
+  fields Kitchen may change. Both lists live in `firestore.rules` and in
+  `shared/src/rules.ts`; `rules-tests` parses the rules file and fails on any drift.
+  Status: open.
+- A41 (M1.8, 17 Sep): no client writes `orders`, `documents`, `counters`, `refunds`,
+  `settlements`, `webhookEvents`, `dayCloses`, `users`, `approvals` (create),
+  `conversations` or `shipments/events`, in any role. Money reads (`documents`,
+  `refunds`, `settlements`, `dayCloses`) are Owner and Viewer. `counters` and
+  `webhookEvents` have no client read at all. Status: open.
+- A42 (M1.8, 17 Sep): Kitchen may create a batch photo update without `approvedBy` or
+  `sentAt`, and edit only `photoPath`, `kitchenLine` and the stamps on its own update
+  while unapproved (D5). Kitchen may not create a Concern (every raiser is a function).
+  Both staff roles may create and edit customers, addresses and shipments, including
+  `packingCost` and `courierCost` (money out, typed from a receipt, "edit packing cost"
+  in §17.12). `audit` entries require `by` = the caller and `at` = the server time and
+  can never be edited or removed. The three admin roles may read `notify`. Owner may
+  delete products, ingredients, recipes, settings and policy versions, never a batch,
+  order, customer, write-off or audit entry. Status: open.
+- A43 (M1.8, 17 Sep): Storage has no public path. `documents/**` and `exports/**` read
+  Owner and Viewer, `shipments/**` read Owner and Kitchen, all three written only by
+  functions; `batches/**` written by Owner and Kitchen and `products/**` by Owner, each
+  an image of at most 8 MB. Status: open.
+- A44 (M1.8, 17 Sep): `@firebase/rules-unit-testing` is 5.0.2 (4.x needs firebase 11, the
+  repo is on 12). The rules suite is its own workspace, `rules-tests`, run inside
+  `firebase emulators:exec --only firestore,storage`, one file at a time against one
+  emulator. A write that sets a protected field to the value it already has passes,
+  because rules compare changed keys. Status: open.

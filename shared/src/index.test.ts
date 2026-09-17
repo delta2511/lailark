@@ -123,6 +123,12 @@ const EXPECTED_EXPORTS = [
   "toDocumentId",
   "fromDocumentId",
   "documentNumberFor",
+  // rules
+  "PROTECTED_BATCH_FIELDS",
+  "KITCHEN_BATCH_FIELDS",
+  "isProtectedBatchField",
+  "isKitchenBatchField",
+  "writableBatchFields",
 ] as const;
 
 describe("the barrel", () => {

@@ -9,7 +9,8 @@
     "shared",
     "functions",
     "site",
-    "admin"
+    "admin",
+    "rules-tests"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
