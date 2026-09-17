@@ -91,7 +91,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       client writes to orders are denied). Viewer: read all including Money. Storage
       rules: authenticated admin only. Tests with `@firebase/rules-unit-testing` for
       every row of brief §17.12. Done when: the test matrix passes.
-- [ ] M1.8a [sonnet] Staging on `tree-quiz-74e04`. Added by the orchestrator on 17 Sep
+- [ ] M1.8a [sonnet] Staging on `tree-quiz-74e04`. (partly done in 2a8a45f: sites, rules and claims live; functions blocked on Q6, sign-in on Q5) Added by the orchestrator on 17 Sep
       after Shefin repurposed a project for staging (D19). Repoint `.firebaserc`, the
       deploy and check scripts and the admin web config to it; build the admin for the
       project it deploys to; cap functions globally; deploy both sites, functions and

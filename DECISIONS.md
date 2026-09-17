@@ -267,3 +267,8 @@ break.
   `users/{uid}`, then the Auth `displayName`, then the phone number. Functions also call
   `setGlobalOptions({ region: asia-south1, maxInstances: 3 })` before any export loads.
   Status: open.
+- A46 (M1.8a, 17 Sep): on staging the two role claims were set with `firebase auth:import`
+  (Shefin `+917736110087` owner, Sumayya `+919446587027` kitchen, each with a
+  `displayName`), because `setRole` could not deploy (Q6). No `users/{uid}` documents
+  exist on staging yet, so the admin shows the Auth `displayName`. Once `setRole` is
+  deployed, run it or the seed script to write the documents. Status: open.

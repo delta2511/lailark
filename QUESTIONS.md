@@ -20,6 +20,18 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
   `firestore.rules` and the rules tests), because a recipe change moves batch costs and
   the label's ingredient line, which is printed on the jars.
 
+- Q5 (M1.8a, 17 Sep): Phone sign-in on the staging admin will be refused until
+  `tree-quiz-74e04-admin.web.app` is an authorised domain. Firebase console, project
+  tree-quiz-74e04, Authentication, Settings, Authorised domains, Add domain. The same is
+  needed on production for `lailark-admin.web.app`, where Authentication itself is not
+  yet enabled. Meanwhile: sites deployed, sign-in untested.
+- Q6 (M1.8a, 17 Sep): No function can deploy to staging until the `setRole` bootstrap
+  secret exists in Secret Manager: the CLI checks every declared secret even for
+  `--only functions:api`. Claude Code's permission check blocked writing it. Either run
+  `firebase functions:secrets:set SETROLE_BOOTSTRAP_SECRET --project staging` yourself
+  and paste any long random value, or allow that command for Claude Code. Meanwhile:
+  `/api/health` on staging is 404 and `setRole` is not deployed.
+
 ## Answered
 
 - ~~Q1 (M1, 16 Sep): Is the `lailark` Firebase project on the Blaze plan yet? Functions and Storage will not deploy without it. Meanwhile: everything runs on the emulator.~~ Answered 17 Sep: Blaze is on for `lailark`. Recorded as D18 in DECISIONS.md.
