@@ -82,7 +82,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       Offline-ready: Firestore persistence enabled, an "offline" pill when the network
       is gone. Done when: installable on iPhone Safari and Android Chrome from the
       staging URL, all five tabs render.
-- [ ] M1.8 [opus] Firestore rules skeleton and tests. Deny by default. Keep `notify`
+- [x] M1.8 [opus] Firestore rules skeleton and tests. (21c69e5; TODO(Q4) ingredients and recipes Owner-only) Deny by default. Keep `notify`
       (create only, same field rules as today) and `config/site` (public read). Role
       helpers reading `request.auth.token.role`. Owner read/write everywhere except the
       money collections (server only). Kitchen: read everything except `documents`,
