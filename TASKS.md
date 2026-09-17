@@ -104,7 +104,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
 - [x] M1.10 [sonnet] Milestone 1 test note (1793ce6) (`docs/milestones/MILESTONE-1-TEST.md`) per
       CLAUDE.md §4.2, then stop.
 
-- [ ] M1.11 [opus] Kitchen recipe-edit switch (D22). Added on 17 Sep from Shefin's Q4
+- [x] M1.11 [opus] Kitchen recipe-edit switch (D22). (9cfd246; rules live on staging) Added on 17 Sep from Shefin's Q4
       answer. Ingredients and recipes readable by all three roles; Owner creates, edits,
       deletes; Kitchen creates and edits only while `settings/permissions.kitchenCanEditRecipes`
       is `true` (Owner-only switch, off by default); nobody but the Owner deletes. Shared
