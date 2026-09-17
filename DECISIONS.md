@@ -47,6 +47,7 @@ confirm or replace at the next milestone break.
 |---|---|---|
 | D18 | `lailark` is on the **Blaze** plan | Answers Q1. Functions and Storage can deploy to production |
 | D19 | Staging is the repurposed project **`tree-quiz-74e04`** (display name lailark-staging), not `lailark-staging` | Answers Q2 and amends ST8. Firestore `(default)` in `asia-south1`, Blaze on, Phone Auth on, budget alert set. Hosting sites `tree-quiz-74e04` (customer) and `tree-quiz-74e04-admin` (admin). Web app "Lailark admin (staging)", `1:168769355731:web:dd82afeb5cff871529f926`. The `.firebaserc` alias stays `staging` |
+| D20 | The `setRole` bootstrap secret on staging was set by Shefin, not by Claude Code | Secret Manager writes stay a human step. The value is not recorded anywhere in the repo or this session. `firebase functions:secrets:set SETROLE_BOOTSTRAP_SECRET --project <id>` is the step for production too |
 
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
@@ -272,3 +273,8 @@ break.
   `displayName`), because `setRole` could not deploy (Q6). No `users/{uid}` documents
   exist on staging yet, so the admin shows the Auth `displayName`. Once `setRole` is
   deployed, run it or the seed script to write the documents. Status: open.
+- A47 (M1.8a, 17 Sep): staging has an Artifact Registry cleanup policy in `asia-south1`
+  that deletes function container images older than one day (the Firebase CLI default,
+  set with `firebase functions:artifacts:setpolicy --force`), so deploys exit cleanly and
+  old images do not accrue storage charges. Production needs the same once functions
+  deploy there. Status: open.
