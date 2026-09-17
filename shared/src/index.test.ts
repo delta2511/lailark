@@ -129,6 +129,8 @@ const EXPECTED_EXPORTS = [
   "isProtectedBatchField",
   "isKitchenBatchField",
   "writableBatchFields",
+  "KITCHEN_RECIPE_EDIT_SWITCH",
+  "kitchenCanEditRecipes",
 ] as const;
 
 describe("the barrel", () => {

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * Seeds the admin allowlist: the two numbers in CLAUDE.md section 9.
+ * Seeds the admin allowlist: the two numbers in CLAUDE.md section 9. Also
+ * writes `settings/permissions` with the Q4 Kitchen switch off, only if that
+ * document does not exist.
  *
  *   node functions/scripts/seed-users.mjs --emulator
  *   node functions/scripts/seed-users.mjs --project tree-quiz-74e04
@@ -117,6 +119,37 @@ for (const person of SEED) {
     failed = true;
     console.error(`  failed for ${person.phone}: ${error?.message ?? error}`);
   }
+}
+
+/*
+ * `settings/permissions`, question Q4: the Owner's switch that lets the Kitchen
+ * edit ingredients and recipes. Written off only if the document does not
+ * exist yet, inside a transaction, so re-running this script (against the
+ * emulator or a real project) never flips a switch the Owner has turned on.
+ * It exists so the switch is visible in the Emulator UI and the console; the
+ * rules treat a missing document as off anyway.
+ */
+try {
+  const ref = db.collection("settings").doc("permissions");
+  const created = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists) return false;
+    const now = FieldValue.serverTimestamp();
+    tx.create(ref, {
+      kitchenCanEditRecipes: false,
+      createdAt: now,
+      createdBy: "seed",
+      updatedAt: now,
+      updatedBy: "seed",
+    });
+    return true;
+  });
+  console.log(
+    `  settings/permissions  ${created ? "created with kitchenCanEditRecipes: false" : "already exists, left alone"}`,
+  );
+} catch (error) {
+  failed = true;
+  console.error(`  failed for settings/permissions: ${error?.message ?? error}`);
 }
 
 if (failed) {

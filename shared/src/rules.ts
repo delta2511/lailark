@@ -14,7 +14,9 @@
  * keys changed."
  */
 
+import type { SettingsName } from "./states.js";
 import type { Batch } from "./types/kitchen.js";
+import type { PermissionsSettings } from "./types/system.js";
 
 /** Any key of the batch document, including the three every document has. */
 type BatchField = keyof Batch;
@@ -106,4 +108,45 @@ export function writableBatchFields(role: string, fields: readonly string[]): st
   if (role === "owner") return fields.filter((f) => !isProtectedBatchField(f));
   if (role === "kitchen") return fields.filter((f) => isKitchenBatchField(f));
   return [];
+}
+
+/* -------------------------------------------------------------------------- */
+/* Ingredients and recipes, question Q4                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Where the Owner's "Kitchen may edit ingredients and recipes" switch lives.
+ *
+ * Q4, answered by Shefin: Owner only for now, with a switch to let the Kitchen
+ * edit later; the Kitchen reads every ingredient and recipe either way. One
+ * switch covers both collections because a recipe and its ingredients are
+ * edited together. Like the discount cap (D17) it is a setting the Owner
+ * flips, not code. `firestore.rules` reads the same document and field, and
+ * treats anything but a literal `true` (including no document) as off.
+ *
+ * Deleting an ingredient or recipe stays the Owner's whatever the switch
+ * says, because a batch's history points at them.
+ */
+export const KITCHEN_RECIPE_EDIT_SWITCH = {
+  collection: "settings",
+  doc: "permissions",
+  field: "kitchenCanEditRecipes",
+  default: false,
+} as const satisfies {
+  collection: "settings";
+  doc: SettingsName;
+  field: keyof PermissionsSettings;
+  default: boolean;
+};
+
+/**
+ * Whether the Kitchen may create and edit ingredients and recipes, given the
+ * `settings/permissions` document as read (or `undefined` if it does not
+ * exist). True only for a literal `true`, exactly like the rule, so the admin
+ * never offers an input the rules would refuse.
+ */
+export function kitchenCanEditRecipes(
+  permissions: Partial<PermissionsSettings> | undefined,
+): boolean {
+  return permissions?.kitchenCanEditRecipes === true;
 }

@@ -3,9 +3,13 @@ import {
   isKitchenBatchField,
   isProtectedBatchField,
   KITCHEN_BATCH_FIELDS,
+  KITCHEN_RECIPE_EDIT_SWITCH,
+  kitchenCanEditRecipes,
   PROTECTED_BATCH_FIELDS,
   writableBatchFields,
 } from "./rules.js";
+import { SETTINGS_NAMES } from "./states.js";
+import type { PermissionsSettings } from "./types/system.js";
 
 const ALL_BATCH_FIELDS = [
   "createdAt",
@@ -90,5 +94,41 @@ describe("the batch field lists", () => {
 
     expect(writableBatchFields("viewer", ALL_BATCH_FIELDS)).toEqual([]);
     expect(writableBatchFields("", ALL_BATCH_FIELDS)).toEqual([]);
+  });
+});
+
+describe("the Kitchen's recipe edit switch (Q4)", () => {
+  it("lives on settings/permissions and is off by default", () => {
+    expect(KITCHEN_RECIPE_EDIT_SWITCH).toEqual({
+      collection: "settings",
+      doc: "permissions",
+      field: "kitchenCanEditRecipes",
+      default: false,
+    });
+    expect(SETTINGS_NAMES).toContain(KITCHEN_RECIPE_EDIT_SWITCH.doc);
+  });
+
+  it("is off when the document does not exist", () => {
+    expect(kitchenCanEditRecipes(undefined)).toBe(false);
+  });
+
+  it("is off when the field is missing", () => {
+    expect(kitchenCanEditRecipes({})).toBe(false);
+  });
+
+  it("is off when the field is false", () => {
+    expect(kitchenCanEditRecipes({ kitchenCanEditRecipes: false })).toBe(false);
+  });
+
+  it("is off for anything truthy that is not a literal true, like the rule", () => {
+    const loose = (value: unknown) =>
+      kitchenCanEditRecipes({ kitchenCanEditRecipes: value } as unknown as Partial<PermissionsSettings>);
+    expect(loose("true")).toBe(false);
+    expect(loose(1)).toBe(false);
+    expect(loose(null)).toBe(false);
+  });
+
+  it("is on only for true", () => {
+    expect(kitchenCanEditRecipes({ kitchenCanEditRecipes: true })).toBe(true);
   });
 });

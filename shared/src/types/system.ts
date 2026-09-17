@@ -96,6 +96,18 @@ export interface PincodesSettings {
   readonly count: number;
 }
 
+/**
+ * `settings/permissions`. Question Q4: ingredients and recipes are the Owner's
+ * to edit, and the Kitchen reads all of them. `kitchenCanEditRecipes` is the
+ * Owner's switch that lets the Kitchen create and edit both as well. Off by
+ * default, and a missing document or field means off. Only a literal `true`
+ * turns it on: see `kitchenCanEditRecipes()` in `rules.ts`, which mirrors the
+ * check in `firestore.rules`.
+ */
+export interface PermissionsSettings {
+  readonly kitchenCanEditRecipes: boolean;
+}
+
 /** `settings/{name}`, keyed by name. */
 export interface SettingsByName {
   readonly gst: GstSettings;
@@ -107,6 +119,7 @@ export interface SettingsByName {
   readonly prefixes: PrefixSettings;
   readonly discountCap: DiscountCapSettings;
   readonly pincodes: PincodesSettings;
+  readonly permissions: PermissionsSettings;
 }
 
 /** One settings document, whichever name it carries. */

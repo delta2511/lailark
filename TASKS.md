@@ -104,6 +104,13 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
 - [x] M1.10 [sonnet] Milestone 1 test note (1793ce6) (`docs/milestones/MILESTONE-1-TEST.md`) per
       CLAUDE.md §4.2, then stop.
 
+- [ ] M1.11 [opus] Kitchen recipe-edit switch (D22). Added on 17 Sep from Shefin's Q4
+      answer. Ingredients and recipes readable by all three roles; Owner creates, edits,
+      deletes; Kitchen creates and edits only while `settings/permissions.kitchenCanEditRecipes`
+      is `true` (Owner-only switch, off by default); nobody but the Owner deletes. Shared
+      constant and helper, rules tests for every switch state, seed writes the switch off
+      if missing, rules deployed to staging. Done when: the rules tests pass for every
+      switch state and staging has the new rules.
 ---
 
 ## Milestone 2: Kitchen and counter
@@ -117,7 +124,9 @@ bill PDF; day close works.
       order and percentages under the basis switch (A, B, C from the label basis doc,
       default B), allergen line from tags, nutrition per 100 g from ingoing nutrients
       divided by finished weight, storage and claims text. Tests reproduce the worked
-      example table in the label basis doc §4. Done when: the batch 001 recipe produces
+      example table in the label basis doc §4. Kitchen sees every ingredient and recipe read-only, and gets
+      the edit inputs only when the Owner's switch is on (D22).
+      Done when: the batch 001 recipe produces
       Prawns 35%, Dates 23% on basis B.
 - [ ] M2.2 [sonnet] Products screen. Heroes and pipeline (Flow §2), photos to Storage
       (note photo last), HSN, prices, jar size, shipping rule (built, off), Koorka
@@ -355,7 +364,8 @@ token with contents scope for the publish workflow, Shiprocket account if ready.
       with the card text changing, discount cap, default courier, packing cost, cut-off
       and non-working days, hold minutes, link expiry, shelf-life rule, gas and power,
       key status (never the keys), bill prefixes, users and roles, scheduled jobs off
-      switch. Every change audited. Done when: flipping GST on produces a correct tax
+      switch. The Owner's "Kitchen may edit ingredients and recipes" switch (D22).
+      Every change audited. Done when: flipping GST on produces a correct tax
       invoice on the emulator and flipping it off produces a plain bill.
 - [ ] M5.9 [opus] Hardening. App Check on callables and Firestore, rate limits on
       checkout and counts, `maxInstances` audit, Firestore scheduled backups and PITR

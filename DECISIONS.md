@@ -48,6 +48,8 @@ confirm or replace at the next milestone break.
 | D18 | `lailark` is on the **Blaze** plan | Answers Q1. Functions and Storage can deploy to production |
 | D19 | Staging is the repurposed project **`tree-quiz-74e04`** (display name lailark-staging), not `lailark-staging` | Answers Q2 and amends ST8. Firestore `(default)` in `asia-south1`, Blaze on, Phone Auth on, budget alert set. Hosting sites `tree-quiz-74e04` (customer) and `tree-quiz-74e04-admin` (admin). Web app "Lailark admin (staging)", `1:168769355731:web:dd82afeb5cff871529f926`. The `.firebaserc` alias stays `staging` |
 | D20 | The `setRole` bootstrap secret on staging was set by Shefin, not by Claude Code | Secret Manager writes stay a human step. The value is not recorded anywhere in the repo or this session. `firebase functions:secrets:set SETROLE_BOOTSTRAP_SECRET --project <id>` is the step for production too |
+| D21 | `www.lailark.in` redirects to `lailark.in` with its own certificate | Answers Q3. Set up by Shefin in the Firebase console and GoDaddy. Verified 17 Sep: `https://www.lailark.in/batch/001` 301s to `https://lailark.in/batch/001` |
+| D22 | **Ingredients and recipes: Owner edits, Kitchen views.** A switch lets the Kitchen edit them later | Answers Q4. Kitchen and Viewer read every ingredient and recipe with all their details. The Owner's switch `settings/permissions.kitchenCanEditRecipes` (off by default, a missing setting is off) lets the Kitchen create and edit both when turned on. Only the Owner flips it, like the discount cap (D17). Deleting stays the Owner's either way. The toggle appears in the admin Settings screen (M5.8) and the Recipes screen honours it (M2.1) |
 
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
@@ -282,3 +284,9 @@ break.
   Java 21 and firebase-tools 15.30.1, one named step per workspace test, no secrets. The
   green GitHub run on the pushed branch is the independent test of this task, in place of
   a tester subagent: https://github.com/delta2511/lailark/actions/runs/35195571480. Status: open.
+- A49 (M1.11, 17 Sep): one switch, `settings/permissions.kitchenCanEditRecipes`, covers
+  both ingredients and recipes; only a literal boolean `true` turns it on, in the rules
+  and in `kitchenCanEditRecipes()` in shared. Kitchen never deletes an ingredient or
+  recipe, even with the switch on, because batch lines and history point at them. With
+  the switch on there are no field limits on what the Kitchen edits. The seed script
+  writes the switch as `false` only when the document is missing. Status: open.

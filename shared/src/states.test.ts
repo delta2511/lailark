@@ -245,7 +245,7 @@ describe("the rest", () => {
     expect([...SHIPPING_RULES]).toEqual(["free", "flatFee", "freeOnTwo"]);
   });
 
-  it("carries the nine settings names of brief 18.1", () => {
+  it("carries the nine settings names of brief 18.1, plus the Q4 permissions switch", () => {
     expect([...SETTINGS_NAMES]).toEqual([
       "gst",
       "shipping",
@@ -256,6 +256,7 @@ describe("the rest", () => {
       "prefixes",
       "discountCap",
       "pincodes",
+      "permissions",
     ]);
   });
 });

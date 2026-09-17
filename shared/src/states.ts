@@ -232,5 +232,6 @@ export const SETTINGS_NAMES = [
   "prefixes",
   "discountCap",
   "pincodes",
+  "permissions",
 ] as const;
 export type SettingsName = (typeof SETTINGS_NAMES)[number];

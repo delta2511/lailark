@@ -294,18 +294,43 @@ service cloud.firestore {
       allow write: if isOwner();
     }
 
-    // TODO(Q4): may Kitchen edit ingredients and recipes? The 17.12 table does
-    // not have a row for it. Owner-only until Shefin says otherwise, because
-    // a recipe change moves costs and the label's ingredient line, and the
-    // label is printed.
+    // Ingredients and recipes, question Q4 (Shefin): "For now admin only, but
+    // keep a switch to turn on that permission for kitchen in the future. The
+    // kitchen can view all the ingredients and details though."
+    //
+    // So all three roles read every field. The Owner creates and edits. The
+    // Kitchen creates and edits only while the Owner's switch
+    // `settings/permissions.kitchenCanEditRecipes` is a literal `true`; a
+    // missing document, a missing field or any other value is off. The switch
+    // is a Settings document, so only the Owner can flip it (rule below), and
+    // it is mirrored by KITCHEN_RECIPE_EDIT_SWITCH in `shared/src/rules.ts`.
+    // Delete stays the Owner's whatever the switch says: a batch's lines and
+    // history point at these documents.
+    //
+    // `isKitchen()` is checked before the switch, so an Owner, Viewer or
+    // signed-out write never spends a document read on it.
+
+    /** The Owner's Q4 switch. Missing or anything but `true` means off. */
+    function kitchenCanEditRecipes() {
+      return exists(/databases/$(database)/documents/settings/permissions)
+             && get(/databases/$(database)/documents/settings/permissions).data.get('kitchenCanEditRecipes', false) == true;
+    }
+
+    /** Owner always; Kitchen only with the switch on. */
+    function editsRecipes() {
+      return isOwner() || (isKitchen() && kitchenCanEditRecipes());
+    }
+
     match /ingredients/{ingredientId} {
       allow read: if isAdmin();
-      allow write: if isOwner();
+      allow create, update: if editsRecipes();
+      allow delete: if isOwner();
     }
 
     match /recipes/{recipeId} {
       allow read: if isAdmin();
-      allow write: if isOwner();
+      allow create, update: if editsRecipes();
+      allow delete: if isOwner();
     }
 
     /* ══ customers ══════════════════════════════════════════════════════ */
@@ -379,7 +404,8 @@ service cloud.firestore {
     // Kitchen reads Settings because the counter needs the discount cap
     // (D17) and the shipping switch. Only the Owner changes them (17.12,
     // "Settings, users, keys, GST and shipping switches"). `settings/pincodes`
-    // is one of these documents.
+    // is one of these documents, and so is `settings/permissions`, which holds
+    // the Q4 switch: the Kitchen can read it but never flip it.
     match /settings/{name} {
       allow read: if isAdmin();
       allow write: if isOwner();

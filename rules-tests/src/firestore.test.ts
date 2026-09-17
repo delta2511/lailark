@@ -12,10 +12,21 @@
  * document or this field".
  */
 
-import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  serverTimestamp,
+  setDoc,
+  Timestamp,
+  updateDoc,
+} from "firebase/firestore";
 import type { RulesTestContext, RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { KITCHEN_RECIPE_EDIT_SWITCH } from "@lailark/shared";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
   callers,
@@ -419,11 +430,145 @@ describe("the catalogue", () => {
     await assertSucceeds(patch(who.owner, "recipes/rec-1", { version: 2 }));
   });
 
-  // TODO(Q4): may the Kitchen edit ingredients and recipes? Owner-only meanwhile.
-  it("is read-only for the Kitchen until Q4 is answered", async () => {
+  it("keeps products, and so prices, away from the Kitchen", async () => {
     await assertFails(patch(who.kitchen, "products/prawns-and-dates", { priceInStock: 1 }));
-    await assertFails(patch(who.kitchen, "ingredients/i1", { unitCost: 1 }));
-    await assertFails(patch(who.kitchen, "recipes/rec-1", { version: 2 }));
+  });
+});
+
+/*
+ * Question Q4, answered by Shefin: ingredients and recipes are the Owner's to
+ * edit, the Kitchen reads all of them, and the Owner has a switch,
+ * `settings/permissions.kitchenCanEditRecipes`, that lets the Kitchen create
+ * and edit them too. Only a literal `true` turns it on. Every case below runs
+ * in all four states of that switch, and each test sets the state it needs
+ * itself and puts it back afterwards, so file order does not matter.
+ */
+describe("ingredients and recipes, and the Owner's Kitchen switch (Q4)", () => {
+  const SWITCH_PATH = `${KITCHEN_RECIPE_EDIT_SWITCH.collection}/${KITCHEN_RECIPE_EDIT_SWITCH.doc}`;
+
+  /** `undefined` means the switch document does not exist. */
+  const SWITCH_STATES: ReadonlyArray<readonly [label: string, value: unknown, on: boolean]> = [
+    ["missing", undefined, false],
+    ["false", false, false],
+    ['the string "true"', "true", false],
+    ["true", true, true],
+  ];
+
+  const CATALOGUE = [
+    ["ingredients", "ingredients/i1", { unitCost: 1 }],
+    ["recipes", "recipes/rec-1", { version: 2 }],
+  ] as const;
+
+  async function setSwitch(value: unknown): Promise<void> {
+    await env.withSecurityRulesDisabled(async (admin) => {
+      const ref = doc(admin.firestore(), SWITCH_PATH);
+      if (value === undefined) await deleteDoc(ref);
+      else await setDoc(ref, { ...base, [KITCHEN_RECIPE_EDIT_SWITCH.field]: value });
+    });
+  }
+
+  afterEach(async () => {
+    await setSwitch(undefined);
+  });
+
+  const list = (ctx: RulesTestContext, name: string) => getDocs(collection(ctx.firestore(), name));
+
+  for (const [label, value, on] of SWITCH_STATES) {
+    describe(`with the switch ${label}`, () => {
+      beforeEach(async () => {
+        await setSwitch(value);
+      });
+
+      it("the Kitchen gets and lists every ingredient and recipe", async () => {
+        for (const [name, path] of CATALOGUE) {
+          await assertSucceeds(read(who.kitchen, path));
+          await assertSucceeds(list(who.kitchen, name));
+        }
+      });
+
+      it("the Viewer reads them and writes nothing", async () => {
+        for (const [name, path, change] of CATALOGUE) {
+          await assertSucceeds(read(who.viewer, path));
+          await assertSucceeds(list(who.viewer, name));
+          await assertFails(patch(who.viewer, path, change));
+          await assertFails(write(who.viewer, `${name}/viewer-new`, { ...base, labelName: "no" }));
+        }
+      });
+
+      it(`the Kitchen ${on ? "may" : "may not"} create and update them`, async () => {
+        const expectation = on ? assertSucceeds : assertFails;
+        for (const [name, path, change] of CATALOGUE) {
+          await expectation(patch(who.kitchen, path, change));
+          await expectation(write(who.kitchen, `${name}/kitchen-new`, { ...base, createdBy: KITCHEN_UID }));
+        }
+      });
+
+      it("the Kitchen never deletes them", async () => {
+        for (const [, path] of CATALOGUE) {
+          await assertFails(remove(who.kitchen, path));
+        }
+      });
+
+      it("the Owner creates, updates and deletes them", async () => {
+        for (const [name, path, change] of CATALOGUE) {
+          await assertSucceeds(write(who.owner, `${name}/owner-new`, { ...base }));
+          await assertSucceeds(patch(who.owner, path, change));
+          await assertSucceeds(remove(who.owner, path));
+        }
+      });
+
+      it("a caller with no role, or nobody at all, neither reads nor writes them", async () => {
+        for (const ctx of [who.noRole, who.unauth]) {
+          for (const [name, path, change] of CATALOGUE) {
+            await assertFails(read(ctx, path));
+            await assertFails(list(ctx, name));
+            await assertFails(patch(ctx, path, change));
+            await assertFails(write(ctx, `${name}/stranger-new`, { ...base }));
+            await assertFails(remove(ctx, path));
+          }
+        }
+      });
+    });
+  }
+
+  describe("the switch itself", () => {
+    const flipOn = { ...base, [KITCHEN_RECIPE_EDIT_SWITCH.field]: true };
+
+    it("cannot be created by the Kitchen or the Viewer", async () => {
+      await setSwitch(undefined);
+      await assertFails(write(who.kitchen, SWITCH_PATH, flipOn));
+      await assertFails(write(who.viewer, SWITCH_PATH, flipOn));
+    });
+
+    it("cannot be flipped by the Kitchen or the Viewer, by set or by update", async () => {
+      await setSwitch(false);
+      for (const ctx of [who.kitchen, who.viewer]) {
+        await assertFails(write(ctx, SWITCH_PATH, flipOn));
+        await assertFails(patch(ctx, SWITCH_PATH, { [KITCHEN_RECIPE_EDIT_SWITCH.field]: true }));
+        await assertFails(remove(ctx, SWITCH_PATH));
+      }
+      await assertFails(patch(who.kitchen, "ingredients/i1", { unitCost: 1 }));
+    });
+
+    it("is read by the Kitchen, so the admin can tell it what it may edit", async () => {
+      await setSwitch(false);
+      await assertSucceeds(read(who.kitchen, SWITCH_PATH));
+    });
+
+    it("is created and flipped by the Owner, and the Kitchen may then edit", async () => {
+      await setSwitch(undefined);
+      await assertSucceeds(write(who.owner, SWITCH_PATH, { ...base, [KITCHEN_RECIPE_EDIT_SWITCH.field]: false }));
+      await assertFails(patch(who.kitchen, "recipes/rec-1", { version: 2 }));
+      await assertSucceeds(patch(who.owner, SWITCH_PATH, { [KITCHEN_RECIPE_EDIT_SWITCH.field]: true }));
+      await assertSucceeds(patch(who.kitchen, "recipes/rec-1", { version: 2 }));
+    });
+
+    it("is not public", async () => {
+      await setSwitch(true);
+      await assertFails(read(who.unauth, SWITCH_PATH));
+      await assertFails(read(who.noRole, SWITCH_PATH));
+      await assertFails(write(who.noRole, SWITCH_PATH, { ...base, [KITCHEN_RECIPE_EDIT_SWITCH.field]: false }));
+    });
   });
 });
 

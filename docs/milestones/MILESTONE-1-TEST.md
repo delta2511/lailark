@@ -41,6 +41,11 @@ staging.** Everything else is secondary.
   Shefin and Sumayya's roles there.
 - **M1.9** (00816bb). Added GitHub Actions: every push and pull request on a milestone
   branch runs install, lint, build, and every test suite.
+- **M1.11**. Built your Q4 answer: Sumayya can read every ingredient and recipe; only
+  you can edit or delete them; a switch (`settings/permissions`,
+  `kitchenCanEditRecipes`, off by default) lets her create and edit them once you turn
+  it on. Deleting stays yours. The toggle on the admin Settings screen arrives in M5.8;
+  until then it can only be flipped in the Firebase console. Deployed to staging.
 
 ## 2. Where things live now
 
@@ -97,8 +102,8 @@ npm run check:batch-001 -- --project staging
 
 Open `https://lailark.in/batch/001` and compare it to a printed jar by eye.
 
-Open `https://www.lailark.in`. Expect a certificate warning in the browser. This is
-known and not fixed yet (see Q3 below).
+Open `https://www.lailark.in/batch/001`. Expect it to land on `https://lailark.in/batch/001`
+with no certificate warning (Q3, fixed by you).
 
 ### C. Laptop: the deploy command
 
@@ -168,8 +173,6 @@ step is green.
   will work there.
 - Staging has no `users/{uid}` documents yet. The admin shows Shefin and Sumayya's
   names from their Auth accounts instead.
-- `www.lailark.in` still shows a certificate warning (Q3, not fixed, needs a console
-  step from Shefin).
 - The root `npm run dev` command only runs the site's dev server for now, not the
   emulators and admin together (A6).
 - The admin's JavaScript bundle is 616 KB before compression (181 KB gzipped), almost
@@ -181,15 +184,7 @@ step is green.
 
 ## 5. Open questions
 
-- **Q3.** The label prints `www.lailark.in`, but that address has no valid
-  certificate: DNS points at Firebase, but the certificate does not cover the `www`
-  name, so browsers show a security warning. The only fix is in the Firebase console
-  (Hosting, site `lailark`, Add custom domain, `www.lailark.in`, choose redirect to
-  `lailark.in`), then two DNS records at GoDaddy. Nothing in the repo can fix this.
-  Meanwhile the address is left as is.
-- **Q4.** May Kitchen edit ingredients and recipes? The roles table in the brief has no
-  row for this. Meanwhile both are Owner-only in the rules, marked `TODO(Q4)`, because
-  a recipe change moves batch costs and the ingredient line printed on the jars.
+None. Q3 and Q4 are answered below.
 
 ## 6. Answered during this milestone
 
@@ -201,6 +196,10 @@ step is green.
   authorised before its admin can sign in.
 - **Q6.** The `setRole` bootstrap secret is set on staging, so `api` and `setRole` are
   deployed there. (D20)
+- **Q3.** `www.lailark.in` now redirects to `lailark.in` with its own certificate.
+  (D21)
+- **Q4.** Ingredients and recipes: you edit them, Sumayya can see all of them, and a
+  switch you control lets her edit them later. Built in M1.11. (D22)
 
 ## 7. Every assumption from this milestone
 
@@ -325,10 +324,13 @@ otherwise they stand.
 - A48: the CI workflow runs on Ubuntu with Node 22 and Java 21, one step per workspace,
   with no secrets configured; the green run on GitHub stood in for a tester subagent
   on this task. Open.
+- A49: one switch covers both ingredients and recipes; only a real "on" turns it on;
+  Sumayya never deletes them even with the switch on; with it on she can edit any field
+  of them. Open.
 
 ## 8. What to reply with
 
-Bugs you found, your answers to Q3 and Q4, any assumption you want to overrule (by its
+Bugs you found, any assumption you want to overrule (by its
 id, for example "A31: no, do X"), then the word `continue`.
 
 After that, here is the merge that follows, for you to run when you are ready (not

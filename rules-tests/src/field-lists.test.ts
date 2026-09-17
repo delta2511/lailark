@@ -15,7 +15,7 @@
 
 import { readFileSync } from "node:fs";
 
-import { KITCHEN_BATCH_FIELDS, PROTECTED_BATCH_FIELDS } from "@lailark/shared";
+import { KITCHEN_BATCH_FIELDS, KITCHEN_RECIPE_EDIT_SWITCH, PROTECTED_BATCH_FIELDS } from "@lailark/shared";
 import { describe, expect, it } from "vitest";
 
 import { FIRESTORE_RULES_PATH } from "./env.js";
@@ -68,5 +68,17 @@ describe("the rules file itself", () => {
     for (const name of ["documents", "counters", "refunds", "settlements", "webhookEvents", "dayCloses"]) {
       expect(rulesText).toContain(`match /${name}/`);
     }
+  });
+});
+
+describe("the Kitchen recipe edit switch in firestore.rules (Q4)", () => {
+  it("reads the document and field KITCHEN_RECIPE_EDIT_SWITCH names, defaulting to off", () => {
+    const { collection, doc, field } = KITCHEN_RECIPE_EDIT_SWITCH;
+    const body = /function\s+kitchenCanEditRecipes\s*\(\)\s*\{([^}]*)\}/.exec(rulesText);
+    if (!body) throw new Error("no function kitchenCanEditRecipes() in firestore.rules");
+    const path = `/databases/$(database)/documents/${collection}/${doc}`;
+    expect(body[1]).toContain(`exists(${path})`);
+    expect(body[1]).toContain(`get(${path}).data.get('${field}', false) == true`);
+    expect(KITCHEN_RECIPE_EDIT_SWITCH.default).toBe(false);
   });
 });
