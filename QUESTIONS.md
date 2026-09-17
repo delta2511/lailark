@@ -20,7 +20,6 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
   `firestore.rules` and the rules tests), because a recipe change moves batch costs and
   the label's ingredient line, which is printed on the jars.
 
-
 ## Answered
 
 - ~~Q1 (M1, 16 Sep): Is the `lailark` Firebase project on the Blaze plan yet? Functions and Storage will not deploy without it. Meanwhile: everything runs on the emulator.~~ Answered 17 Sep: Blaze is on for `lailark`. Recorded as D18 in DECISIONS.md.

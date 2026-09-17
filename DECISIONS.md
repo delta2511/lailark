@@ -278,3 +278,7 @@ break.
   set with `firebase functions:artifacts:setpolicy --force`), so deploys exit cleanly and
   old images do not accrue storage charges. Production needs the same once functions
   deploy there. Status: open.
+- A48 (M1.9, 17 Sep): CI (`.github/workflows/ci.yml`) runs on Ubuntu with Node 22, Temurin
+  Java 21 and firebase-tools 15.30.1, one named step per workspace test, no secrets. The
+  green GitHub run on the pushed branch is the independent test of this task, in place of
+  a tester subagent: https://github.com/delta2511/lailark/actions/runs/35195571480. Status: open.

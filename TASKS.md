@@ -98,7 +98,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       Firestore rules to staging; set the Owner and Kitchen role claims there. Done
       when: both staging URLs serve, `/batch/001` on staging matches the record,
       `/api/health` on staging reports the project, and both numbers carry their role.
-- [ ] M1.9 [haiku] CI. GitHub Actions workflow on pull requests and pushes to
+- [x] M1.9 [haiku] CI. (00816bb; green on GitHub, run 35195571480) GitHub Actions workflow on pull requests and pushes to
       milestone branches: install, lint, build all three, unit tests, rules tests
       against the emulator. Done when: green on the milestone branch.
 - [ ] M1.10 [sonnet] Milestone 1 test note (`docs/milestones/MILESTONE-1-TEST.md`) per
