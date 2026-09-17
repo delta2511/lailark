@@ -101,7 +101,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
 - [x] M1.9 [haiku] CI. (00816bb; green on GitHub, run 35195571480) GitHub Actions workflow on pull requests and pushes to
       milestone branches: install, lint, build all three, unit tests, rules tests
       against the emulator. Done when: green on the milestone branch.
-- [ ] M1.10 [sonnet] Milestone 1 test note (`docs/milestones/MILESTONE-1-TEST.md`) per
+- [x] M1.10 [sonnet] Milestone 1 test note (1793ce6) (`docs/milestones/MILESTONE-1-TEST.md`) per
       CLAUDE.md §4.2, then stop.
 
 ---
