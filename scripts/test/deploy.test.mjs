@@ -242,6 +242,43 @@ test("--target both --project staging --preview fails fast on the admin message 
   assert.doesNotMatch(stdout, /hosting:channel:deploy|firebase deploy/);
 });
 
+test("(g) staging admin build passes VITE_FIREBASE_PROJECT for the staging project id, not production's default", (t) => {
+  const adminPkg = JSON.parse(readFileSync(resolve(ROOT, "admin", "package.json"), "utf8"));
+  if (!(adminPkg.scripts && adminPkg.scripts.build)) {
+    t.skip("admin/ has no build script yet (M1.6 not landed) — this check does not apply");
+    return;
+  }
+  const firebaserc = JSON.parse(readFileSync(resolve(ROOT, ".firebaserc"), "utf8"));
+  const { status, stdout } = runDeploy([
+    "--target",
+    "admin",
+    "--project",
+    "staging",
+    "--preview",
+    "--channel",
+    "test-ch",
+  ]);
+  assert.equal(status, 0);
+  assert.match(
+    stdout,
+    new RegExp(`VITE_FIREBASE_PROJECT=${firebaserc.projects.staging} npm run build --workspace admin`),
+  );
+});
+
+test("(g) production admin build passes VITE_FIREBASE_PROJECT=lailark", (t) => {
+  const adminPkg = JSON.parse(readFileSync(resolve(ROOT, "admin", "package.json"), "utf8"));
+  if (!(adminPkg.scripts && adminPkg.scripts.build)) {
+    t.skip("admin/ has no build script yet (M1.6 not landed) — this check does not apply");
+    return;
+  }
+  const { status, stdout } = runDeploy(
+    ["--target", "admin", "--project", "production", "--live"],
+    { input: "yes\n" },
+  );
+  assert.equal(status, 0);
+  assert.match(stdout, /VITE_FIREBASE_PROJECT=lailark npm run build --workspace admin/);
+});
+
 test("DRY_RUN skips the /batch/001 network check after a live customer deploy and says so", () => {
   const { status, stdout } = runDeploy(
     ["--target", "customer", "--project", "production", "--live"],

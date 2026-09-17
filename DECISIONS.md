@@ -46,6 +46,7 @@ confirm or replace at the next milestone break.
 | # | Decision | Detail |
 |---|---|---|
 | D18 | `lailark` is on the **Blaze** plan | Answers Q1. Functions and Storage can deploy to production |
+| D19 | Staging is the repurposed project **`tree-quiz-74e04`** (display name lailark-staging), not `lailark-staging` | Answers Q2 and amends ST8. Firestore `(default)` in `asia-south1`, Blaze on, Phone Auth on, budget alert set. Hosting sites `tree-quiz-74e04` (customer) and `tree-quiz-74e04-admin` (admin). Web app "Lailark admin (staging)", `1:168769355731:web:dd82afeb5cff871529f926`. The `.firebaserc` alias stays `staging` |
 
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
@@ -94,7 +95,8 @@ break.
 - A9 (M1.2, 16 Sep): staging Hosting site ids are assumed as `lailark-staging` (customer)
   and `lailark-staging-admin` (admin) in `.firebaserc`; neither exists until the staging
   project does (Q2). If either id is taken when created, `.firebaserc` needs one edit.
-  Status: open.
+  Status: replaced by D19, the staging sites are `tree-quiz-74e04` and
+  `tree-quiz-74e04-admin`.
 - A10 (M1.2, 16 Sep): the hosting emulator listens on 5010 (customer) and 5015 (admin,
   auto-assigned), not 5000, because macOS AirPlay Receiver holds port 5000 on the Mac
   and functions keep 5001. Firestore 8080, Auth 9099, Storage 9199, UI 4000.
@@ -257,3 +259,11 @@ break.
   `firebase emulators:exec --only firestore,storage`, one file at a time against one
   emulator. A write that sets a protected field to the value it already has passes,
   because rules compare changed keys. Status: open.
+- A45 (M1.8a, 17 Sep): `scripts/deploy.mjs` and `scripts/check-batch-001.mjs` read the
+  staging project id from `.firebaserc`; the admin build gets `VITE_FIREBASE_PROJECT`
+  for the project it deploys to, and `admin/src/firebase.ts` picks the config with a
+  literal comparison so each bundle carries only its own project's web config (a repoint
+  touches `.firebaserc` and that one line). The admin shows a user's name from
+  `users/{uid}`, then the Auth `displayName`, then the phone number. Functions also call
+  `setGlobalOptions({ region: asia-south1, maxInstances: 3 })` before any export loads.
+  Status: open.

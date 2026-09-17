@@ -27,16 +27,16 @@ describe("getProjectId", () => {
 
   it("prefers GCLOUD_PROJECT over FIREBASE_CONFIG when both are set", () => {
     process.env.GCLOUD_PROJECT = "lailark";
-    process.env.FIREBASE_CONFIG = JSON.stringify({ projectId: "lailark-staging" });
+    process.env.FIREBASE_CONFIG = JSON.stringify({ projectId: "tree-quiz-74e04" });
 
     expect(getProjectId()).toBe("lailark");
   });
 
   it("falls back to FIREBASE_CONFIG's projectId when GCLOUD_PROJECT is unset", () => {
     delete process.env.GCLOUD_PROJECT;
-    process.env.FIREBASE_CONFIG = JSON.stringify({ projectId: "lailark-staging" });
+    process.env.FIREBASE_CONFIG = JSON.stringify({ projectId: "tree-quiz-74e04" });
 
-    expect(getProjectId()).toBe("lailark-staging");
+    expect(getProjectId()).toBe("tree-quiz-74e04");
   });
 
   it("returns 'unknown' when FIREBASE_CONFIG is malformed JSON", () => {

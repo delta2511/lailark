@@ -1,7 +1,7 @@
 {
   "projects": {
     "default": "lailark",
-    "staging": "lailark-staging"
+    "staging": "tree-quiz-74e04"
   },
   "targets": {
     "lailark": {
@@ -14,13 +14,13 @@
         ]
       }
     },
-    "lailark-staging": {
+    "tree-quiz-74e04": {
       "hosting": {
         "customer": [
-          "lailark-staging"
+          "tree-quiz-74e04"
         ],
         "admin": [
-          "lailark-staging-admin"
+          "tree-quiz-74e04-admin"
         ]
       }
     }

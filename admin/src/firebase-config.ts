@@ -16,10 +16,10 @@ export interface FirebaseWebConfig {
   readonly appId: string;
 }
 
-export const PROJECT_IDS = ["lailark", "lailark-staging"] as const;
+export const PROJECT_IDS = ["lailark", "tree-quiz-74e04"] as const;
 export type ProjectId = (typeof PROJECT_IDS)[number];
 
-const production: FirebaseWebConfig = {
+export const production: FirebaseWebConfig = {
   apiKey: "AIzaSyBuM-P0x4vx9qNV2psQ4itvtVQTy9mUvNQ",
   authDomain: "lailark.firebaseapp.com",
   projectId: "lailark",
@@ -29,30 +29,39 @@ const production: FirebaseWebConfig = {
 };
 
 /**
- * TODO(Q2): the `lailark-staging` project does not exist yet, so there is no
- * web app to read a config from. Replace every value below with the output of
- * `firebase apps:sdkconfig web --project lailark-staging` once Shefin creates
- * it. The emulator does not read these values, so local work is unaffected.
+ * Staging is the repurposed `tree-quiz-74e04` project (not a project literally
+ * named "lailark-staging" — that name does not exist). Values below came from:
+ * `firebase apps:sdkconfig WEB 1:168769355731:web:dd82afeb5cff871529f926 --project tree-quiz-74e04`
  */
-const staging: FirebaseWebConfig = {
-  apiKey: "TODO(Q2)",
-  authDomain: "lailark-staging.firebaseapp.com",
-  projectId: "lailark-staging",
-  storageBucket: "lailark-staging.firebasestorage.app",
-  messagingSenderId: "TODO(Q2)",
-  appId: "TODO(Q2)",
+export const staging: FirebaseWebConfig = {
+  apiKey: "AIzaSyD0hyRuIVBS1TwrrmBUBsFVdCn3yDTerfk",
+  authDomain: "tree-quiz-74e04.firebaseapp.com",
+  projectId: "tree-quiz-74e04",
+  storageBucket: "tree-quiz-74e04.firebasestorage.app",
+  messagingSenderId: "168769355731",
+  appId: "1:168769355731:web:dd82afeb5cff871529f926",
 };
 
 const configs: Record<ProjectId, FirebaseWebConfig> = {
   lailark: production,
-  "lailark-staging": staging,
+  "tree-quiz-74e04": staging,
 };
 
 function isProjectId(value: string | undefined): value is ProjectId {
-  return value === "lailark" || value === "lailark-staging";
+  return value === "lailark" || value === "tree-quiz-74e04";
 }
 
-/** The config for VITE_FIREBASE_PROJECT, defaulting to production. */
+/**
+ * The config for a given VITE_FIREBASE_PROJECT value, defaulting to production.
+ *
+ * A generic Record lookup like this can't be reduced to a single object at
+ * build time (it has to keep both configs around for any raw string), so
+ * firebase.ts does NOT call this for the app's actual initialisation — it
+ * compares import.meta.env.VITE_FIREBASE_PROJECT against a literal directly,
+ * which lets the unselected project's config (and API key) be dropped from
+ * that build entirely. This function exists for tests and any other code
+ * that genuinely needs a project id -> config lookup.
+ */
 export function configFor(raw: string | undefined): FirebaseWebConfig {
   return configs[isProjectId(raw) ? raw : "lailark"];
 }

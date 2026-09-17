@@ -9,11 +9,6 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
 
 ## Open
 
-- Q2 (M1, 16 Sep): Please create the `lailark-staging` project (Firestore in
-  `asia-south1`, Phone Auth enabled, Blaze) or say if you would rather M1 run on
-  emulators only and staging is set up at the M1 break. Meanwhile: `.firebaserc` will
-  carry the `staging` alias and every staging deploy is skipped with a note until it
-  exists.
 - Q3 (M1.2, 16 Sep): `www.lailark.in` is printed on the label but has no certificate:
   DNS points at Firebase, plain HTTP redirects to `https://www.lailark.in/`, and HTTPS
   fails with a certificate name mismatch, so a browser shows a security warning. Fix is
@@ -28,3 +23,4 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
 ## Answered
 
 - ~~Q1 (M1, 16 Sep): Is the `lailark` Firebase project on the Blaze plan yet? Functions and Storage will not deploy without it. Meanwhile: everything runs on the emulator.~~ Answered 17 Sep: Blaze is on for `lailark`. Recorded as D18 in DECISIONS.md.
+- ~~Q2 (M1, 16 Sep): Please create the `lailark-staging` project (Firestore in `asia-south1`, Phone Auth enabled, Blaze) or say if you would rather M1 run on emulators only and staging is set up at the M1 break. Meanwhile: `.firebaserc` will carry the `staging` alias and every staging deploy is skipped with a note until it exists.~~ Answered 17 Sep: staging is the repurposed project `tree-quiz-74e04`, created by Shefin. Recorded as D19.

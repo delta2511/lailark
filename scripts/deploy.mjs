@@ -28,11 +28,19 @@ import { resolve } from "node:path";
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
 const DRY_RUN = env.LAILARK_DEPLOY_DRY_RUN === "1";
 const PROJECTS = { staging: "staging", production: "default" };
+// Read project ids from .firebaserc rather than hard-coding them, so a future
+// repoint (like this one, lailark-staging -> tree-quiz-74e04) is one file.
+const FIREBASERC = JSON.parse(readFileSync(resolve(ROOT, ".firebaserc"), "utf8"));
 const BATCH_URL = {
   default: "https://lailark.in/batch/001",
-  staging: "https://lailark-staging.web.app/batch/001",
+  staging: `https://${FIREBASERC.projects.staging}.web.app/batch/001`,
 };
 const BATCH_RECORD = resolve(ROOT, "site/public/batch/001/index.html");
+
+/** The Firebase/GCP project id a deploy `--project <alias>` targets, per .firebaserc. */
+function projectIdFor(projectAlias) {
+  return FIREBASERC.projects[PROJECTS[projectAlias]];
+}
 
 function arg(name) {
   const i = argv.indexOf(`--${name}`);
@@ -93,13 +101,20 @@ function createPrompter(rl) {
   return { ask, raw };
 }
 
-function run(cmd, args, opts = {}) {
-  console.log(`\n$ ${cmd} ${args.join(" ")}`);
+// envVars are printed on the command line (so a dry run, and the tests that read
+// its stdout, can see exactly what would be exported) and passed to the child
+// process's real environment when it actually runs.
+function run(cmd, args, { envVars = {} } = {}) {
+  const prefix = Object.entries(envVars)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(" ");
+  const shown = prefix ? `${prefix} ${cmd} ${args.join(" ")}` : `${cmd} ${args.join(" ")}`;
+  console.log(`\n$ ${shown}`);
   if (DRY_RUN) {
     console.log("  (dry run: not executed)");
     return { status: 0 };
   }
-  const r = spawnSync(cmd, args, { stdio: "inherit", cwd: ROOT, ...opts });
+  const r = spawnSync(cmd, args, { stdio: "inherit", cwd: ROOT, env: { ...env, ...envVars } });
   if (r.status !== 0) {
     console.error(`\nfailed: ${cmd} ${args.join(" ")}`);
     exit(r.status ?? 1);
@@ -230,7 +245,12 @@ async function main() {
       console.error("admin/ is not set up yet (M1.6).");
       exit(1);
     }
-    run("npm", ["run", "build", "--workspace", "admin"]);
+    // The admin build must point at the project it is being deployed to, not
+    // whatever VITE_FIREBASE_PROJECT defaults to (production) — otherwise a
+    // staging deploy ships an admin bundle that talks to production.
+    run("npm", ["run", "build", "--workspace", "admin"], {
+      envVars: { VITE_FIREBASE_PROJECT: projectIdFor(project) },
+    });
   }
   if (withFunctions) run("npm", ["run", "build", "--workspace", "functions"]);
 

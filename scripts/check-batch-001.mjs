@@ -2,7 +2,7 @@
 // Checks the deployed site's /batch/001 against the printed-jar record.
 //
 //   npm run check:batch-001                        production, https://lailark.in
-//   npm run check:batch-001 -- --project staging    https://lailark-staging.web.app
+//   npm run check:batch-001 -- --project staging    https://tree-quiz-74e04.web.app
 //   npm run check:batch-001 -- --url http://127.0.0.1:5010   any base URL
 //
 // Compares the /batch/001 body byte for byte against site/public/batch/001/index.html
@@ -16,6 +16,9 @@ import { resolve } from "node:path";
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
 const RECORD_PATH = resolve(ROOT, "site/public/batch/001/index.html");
+// Read the staging project id from .firebaserc rather than hard-coding it, so a
+// future repoint is one file.
+const FIREBASERC = JSON.parse(readFileSync(resolve(ROOT, ".firebaserc"), "utf8"));
 
 function arg(name) {
   const i = argv.indexOf(`--${name}`);
@@ -27,7 +30,7 @@ function arg(name) {
 function baseUrl() {
   const explicit = arg("url");
   if (explicit && explicit !== true) return explicit.replace(/\/$/, "");
-  if (arg("project") === "staging") return "https://lailark-staging.web.app";
+  if (arg("project") === "staging") return `https://${FIREBASERC.projects.staging}.web.app`;
   return "https://lailark.in";
 }
 

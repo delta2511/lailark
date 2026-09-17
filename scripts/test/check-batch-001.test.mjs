@@ -102,3 +102,22 @@ test("exits 2 when a redirect is missing (404 instead of 301)", async () => {
     server.close();
   }
 });
+
+test("--project staging targets the staging project's URL from .firebaserc, not a hard-coded name", async () => {
+  const firebaserc = JSON.parse(readFileSync(resolve(ROOT, ".firebaserc"), "utf8"));
+  const expectedBase = `https://${firebaserc.projects.staging}.web.app`;
+
+  // Don't wait for the real network call to finish (there is no server listening
+  // at that address in this test) — just capture the "checking ..." line the
+  // script prints before it dials out, then kill it.
+  const child = spawn(process.execPath, [CHECK_SCRIPT, "--project", "staging"], { cwd: ROOT });
+  let stdout = "";
+  await new Promise((resolvePromise) => {
+    child.stdout.on("data", (c) => {
+      stdout += c.toString();
+      if (stdout.includes("checking ")) resolvePromise();
+    });
+  });
+  child.kill();
+  assert.match(stdout, new RegExp(`checking ${expectedBase.replace(/[.]/g, "\\.")} `));
+});

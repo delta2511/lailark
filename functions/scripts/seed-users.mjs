@@ -3,7 +3,7 @@
  * Seeds the admin allowlist: the two numbers in CLAUDE.md section 9.
  *
  *   node functions/scripts/seed-users.mjs --emulator
- *   node functions/scripts/seed-users.mjs --project lailark-staging
+ *   node functions/scripts/seed-users.mjs --project tree-quiz-74e04
  *
  * Idempotent. Re-running finds the existing Auth users, re-asserts the claim
  * and leaves createdAt alone. It uses the Admin SDK directly rather than the

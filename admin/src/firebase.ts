@@ -16,7 +16,16 @@ import {
 } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions, type Functions } from "firebase/functions";
 
-import { configFor } from "./firebase-config";
+import { production, staging } from "./firebase-config";
+
+// A direct, literal comparison (rather than routing through configFor, which
+// does a generic Record lookup by an arbitrary runtime string) so Vite's
+// build-time replacement of import.meta.env.VITE_FIREBASE_PROJECT collapses
+// this to a compile-time-constant ternary: esbuild's minifier then drops the
+// unreachable branch's config object (and its API key) from this build's
+// output entirely, rather than shipping both projects' configs in one bundle.
+const resolvedConfig =
+  import.meta.env.VITE_FIREBASE_PROJECT === "tree-quiz-74e04" ? staging : production;
 
 /** Region for everything server-side (CLAUDE.md section 3, ST3). */
 export const REGION = "asia-south1";
@@ -29,7 +38,7 @@ const FUNCTIONS_EMULATOR_PORT = 5001;
 export const useEmulators: boolean =
   import.meta.env.DEV || import.meta.env.VITE_USE_EMULATORS === "1";
 
-export const app: FirebaseApp = initializeApp(configFor(import.meta.env.VITE_FIREBASE_PROJECT));
+export const app: FirebaseApp = initializeApp(resolvedConfig);
 
 /**
  * Auth keeps its default persistence (indexedDB, falling back to

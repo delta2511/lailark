@@ -20,3 +20,20 @@ export function roleFromClaims(claims: unknown): Role | null {
   if (typeof role !== "string") return null;
   return (ROLES as readonly string[]).includes(role) ? (role as Role) : null;
 }
+
+function nonEmpty(value: unknown): string | null {
+  return typeof value === "string" && value.trim() !== "" ? value : null;
+}
+
+/**
+ * The name shown for a signed-in user: the `users/{uid}` document's `name` if
+ * it has one, else the Firebase Auth user's `displayName`, else the phone
+ * number (which is always present once someone is signed in).
+ */
+export function resolveDisplayName(
+  docName: unknown,
+  authDisplayName: string | null | undefined,
+  phone: string,
+): string {
+  return nonEmpty(docName) ?? nonEmpty(authDisplayName) ?? phone;
+}

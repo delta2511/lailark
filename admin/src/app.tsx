@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { COPY } from "./copy";
 import { auth, db } from "./firebase";
 import { cleanOtp, formatIndianMobile, parseIndianMobile } from "./phone";
-import { roleFromClaims, type Session } from "./session";
+import { resolveDisplayName, roleFromClaims, type Session } from "./session";
 import { Shell } from "./shell/Shell";
 
 type Step = "loading" | "phone" | "otp" | "signedIn";
@@ -68,21 +68,26 @@ export function App() {
       return;
     }
 
-    setSession({ name: await nameFor(user.uid, phoneNumber), role, phone: phoneNumber });
+    setSession({
+      name: await nameFor(user.uid, user.displayName, phoneNumber),
+      role,
+      phone: phoneNumber,
+    });
     setDenied(false);
     setError(null);
     setStep("signedIn");
   }
 
-  // The users document holds the name. If it is missing, or the read is
-  // refused, the phone number stands in: the claim already said yes.
-  async function nameFor(uid: string, fallback: string): Promise<string> {
+  // The users document holds the name. If it is missing, has no name, or the
+  // read is refused, the Auth user's displayName stands in, then the phone
+  // number: the claim already said yes.
+  async function nameFor(uid: string, authDisplayName: string | null, fallback: string): Promise<string> {
     try {
       const snap = await getDoc(doc(db, "users", uid));
       const name = snap.exists() ? (snap.data() as { name?: unknown }).name : undefined;
-      return typeof name === "string" && name.trim() !== "" ? name : fallback;
+      return resolveDisplayName(name, authDisplayName, fallback);
     } catch {
-      return fallback;
+      return resolveDisplayName(undefined, authDisplayName, fallback);
     }
   }
 
