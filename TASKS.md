@@ -140,7 +140,7 @@ bill PDF; day close works.
       season window, custom lines with set amounts (brief §17.8). Every number editable
       in place with an undo toast (brief §17.1). Done when: the four heroes and three
       pipeline products exist on staging.
-- [ ] M2.3 [opus] Batch state machine. Callable `transitionBatch` implementing brief
+- [x] M2.3 [opus] Batch state machine. (d81cf56; TODO(Q11), TODO(Q12), TODO(Q13)) Callable `transitionBatch` implementing brief
       §8.2 exactly: who may call each transition, what it asks for, what it computes
       (bookable, half, limits, best before, sale stop, surplus), what it flags. Batch
       number allocation from a `counters/batch` transaction, global, zero-padded.
