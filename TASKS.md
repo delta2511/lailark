@@ -126,7 +126,7 @@ Branch `milestone-2-kitchen-and-counter`. Brief §23 steps 2 and 3. Shefin's bre
 batch 001 entered with its real numbers; a cash sale at the door produces a numbered
 bill PDF; day close works.
 
-- [ ] M2.1 [opus] Ingredients and recipes. Admin screens under Products for
+- [x] M2.1 [opus] Ingredients and recipes. (732c4b5; TODO(Q7) doc column A) Admin screens under Products for
       `ingredients` and `recipes` (brief §18.1). Recipe engine in `shared/`: ingredient
       order and percentages under the basis switch (A, B, C from the label basis doc,
       default B), allergen line from tags, nutrition per 100 g from ingoing nutrients
