@@ -329,3 +329,21 @@ button.quiet {
   letter-spacing: 0.08em;
   font-size: var(--font-size-small);
 }
+
+/* ---- reCAPTCHA host (M1.12) ---- */
+
+/*
+ * The invisible widget's anchor lives here for the life of the app, so it is
+ * never unmounted while Google's widget is bound to it. Zero size and out of
+ * flow, so it changes no layout; not `display: none` and not
+ * `visibility: hidden`, because the reCAPTCHA badge inside it is a
+ * `position: fixed` node that has to stay visible (it is Google's required
+ * attribution).
+ */
+.recaptcha-host {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+}

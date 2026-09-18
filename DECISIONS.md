@@ -290,3 +290,13 @@ break.
   recipe, even with the switch on, because batch lines and history point at them. With
   the switch on there are no field limits on what the Kitchen edits. The seed script
   writes the switch as `false` only when the document is missing. Status: confirmed at the M1 break (17 Sep, S: no overrule).
+- A50 (M1.12, 18 Sep): signing out returns to Today (`/`) rather than the screen the
+  sign out was tapped on; an error boundary replaces a dead screen with a line and a
+  Reload button; `unhandledrejection` and `error` listeners log in every build, not only
+  dev; the reCAPTCHA host stays 0 by 0 and visible so Google's badge still shows;
+  `clearRecaptchaArtifacts` removes only the badge and unnamed body-level containers
+  whose every iframe is a reCAPTCHA iframe; "Use another number" keeps the typed number
+  for correction. Status: open.
+- A51 (M1.12, 18 Sep): testers default to `[sonnet]`, and `[opus]` is kept for money,
+  rules, auth, webhooks, the agent and customer-facing copy, per CLAUDE.md §4.2 and
+  Shefin's note on 18 Sep to be mindful of model choice. Status: open.

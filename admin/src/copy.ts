@@ -27,6 +27,11 @@ export const COPY = {
   sendFailed: "We could not send the code just now. Please check the signal and try again.",
   notAllowed: "This number is not on the Lailark admin list. If it should be, ask Shefin.",
 
+  /** M1.12: the last resort when a screen throws while it is drawing. */
+  crashed: "Something went wrong on this screen.",
+  crashedLede: "Reloading usually sets it right. If it keeps happening, tell Shefin what you were doing.",
+  crashedReload: "Reload",
+
   offline: "Offline",
 
   navToday: "Today",

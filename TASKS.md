@@ -111,6 +111,13 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       constant and helper, rules tests for every switch state, seed writes the switch off
       if missing, rules deployed to staging. Done when: the rules tests pass for every
       switch state and staging has the new rules.
+- [x] M1.12 [opus] Sign-out left the phone box unusable. Found by Shefin on his phone on
+      18 Sep: after signing out, the phone input took no characters until the page was
+      reloaded. Cause: for one render the app was signed out but still on the signed-in
+      step, fell through to the sign-in screen and drew the code form, so Preact reused
+      the same input and left `maxlength="0"` on it. Fixed with keyed forms, a blank
+      screen for that in-between render, state reset before any cleanup that can throw,
+      a reCAPTCHA anchor per verifier with its leftovers removed, and an error boundary.
 ---
 
 ## Milestone 2: Kitchen and counter
