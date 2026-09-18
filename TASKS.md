@@ -135,7 +135,7 @@ bill PDF; day close works.
       the edit inputs only when the Owner's switch is on (D22).
       Done when: the batch 001 recipe produces
       Prawns 35%, Dates 23% on basis B.
-- [ ] M2.2 [sonnet] Products screen. Heroes and pipeline (Flow §2), photos to Storage
+- [x] M2.2 [sonnet] Products screen. (4e06456; staging seed pending Q9, HSN TODO(Q10)) Heroes and pipeline (Flow §2), photos to Storage
       (note photo last), HSN, prices, jar size, shipping rule (built, off), Koorka
       season window, custom lines with set amounts (brief §17.8). Every number editable
       in place with an undo toast (brief §17.1). Done when: the four heroes and three
