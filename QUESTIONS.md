@@ -17,6 +17,19 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
   confirm with the food consultant. Meanwhile: the engine does the arithmetic and its
   tests name the two cells so the difference stays visible.
 
+- Q8 (M2.2, 18 Sep): Cloud Storage has never been started on either project, so there is
+  no bucket to put photos in. Firebase console, project `tree-quiz-74e04`, Storage, Get
+  started (choose `asia-south1`, and it must match the Firestore region), and the same on
+  `lailark` before launch. Meanwhile: photo upload is built and tested against the
+  Storage emulator, and the Storage rules cannot be deployed.
+- Q9 (M2.2, 18 Sep): seeding data straight into staging needs Google application default
+  credentials on the Mac, which do not exist (`gcloud` is not installed). Two ways round
+  it: run `brew install --cask google-cloud-sdk` then `gcloud auth application-default
+  login` once, and the seed scripts can write to staging; or create the products by
+  tapping through the admin as Owner, which doubles as a test of the screens. Which do
+  you want? Meanwhile: every seed runs against the emulator, and the staging half of a
+  done-when is recorded as skipped.
+
 ## Answered
 
 - ~~Q1 (M1, 16 Sep): Is the `lailark` Firebase project on the Blaze plan yet? Functions and Storage will not deploy without it. Meanwhile: everything runs on the emulator.~~ Answered 17 Sep: Blaze is on for `lailark`. Recorded as D18 in DECISIONS.md.
