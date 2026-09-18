@@ -35,7 +35,16 @@ export const BATCH_STATES_OPEN_FOR_BOOKING = ["open", "halfReached", "sourcing"]
 /** The batch states in which a bottled jar can be bought in stock at Rs 649. */
 export const BATCH_STATES_IN_STOCK = ["bottled", "inStock"] as const;
 
-/** A paused batch can resume only to the state it was paused from. */
+/**
+ * A paused batch can resume only to the state it was paused from.
+ *
+ * TODO(Q13): the brief contradicts itself here. §8.2's transition table has a
+ * row "Any → Paused", while §8.1's diagram says "Paused ← from Open, Half
+ * reached, Sourcing or Cooking". This list follows §8.1, so an **In stock**
+ * batch cannot be paused and there is no way to freeze sales on a jar that
+ * turns out to be bad. Q13 asks Shefin whether In stock and Sold out should be
+ * pausable too; until it is answered, four states.
+ */
 export const BATCH_STATES_PAUSABLE = ["open", "halfReached", "sourcing", "cooking"] as const;
 
 /** Brief section 8.1 and the transition table in 8.2. */

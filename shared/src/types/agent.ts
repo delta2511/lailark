@@ -62,6 +62,25 @@ export interface Approval extends BaseDoc {
   readonly status: ApprovalStatus;
   readonly answeredBy: ActorId | null;
   readonly at: Timestamp | null;
+  /**
+   * The production clock this approval starts: five days at half reached,
+   * three days once the batch is full (brief 7.3 and 8.2). Null for an
+   * approval with no clock, such as a broadcast offer.
+   */
+  readonly dueAt: Timestamp | null;
+  /**
+   * The approval whose clock replaced this one's, or null. Brief §8.2: "3-day
+   * production clock replaces the 5-day" once the batch is full, so the half
+   * approval's `dueAt` is cleared and this says by what. Never more than one
+   * clock is live on a batch at a time.
+   */
+  readonly dueAtSupersededBy: string | null;
+  /**
+   * When the approved message actually went out. An approved approval with no
+   * `sentAt` is the "recorded as sent-pending" of M2.5: the Owner has said
+   * yes, and sending itself arrives in M5.
+   */
+  readonly sentAt: Timestamp | null;
 }
 
 /** `notify/{id}`: the notify-me list. */

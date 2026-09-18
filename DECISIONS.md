@@ -335,3 +335,30 @@ break.
   ₹649 MRP; a custom line amount must be a whole number of 0 or more, with no MRP bound
   because a custom line is not a jar. Both are refused on screen with a plain line.
   Status: open.
+- A59 (M2.3, 19 Sep): `transitionBatch` keeps the §8.2 table in a pure module with no
+  Firebase in it, so every row (who may call it, what it asks for, what it computes, what
+  it flags) is unit-testable. The Owner may also call the rows §8.2 gives to Kitchen,
+  since §17.12 gives the Owner every right. Resuming from Paused names its target state.
+  Status: open.
+- A60 (M2.3, 19 Sep): `heldJars` entries carry `customerPhone` beside `qty` and
+  `expiresAt`, extending the §18.1 shape, because the transaction cannot otherwise tell
+  whose live holds it is counting and the per-person limit could be beaten by taking
+  several holds. Batches are admin-read-only, so no customer number is exposed. The limit
+  counts a customer's live holds plus their paid jars across every order in the batch, is
+  checked inside the same transaction that moves the count, and is checked before the
+  last-jar check so a customer over their cap hears about the cap. It applies to in-stock
+  purchases as well as open-batch bookings. Status: open.
+- A61 (M2.3, 19 Sep): the 3-day production clock lives on the full approval, and raising
+  the full flag clears the half approval's `dueAt` with `dueAtSupersededBy`, so exactly
+  one clock is ever live (§8.2 "replaces"). The half hop is always evaluated before the
+  full flag, so a batch that fills in one payment cannot start a 5-day clock after the
+  3-day one. Status: open.
+- A62 (M2.3, 19 Sep): answering the full approval is its own callable `approveBatchFull`
+  rather than a row of the transition table, because the full flag moves no state. Owner
+  only, stamps `fullApprovedAt`, marks the approval approved or edited, never sets
+  `sentAt`, and a second yes writes nothing. Status: open.
+- A63 (M2.3, 19 Sep): a paused batch blocks a second batch of the same product (D15 lets
+  a second open once the first is cooking, and paused is not cooking). Approvals and
+  concerns use deterministic ids so an at-least-once trigger cannot duplicate them; every
+  automatic step makes its own precondition false, so a trigger's own write stops the
+  chain. Status: open.

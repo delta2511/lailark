@@ -4,10 +4,23 @@ import type { Paise } from "../money.js";
 import type { BatchState } from "../states.js";
 import type { ActorId, BaseDoc, IsoDate, Timestamp } from "./base.js";
 
-/** One live hold on the batch document, keyed by order id. Section 9.3. */
+/**
+ * One live hold on the batch document, keyed by order id. Section 9.3.
+ *
+ * `customerPhone` is not in section 18.1's field list, which spells the map as
+ * `heldJars{orderId: {qty, expiresAt}}`. It is here because §7.2 step 3 checks
+ * the per-person limit "across all their orders in this batch", and a hold is
+ * one of those orders: without the number on the hold itself, the hold
+ * transaction cannot tell whose live holds it is looking at, and the limit
+ * could only be enforced against orders that have already been paid. Batches
+ * are readable by the three admin roles alone (`firestore.rules`), so no
+ * customer number is exposed by keeping it here.
+ */
 export interface BatchHold {
   readonly qty: number;
   readonly expiresAt: Timestamp;
+  /** E.164, the `customers/{phoneE164}` document id of §18.1. */
+  readonly customerPhone: string;
 }
 
 export interface BatchCosts {

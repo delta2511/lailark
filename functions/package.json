@@ -9,7 +9,9 @@
   "scripts": {
     "build": "tsc",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "vitest run && npm run build && npm run test:emulator",
+    "test:unit": "vitest run",
+    "test:emulator": "firebase emulators:exec --only firestore,auth,functions --project lailark --config ../firebase.json \"vitest run --config vitest.emulator.config.mts\"",
     "serve": "npm run build && firebase emulators:start --only functions",
     "dev": "tsc --watch"
   },

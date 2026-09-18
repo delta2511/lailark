@@ -7,3 +7,4 @@ import "./lib/options";
 
 export { api } from "./api";
 export { setRole } from "./auth";
+export { approveBatchFull, onBatchWritten, onOrderWritten, transitionBatch } from "./batches";

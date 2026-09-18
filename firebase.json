@@ -164,7 +164,9 @@
       "*.local",
       "*.test.ts",
       "scripts",
+      "test",
       "vitest.config.mts",
+      "vitest.emulator.config.mts",
       "eslint.config.mjs",
       "*.tsbuildinfo",
       "coverage"
