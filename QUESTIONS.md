@@ -36,6 +36,22 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
   Meanwhile: `TODO(Q10)` in the seed, and the Owner can correct each one in place on the
   Products screen. Nothing depends on it until GST is switched on.
 
+- Q11 (M2.3, 18 Sep): three customer messages have no drafted wording anywhere: the
+  "batch open" message to the opted-in list, the half-reached message for any product
+  other than prawns (the prawns one is drafted in brief §7.2), and the back-in-stock
+  message to the notify-me list. Please draft each, or say the Owner will write them by
+  hand each time in the approval. Meanwhile: every approval carries a `TODO(Q11)` draft
+  naming the product, so nothing can be sent without the Owner editing it first.
+- Q12 (M2.3, 18 Sep): when should a batch take its number? Brief §8.2 allocates it at
+  Draft to Open, but §18.1 makes the number the document id, so a Draft needs one the
+  moment it exists. The build currently allocates at Draft, which means an abandoned
+  draft keeps its number and the published batches can have a gap (draft 002 abandoned,
+  so the next printed jar reads 003 and `/batch/002` never resolves). The alternative is
+  to hold drafts under a temporary id and stamp the real number at Open, so published
+  numbers are always unbroken. Batch lifecycle is on the never-assume list, so this is
+  yours. Meanwhile: numbers are allocated at Draft, still global, sequential and never
+  reused.
+
 ## Answered
 
 - ~~Q1 (M1, 16 Sep): Is the `lailark` Firebase project on the Blaze plan yet? Functions and Storage will not deploy without it. Meanwhile: everything runs on the emulator.~~ Answered 17 Sep: Blaze is on for `lailark`. Recorded as D18 in DECISIONS.md.
