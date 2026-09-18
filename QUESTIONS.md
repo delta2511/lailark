@@ -52,6 +52,13 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
   yours. Meanwhile: numbers are allocated at Draft, still global, sequential and never
   reused.
 
+- Q13 (M2.3, 18 Sep): the brief contradicts itself on pausing. §8.2's table says "Any to
+  Paused", while §8.1's diagram says a batch may be paused only from Open, Half reached,
+  Sourcing or Cooking. The build follows §8.1, which means an **In stock** batch cannot be
+  paused, so there is no way to freeze sales on a jar that turns out to be bad. Should In
+  stock and Sold out be pausable too? Meanwhile: four states, with a `TODO(Q13)` comment
+  where the list is defined.
+
 ## Answered
 
 - ~~Q1 (M1, 16 Sep): Is the `lailark` Firebase project on the Blaze plan yet? Functions and Storage will not deploy without it. Meanwhile: everything runs on the emulator.~~ Answered 17 Sep: Blaze is on for `lailark`. Recorded as D18 in DECISIONS.md.
