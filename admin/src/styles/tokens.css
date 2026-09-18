@@ -1,0 +1,59 @@
+/*
+ * Lailark design tokens. Sales flow doc section 10.
+ *
+ * Hard rule: Rust is a number colour, never a button or a heading. Leaf only
+ * ever touches a claim. There is no fifth colour; when something needs
+ * separating the answer is space, then size, then the hairline.
+ *
+ * --rust and --leaf are declared here for the screens that need them from
+ * M2 on (a jar number, a batch number, a claim); M1.7 itself does not paint
+ * anything with them, including the offline pill, which is grey and ink.
+ *
+ * ASSUMED (M1.7): the customer site honours prefers-color-scheme, but the
+ * admin is a tool, used with flour on your hands, often in bad kitchen
+ * light. It picks one look, paper ground and ink type, on purpose, and does
+ * not attempt a half-built dark mode. `color-scheme: light` tells the
+ * platform not to darken form controls and scrollbars against it.
+ */
+:root {
+  color-scheme: light;
+
+  /* Colour */
+  --ink: #17150f;
+  --paper: #faf8f4;
+  --rust: #a34a28;
+  --leaf: #2f5d3a;
+  --grey: #6e665a;
+  --hairline: #e4ddd0;
+
+  /* Type */
+  --font-heading: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --font-size-small: 14px;
+  --font-size-body: 17px;
+  --font-size-heading-sm: 22px;
+  --font-size-heading-lg: 28px;
+
+  --line-height-body: 1.45;
+  --line-height-heading: 1.2;
+
+  /* Space: 4 / 8 / 12 / 16 / 24 / 32 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Shape */
+  --radius-sm: 2px;
+  --radius-md: 8px;
+  --shadow-none: none;
+
+  /* Touch and focus */
+  --tap: 48px;
+  --focus-ring: 2px solid var(--ink);
+  --focus-ring-offset: 2px;
+}

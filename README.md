@@ -51,5 +51,7 @@ npm test
 npm run deploy
 ```
 
+CI runs lint, build and every test suite on pull requests and milestone branches: `.github/workflows/ci.yml`.
+
 Development runs in Claude Code with the protocol in `CLAUDE.md`. Shefin tests at five
 milestone breaks; between them the build runs on its own.

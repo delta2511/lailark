@@ -4,21 +4,144 @@ rules_version = '2';
 //
 // Default posture is deny. Anything not named here is unreachable from the
 // public internet. The Firebase console and the Admin SDK bypass these rules,
-// so Sumayya can always read everything from the console.
+// so Sumayya can always read everything from the console, and every Cloud
+// Function writes whatever it needs regardless of what is written below.
+//
+// Three things this file is responsible for, from brief section 18.2:
+//
+//   1. Nothing is public. Two exceptions, both carried over from v0: a create
+//      on `notify`, and a read of `config/site`.
+//   2. No client ever writes money. `orders`, `documents`, `counters`,
+//      `refunds`, `settlements`, `webhookEvents` and `dayCloses` take no
+//      client write at all, not even from the Owner. Functions write them.
+//   3. The Kitchen role may change only kitchen fields on a batch, checked by
+//      comparing which keys changed.
+//
+// Roles come from the `role` custom claim on the Firebase Auth token, set by
+// the `setRole` callable (M1.6). A signed-in user with no claim can read their
+// own `users` document and nothing else. The role table is brief section
+// 17.12; the access matrix below is that table as far as rules can express it.
+// Anything the table gives a role that is a *transition* rather than a field
+// write (open a batch, approve, discount, refund, broadcast) is enforced in
+// the callable that performs it, not here, because rules cannot see a cap in
+// Settings or a state machine.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    /* ── who is asking ──────────────────────────────────────────────────── */
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // '' for a signed-out caller and for a signed-in one with no claim, so no
+    // comparison below can throw on a missing key.
+    function role() {
+      return (signedIn() && ('role' in request.auth.token)) ? request.auth.token.role : '';
+    }
+
+    function isOwner() {
+      return role() == 'owner';
+    }
+
+    function isKitchen() {
+      return role() == 'kitchen';
+    }
+
+    function isViewer() {
+      return role() == 'viewer';
+    }
+
+    /** Any of the three roles: somebody on the Lailark admin list. */
+    function isAdmin() {
+      return isOwner() || isKitchen() || isViewer();
+    }
+
+    /** The two who do the work. Viewer is read-only, everywhere, always. */
+    function isStaff() {
+      return isOwner() || isKitchen();
+    }
+
+    /** May see Money: brief 17.12 row "See Money". */
+    function seesMoney() {
+      return isOwner() || isViewer();
+    }
+
+    /* ── which keys changed ─────────────────────────────────────────────── */
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    /** This update changes nothing outside `keys`. */
+    function onlyChanged(keys) {
+      return changedKeys().hasOnly(keys);
+    }
+
+    /** This update changes at least one of `keys`. */
+    function touches(keys) {
+      return changedKeys().hasAny(keys);
+    }
+
+    /* ── the two batch field lists ──────────────────────────────────────── */
+    //
+    // Kept identical to PROTECTED_BATCH_FIELDS and KITCHEN_BATCH_FIELDS in
+    // `shared/src/rules.ts`, which is what the admin reads to grey out the
+    // inputs a role may not touch. `rules-tests/` parses the two arrays out of
+    // this file and asserts the sets match, so they cannot drift.
+
+    /** Counts and server-computed fields. No client writes these, ever. */
+    function protectedBatchFields() {
+      return [
+        'bestBefore',
+        'bookableJars',
+        'bottledJars',
+        'fullApprovedAt',
+        'fullReachedAt',
+        'halfApprovedAt',
+        'halfReachedAt',
+        'heldJars',
+        'paidCount',
+        'perPersonLimit',
+        'pnl',
+        'saleStopOn',
+        'state',
+        'writtenOff'
+      ];
+    }
+
+    /** Weights, dates, sourcing note and packaging costs. Kitchen's own. */
+    function kitchenBatchFields() {
+      return [
+        'cookedOn',
+        'costs',
+        'landedOn',
+        'packedOn',
+        'source',
+        'updatedAt',
+        'updatedBy',
+        'weightCleaned',
+        'weightCooked',
+        'weightRaw'
+      ];
+    }
+
+    /* ══ public ═════════════════════════════════════════════════════════ */
+
     // ── notify ────────────────────────────────────────────────────────────
-    // The "tell me when a batch opens" list. WRITE-ONLY from the public:
-    // anyone may add themselves, nobody may read the list back. It holds
-    // phone numbers, so a public read would be a scrapeable contact dump.
+    // The "tell me when a batch opens" list. Create-only from the public:
+    // anyone may add themselves, nobody on the public internet may read the
+    // list back. It holds phone numbers, so a public read would be a
+    // scrapeable contact dump. The three admin roles may read it, because the
+    // admin has to message the list when a batch opens.
     //
     // The field allowlist and the size caps are what bound abuse: no
     // arbitrary documents, no large payloads, no edits or deletes after
     // the fact.
     match /notify/{doc} {
-      allow read, update, delete: if false;
+      allow read: if isAdmin();
+      allow update, delete: if false;
 
       allow create: if request.resource.data.keys().hasOnly(['contact', 'source', 'createdAt'])
                     && request.resource.data.contact is string
@@ -33,14 +156,292 @@ service cloud.firestore {
     // Public, read-only switches the site reads at page load. Only the one
     // named document is exposed, and writes are console-only (the Admin SDK
     // bypasses these rules), so nothing on the public internet can flip a
-    // switch. Currently holds: notifyCtaVisible (bool) — shows/hides the
-    // "tell me when a batch opens" WhatsApp link on the homepage.
+    // switch, and neither can the admin app. Currently holds:
+    // notifyCtaVisible (bool) — shows/hides the "tell me when a batch opens"
+    // WhatsApp link on the homepage.
     match /config/site {
       allow read: if true;
       allow write: if false;
     }
 
-    // ── everything else ───────────────────────────────────────────────────
+    /* ══ money: server only ═════════════════════════════════════════════ */
+    //
+    // CLAUDE.md section 3 and brief 18.2. Every collection in this block takes
+    // no client write in any role. Reads follow the "See Money" row of 17.12:
+    // Owner and Viewer yes, Kitchen no. `counters` and `webhookEvents` are
+    // plumbing nobody reads from a client at all.
+
+    /** Bills, receipts, refund notes, credit notes. Id is the number itself. */
+    match /documents/{documentId} {
+      allow read: if seesMoney();
+      allow write: if false;
+    }
+
+    /** Next number per series. Changed only inside the server transaction. */
+    match /counters/{series} {
+      allow read, write: if false;
+    }
+
+    match /refunds/{refundId} {
+      allow read: if seesMoney();
+      allow write: if false;
+    }
+
+    match /settlements/{razorpayId} {
+      allow read: if seesMoney();
+      allow write: if false;
+    }
+
+    /** Written with a must-not-exist create by the webhook handler. */
+    match /webhookEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    /** The day's close. Written by the day-close function (M2.11). */
+    match /dayCloses/{date} {
+      allow read: if seesMoney();
+      allow write: if false;
+    }
+
+    /* ══ orders ═════════════════════════════════════════════════════════ */
+
+    // Every order is created and changed by a callable: the counter sale, the
+    // web checkout, the hold transaction, packing. None of them is a client
+    // write, because every one of them either moves a count on the batch
+    // document inside a transaction or touches `payment`, and brief 18.2 puts
+    // both on the server. So: read for the three roles, no client write at
+    // all, Owner included.
+    //
+    // M4.1 (packing) may want a narrow kitchen update here for the packing
+    // note and jar numbers. If it does, it arrives as a field-limited rule
+    // like the batch one below, never as a blanket update.
+    match /orders/{orderId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+
+      match /events/{eventId} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
+    }
+
+    /* ══ kitchen ════════════════════════════════════════════════════════ */
+
+    match /batches/{batchNo} {
+      allow read: if isAdmin();
+
+      // Owner opens a batch and sets its prices (17.12). The document id is
+      // the batch number and numbers are allocated by the `nextBatchNo`
+      // transaction (M2.2), so a create here is the draft body only: no
+      // counts, no state, no computed dates. `transitionBatch` (M2.3) puts it
+      // into `draft` and moves it from there.
+      allow create: if isOwner()
+                    && !request.resource.data.keys().hasAny(protectedBatchFields());
+
+      // Owner: everything except the counts and the computed fields.
+      // Kitchen: the weights, dates, sourcing note and costs, and nothing
+      // else. Brief 18.2, "checked by comparing which keys changed".
+      allow update: if (isOwner() && !touches(protectedBatchFields()))
+                    || (isKitchen() && onlyChanged(kitchenBatchFields()));
+
+      // A batch is archived, never deleted. Numbers are never reused.
+      allow delete: if false;
+
+      /** What the pot actually used. Both staff roles record actuals. */
+      match /lines/{lineId} {
+        allow read: if isAdmin();
+        allow create, update: if isStaff();
+        allow delete: if isOwner();
+      }
+
+      /**
+       * A kitchen photo update. Decision D5: nothing reaches a customer
+       * without the Owner. So Kitchen may write the photo and the line, and
+       * only the Owner may stamp `approvedBy`; `sentAt` is the send, which is
+       * a function, but the Owner is allowed it for a manual correction.
+       */
+      match /updates/{updateId} {
+        allow read: if isAdmin();
+
+        allow create: if isOwner()
+                      || (isKitchen()
+                          && request.resource.data.get('approvedBy', null) == null
+                          && request.resource.data.get('sentAt', null) == null);
+
+        allow update: if isOwner()
+                      || (isKitchen()
+                          && onlyChanged(['photoPath', 'kitchenLine', 'updatedAt', 'updatedBy'])
+                          && resource.data.get('approvedBy', null) == null
+                          && resource.data.createdBy == request.auth.uid);
+
+        allow delete: if false;
+      }
+
+      /** A jar that will never be sold. Recorded, never edited away. */
+      match /writeOffs/{writeOffId} {
+        allow read: if isAdmin();
+        allow create: if isStaff();
+        allow update, delete: if false;
+      }
+    }
+
+    /* ══ catalogue ══════════════════════════════════════════════════════ */
+
+    // Prices live on products, so products are the Owner's: 17.12 gives
+    // "set prices" to Owner alone.
+    match /products/{slug} {
+      allow read: if isAdmin();
+      allow write: if isOwner();
+    }
+
+    // Ingredients and recipes, question Q4 (Shefin): "For now admin only, but
+    // keep a switch to turn on that permission for kitchen in the future. The
+    // kitchen can view all the ingredients and details though."
+    //
+    // So all three roles read every field. The Owner creates and edits. The
+    // Kitchen creates and edits only while the Owner's switch
+    // `settings/permissions.kitchenCanEditRecipes` is a literal `true`; a
+    // missing document, a missing field or any other value is off. The switch
+    // is a Settings document, so only the Owner can flip it (rule below), and
+    // it is mirrored by KITCHEN_RECIPE_EDIT_SWITCH in `shared/src/rules.ts`.
+    // Delete stays the Owner's whatever the switch says: a batch's lines and
+    // history point at these documents.
+    //
+    // `isKitchen()` is checked before the switch, so an Owner, Viewer or
+    // signed-out write never spends a document read on it.
+
+    /** The Owner's Q4 switch. Missing or anything but `true` means off. */
+    function kitchenCanEditRecipes() {
+      return exists(/databases/$(database)/documents/settings/permissions)
+             && get(/databases/$(database)/documents/settings/permissions).data.get('kitchenCanEditRecipes', false) == true;
+    }
+
+    /** Owner always; Kitchen only with the switch on. */
+    function editsRecipes() {
+      return isOwner() || (isKitchen() && kitchenCanEditRecipes());
+    }
+
+    match /ingredients/{ingredientId} {
+      allow read: if isAdmin();
+      allow create, update: if editsRecipes();
+      allow delete: if isOwner();
+    }
+
+    match /recipes/{recipeId} {
+      allow read: if isAdmin();
+      allow create, update: if editsRecipes();
+      allow delete: if isOwner();
+    }
+
+    /* ══ customers ══════════════════════════════════════════════════════ */
+
+    // Both staff roles: a name typed wrong at the counter, an address fixed
+    // before packing (17.12, "change address before packing"). Deletion is a
+    // function (M4.10) because it has to reach documents and conversations
+    // too, so no client delete.
+    match /customers/{phone} {
+      allow read: if isAdmin();
+      allow create, update: if isStaff();
+      allow delete: if false;
+
+      match /addresses/{addressId} {
+        allow read: if isAdmin();
+        allow create, update: if isStaff();
+        allow delete: if false;
+      }
+    }
+
+    /* ══ shipping ═══════════════════════════════════════════════════════ */
+
+    // Packing and booking a courier are both staff jobs (17.12), and
+    // "edit packing cost" is explicitly Kitchen's. `packingCost` and
+    // `courierCost` are money but they are money *out*, typed by hand from a
+    // receipt, not a customer payment, so they are not on the server-only
+    // list. The courier booking itself is a callable.
+    match /shipments/{shipmentId} {
+      allow read: if isAdmin();
+      allow create, update: if isStaff();
+      allow delete: if false;
+
+      match /events/{eventId} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
+    }
+
+    /* ══ agent ══════════════════════════════════════════════════════════ */
+
+    // Concerns and approvals are raised by functions and answered by the
+    // Owner: 17.12 gives "Answer a Concern" and "Approve half, full, photo
+    // update and broadcast" to Owner alone. Kitchen and Viewer read them.
+    match /concerns/{concernId} {
+      allow read: if isAdmin();
+      allow create, update: if isOwner();
+      allow delete: if false;
+    }
+
+    match /approvals/{approvalId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update: if isOwner();
+      allow delete: if false;
+    }
+
+    // Every message in or out goes through the WhatsApp function, which logs
+    // it. A client write here would be a message nobody sent.
+    match /conversations/{phone} {
+      allow read: if isAdmin();
+      allow write: if false;
+
+      match /messages/{messageId} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
+    }
+
+    /* ══ system ═════════════════════════════════════════════════════════ */
+
+    // Kitchen reads Settings because the counter needs the discount cap
+    // (D17) and the shipping switch. Only the Owner changes them (17.12,
+    // "Settings, users, keys, GST and shipping switches"). `settings/pincodes`
+    // is one of these documents, and so is `settings/permissions`, which holds
+    // the Q4 switch: the Kitchen can read it but never flip it.
+    match /settings/{name} {
+      allow read: if isAdmin();
+      allow write: if isOwner();
+    }
+
+    // A signed-in admin may read their own users document, so the app can show
+    // their name next to the role; the Owner may read all of them, for the
+    // users screen. Nothing on the client may write it: roles are set by the
+    // `setRole` callable through the Admin SDK, which bypasses these rules.
+    match /users/{uid} {
+      allow read: if isOwner() || (signedIn() && request.auth.uid == uid);
+      allow write: if false;
+    }
+
+    // The text a customer agreed to, kept forever so an old order can be read
+    // against the policy of its day.
+    match /policyVersions/{versionId} {
+      allow read: if isAdmin();
+      allow write: if isOwner();
+    }
+
+    // The undo log. The admin write wrapper (M2.6) appends before/after on
+    // every change either staff role makes, so both may create; nobody may
+    // edit or remove an entry, or undo would be lying. `by` must be the
+    // caller and `at` must be the server's clock, so an entry cannot be
+    // backdated or pinned on somebody else.
+    match /audit/{entryId} {
+      allow read: if isAdmin();
+      allow create: if isStaff()
+                    && request.resource.data.by == request.auth.uid
+                    && request.resource.data.at == request.time;
+      allow update, delete: if false;
+    }
+
+    /* ══ everything else ════════════════════════════════════════════════ */
+
     match /{document=**} {
       allow read, write: if false;
     }

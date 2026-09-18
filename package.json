@@ -1,0 +1,29 @@
+{
+  "name": "lailark",
+  "private": true,
+  "version": "0.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "shared",
+    "functions",
+    "site",
+    "admin",
+    "rules-tests"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present && npm run test:scripts",
+    "test:scripts": "node --test \"scripts/test/**/*.test.mjs\"",
+    "lint": "npm run lint --workspaces --if-present",
+    "dev": "npm run dev --workspace site",
+    "emulators": "firebase emulators:start",
+    "deploy": "node scripts/deploy.mjs",
+    "pack:shared": "node scripts/pack-shared.mjs",
+    "pack:shared:restore": "node scripts/pack-shared.mjs --restore",
+    "check:batch-001": "node scripts/check-batch-001.mjs",
+    "seed:users": "node functions/scripts/seed-users.mjs",
+    "emulators:hosting": "firebase emulators:start --only hosting,auth,functions"
+  }
+}

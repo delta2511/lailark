@@ -3,7 +3,9 @@ node_modules/
 site/.next/
 site/out/
 admin/dist/
+admin/dist-test/
 functions/lib/
+functions/vendor/
 shared/dist/
 *.tsbuildinfo
 
@@ -21,6 +23,9 @@ emulator-data/
 .env
 .env.*
 !.env.example
+.secret.local
+*.secret.local
+functions/.secret.local
 *.pem
 *.p12
 service-account*.json

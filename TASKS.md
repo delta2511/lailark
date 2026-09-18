@@ -22,7 +22,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
 `lailark` on Blaze, budget alert set, `lailark-staging` created with Firestore in
 `asia-south1` and Phone Auth enabled, Firebase CLI logged in on the Mac.
 
-- [ ] M1.1 [sonnet] Repo restructure into workspaces. Root `package.json` with
+- [x] M1.1 [sonnet] Repo restructure into workspaces. (ed52360) Root `package.json` with
       workspaces `site`, `admin`, `functions`, `shared`. Move `lailark-site/` into
       `site/` as the seed of the Next.js app: the v0 pages become `site/public/batch/001/index.html`
       (byte-identical, served as a static file) and the home page becomes a Next.js page
@@ -32,7 +32,7 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       Done when: `npm run build` in `site/` produces `out/` and `diff` of
       `out/batch/001/index.html` against the old file is empty; home page renders the
       same copy.
-- [ ] M1.2 [opus] Firebase config for two hosting sites. Create the admin site
+- [x] M1.2 [opus] Firebase config for two hosting sites. (d74c8dc) Create the admin site
       (`firebase hosting:sites:create lailark-admin` on both projects). `firebase.json`
       becomes the array form with targets `customer` (public `site/out`, the existing
       redirects and headers, `/api/**` rewrite to the functions) and `admin` (public
@@ -42,23 +42,23 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       deploy --only hosting:customer --project staging` succeeds and the staging URL
       serves v0; `curl -I https://lailark.in/batch/001` is still 200 on production
       after a production deploy of the same content.
-- [ ] M1.3 [sonnet] Wire `scripts/deploy.mjs` (already written) into `npm run deploy`.
+- [x] M1.3 [sonnet] Wire `scripts/deploy.mjs` (already written) into `npm run deploy`. (068933f; staging preview deploy skipped until Q2)
       Test interactive and non-interactive paths, preview channels, and that
       "production" asks for a typed `yes`. Add `npm run check:batch-001`. Done when: a
       preview channel deploy of both targets to staging completes and prints its URLs.
-- [ ] M1.4 [sonnet] Functions scaffold. TypeScript, `firebase-functions` v2, region
+- [x] M1.4 [sonnet] Functions scaffold. (f4ab8ed) TypeScript, `firebase-functions` v2, region
       `asia-south1`, `maxInstances` on every export, ESLint, Vitest. One HTTP function
       `api` mounted at `/api/*` with `/api/health` returning `{ok:true, project}`.
       Emulator runs it. Done when: `curl localhost:5001/.../api/health` and the hosting
       emulator's `/api/health` both return ok.
-- [ ] M1.5 [opus] Shared package. `shared/` with the Firestore document types from brief
+- [x] M1.5 [opus] Shared package. (31b7bf7) `shared/` with the Firestore document types from brief
       §18.1, the batch and order state enums (brief §8.1, §9.1), money helpers (paise
       integers, `formatINR`), batch maths (`bookable = floor(planned*0.9)`, `half =
       ceil(bookable/2)`, `perPersonLimit = max(1, floor(bookable/4))`, best-before,
       sale-stop date), and the bill number series helpers (`LK/26-27/0001`, resets 1
       April). Unit tests for every helper, including the table in brief §7.1. Done when:
       tests pass and `site`, `admin`, `functions` all import from it.
-- [ ] M1.6 [opus] Admin auth and roles. Vite + Preact + TypeScript scaffold in `admin/`,
+- [x] M1.6 [opus] Admin auth and roles. (2026fb3; emulator OTP via test helper, see A30) Vite + Preact + TypeScript scaffold in `admin/`,
       `vite-plugin-pwa` with a manifest (name "Lailark", ink and paper colours). Phone
       sign-in with Firebase Phone Auth (reCAPTCHA invisible). `users/{uid}` doc and a
       callable `setRole` that only an existing Owner (or a bootstrap secret on an empty
@@ -66,13 +66,23 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       numbers in CLAUDE.md §9 seeded as Owner and Kitchen by a seed script. Sign-in
       denied for any other number with a kind message. Done when: Playwright signs in
       as each number against the emulator (OTP 123456) and sees their role.
-- [ ] M1.7 [sonnet] Admin shell. Bottom bar Today, Sell, Batches, Orders, More (brief
+- [x] M1.6a [sonnet] Functions deploy packaging. (0e395a5; staging deploy skipped until Q1, Q2) Added by the orchestrator on 16 Sep
+      after M1.5: `@lailark/shared` is a private workspace package, so `firebase deploy
+      --only functions` cannot `npm install` it in the cloud build. Add a functions
+      predeploy (in `firebase.json` or `scripts/deploy.mjs`) that builds `shared/` and
+      packs it into `functions/` (for example `npm pack` into `functions/vendor/` with a
+      `file:` dependency, restored after deploy) so a deploy from a clean checkout works
+      while the emulator, tests and CI keep resolving the workspace link. Done when: a
+      temp copy of the packaged `functions/` installs with `npm ci --omit=dev` and loads
+      `lib/index.js`; `firebase deploy --only functions --project staging` succeeds once
+      staging exists (Q1, Q2), else recorded as skipped.
+- [x] M1.7 [sonnet] Admin shell. (70afdcf; installability proven locally, staging URL pending Q2) Bottom bar Today, Sell, Batches, Orders, More (brief
       §17.1). Empty states for each, "More" lists Concerns, Products, Customers, Agent,
       Money, Settings. Design tokens from Flow §10 as CSS variables. Large tap targets.
       Offline-ready: Firestore persistence enabled, an "offline" pill when the network
       is gone. Done when: installable on iPhone Safari and Android Chrome from the
       staging URL, all five tabs render.
-- [ ] M1.8 [opus] Firestore rules skeleton and tests. Deny by default. Keep `notify`
+- [x] M1.8 [opus] Firestore rules skeleton and tests. (21c69e5; TODO(Q4) ingredients and recipes Owner-only) Deny by default. Keep `notify`
       (create only, same field rules as today) and `config/site` (public read). Role
       helpers reading `request.auth.token.role`. Owner read/write everywhere except the
       money collections (server only). Kitchen: read everything except `documents`,
@@ -81,12 +91,33 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
       client writes to orders are denied). Viewer: read all including Money. Storage
       rules: authenticated admin only. Tests with `@firebase/rules-unit-testing` for
       every row of brief §17.12. Done when: the test matrix passes.
-- [ ] M1.9 [haiku] CI. GitHub Actions workflow on pull requests and pushes to
+- [x] M1.8a [sonnet] Staging on `tree-quiz-74e04`. (2a8a45f, deployed 17 Sep; sign-in on phones is Shefin's break test)
+      after Shefin repurposed a project for staging (D19). Repoint `.firebaserc`, the
+      deploy and check scripts and the admin web config to it; build the admin for the
+      project it deploys to; cap functions globally; deploy both sites, functions and
+      Firestore rules to staging; set the Owner and Kitchen role claims there. Done
+      when: both staging URLs serve, `/batch/001` on staging matches the record,
+      `/api/health` on staging reports the project, and both numbers carry their role.
+- [x] M1.9 [haiku] CI. (00816bb; green on GitHub, run 35195571480) GitHub Actions workflow on pull requests and pushes to
       milestone branches: install, lint, build all three, unit tests, rules tests
       against the emulator. Done when: green on the milestone branch.
-- [ ] M1.10 [sonnet] Milestone 1 test note (`docs/milestones/MILESTONE-1-TEST.md`) per
+- [x] M1.10 [sonnet] Milestone 1 test note (1793ce6) (`docs/milestones/MILESTONE-1-TEST.md`) per
       CLAUDE.md §4.2, then stop.
 
+- [x] M1.11 [opus] Kitchen recipe-edit switch (D22). (9cfd246; rules live on staging) Added on 17 Sep from Shefin's Q4
+      answer. Ingredients and recipes readable by all three roles; Owner creates, edits,
+      deletes; Kitchen creates and edits only while `settings/permissions.kitchenCanEditRecipes`
+      is `true` (Owner-only switch, off by default); nobody but the Owner deletes. Shared
+      constant and helper, rules tests for every switch state, seed writes the switch off
+      if missing, rules deployed to staging. Done when: the rules tests pass for every
+      switch state and staging has the new rules.
+- [x] M1.12 [opus] Sign-out left the phone box unusable. Found by Shefin on his phone on
+      18 Sep: after signing out, the phone input took no characters until the page was
+      reloaded. Cause: for one render the app was signed out but still on the signed-in
+      step, fell through to the sign-in screen and drew the code form, so Preact reused
+      the same input and left `maxlength="0"` on it. Fixed with keyed forms, a blank
+      screen for that in-between render, state reset before any cleanup that can throw,
+      a reCAPTCHA anchor per verifier with its leftovers removed, and an error boundary.
 ---
 
 ## Milestone 2: Kitchen and counter
@@ -100,7 +131,9 @@ bill PDF; day close works.
       order and percentages under the basis switch (A, B, C from the label basis doc,
       default B), allergen line from tags, nutrition per 100 g from ingoing nutrients
       divided by finished weight, storage and claims text. Tests reproduce the worked
-      example table in the label basis doc §4. Done when: the batch 001 recipe produces
+      example table in the label basis doc §4. Kitchen sees every ingredient and recipe read-only, and gets
+      the edit inputs only when the Owner's switch is on (D22).
+      Done when: the batch 001 recipe produces
       Prawns 35%, Dates 23% on basis B.
 - [ ] M2.2 [sonnet] Products screen. Heroes and pipeline (Flow §2), photos to Storage
       (note photo last), HSN, prices, jar size, shipping rule (built, off), Koorka
@@ -338,7 +371,8 @@ token with contents scope for the publish workflow, Shiprocket account if ready.
       with the card text changing, discount cap, default courier, packing cost, cut-off
       and non-working days, hold minutes, link expiry, shelf-life rule, gas and power,
       key status (never the keys), bill prefixes, users and roles, scheduled jobs off
-      switch. Every change audited. Done when: flipping GST on produces a correct tax
+      switch. The Owner's "Kitchen may edit ingredients and recipes" switch (D22).
+      Every change audited. Done when: flipping GST on produces a correct tax
       invoice on the emulator and flipping it off produces a plain bill.
 - [ ] M5.9 [opus] Hardening. App Check on callables and Firestore, rate limits on
       checkout and counts, `maxInstances` audit, Firestore scheduled backups and PITR

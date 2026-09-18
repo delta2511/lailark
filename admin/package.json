@@ -1,0 +1,33 @@
+{
+  "name": "@lailark/admin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:emulator": "VITE_USE_EMULATORS=1 vite build --outDir dist-test",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "test:unit": "vitest run",
+    "test": "npm run test:unit && npm run build:emulator && firebase emulators:exec --only auth,firestore --project lailark --config ../firebase.json \"playwright test\"",
+    "test:e2e": "playwright test",
+    "test:install": "playwright install chromium",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "dependencies": {
+    "@lailark/shared": "0.0.0",
+    "firebase": "12.19.0",
+    "preact": "10.29.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@preact/preset-vite": "2.10.6",
+    "eslint": "9.39.5",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0",
+    "vite": "8.3.0",
+    "vite-plugin-pwa": "1.3.0",
+    "vitest": "5.0.1"
+  }
+}
