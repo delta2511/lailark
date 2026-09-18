@@ -4,6 +4,18 @@ import type { Paise } from "../money.js";
 import type { ProductType, ShippingRule } from "../states.js";
 import type { BaseDoc, IsoDate } from "./base.js";
 
+/**
+ * Something the kitchen may sell at the counter outside the jar catalogue,
+ * with its own set amount: brief section 17.8, "Custom lines the kitchen may
+ * sell at the counter, with their set amount." `description` is what shows
+ * on the sale line; `amountPaise` is the fixed price, integers in paise
+ * (CLAUDE.md section 3), never a per-unit rate.
+ */
+export interface CustomLine {
+  readonly description: string;
+  readonly amountPaise: Paise;
+}
+
 /** `products/{slug}`. The document id is the slug. */
 export interface Product extends BaseDoc {
   readonly name: string;
@@ -19,8 +31,8 @@ export interface Product extends BaseDoc {
   readonly seasonStart: string | null;
   readonly seasonEnd: string | null;
   readonly active: boolean;
-  /** Extra label lines, copied character for character from the print file. */
-  readonly customLines: readonly string[];
+  /** Things the kitchen may sell at the counter under this product's name. */
+  readonly customLines: readonly CustomLine[];
 }
 
 export interface NutritionPer100g {

@@ -30,6 +30,12 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
   you want? Meanwhile: every seed runs against the emulator, and the staging half of a
   done-when is recorded as skipped.
 
+- Q10 (M2.2, 18 Sep): the brief gives only the HSN chapter (16 for prawns, squid, beef,
+  duck and rabbit; 20 for koorka and yam) and says to confirm the code with the CA. The
+  seed writes the two-digit chapter as a placeholder. What are the full HSN codes?
+  Meanwhile: `TODO(Q10)` in the seed, and the Owner can correct each one in place on the
+  Products screen. Nothing depends on it until GST is switched on.
+
 ## Answered
 
 - ~~Q1 (M1, 16 Sep): Is the `lailark` Firebase project on the Blaze plan yet? Functions and Storage will not deploy without it. Meanwhile: everything runs on the emulator.~~ Answered 17 Sep: Blaze is on for `lailark`. Recorded as D18 in DECISIONS.md.

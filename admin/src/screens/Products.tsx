@@ -9,6 +9,7 @@
  * a write is refused anyway (the switch flipped off between the read and the
  * save) the screen says so in one plain line rather than looking broken.
  */
+import { formatINR } from "@lailark/shared";
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";
 
@@ -16,25 +17,32 @@ import { PRODUCTS } from "../copy";
 import { IngredientDetail } from "../products/IngredientDetail";
 import {
   createIngredient,
+  createProduct,
   createRecipe,
   isPermissionDenied,
   saveIngredient,
   saveRecipe,
+  updateProduct,
   useCanEditRecipes,
   useIngredients,
+  useProducts,
   useRecipes,
   type IngredientInput,
+  type ProductDoc,
+  type ProductInput,
   type RecipeInput,
 } from "../products/data";
+import { ProductDetail } from "../products/ProductDetail";
 import { RecipeDetail } from "../products/RecipeDetail";
 import type { Session } from "../session";
 
-type Tab = "ingredients" | "recipes";
+type Tab = "ingredients" | "recipes" | "products";
 
 type View =
   | { readonly kind: "list" }
   | { readonly kind: "ingredient"; readonly id: string | null }
-  | { readonly kind: "recipe"; readonly id: string | null };
+  | { readonly kind: "recipe"; readonly id: string | null }
+  | { readonly kind: "product"; readonly id: string | null };
 
 interface Props {
   readonly session: Session;
@@ -47,7 +55,11 @@ export function Products({ session }: Props): JSX.Element {
 
   const ingredients = useIngredients();
   const recipes = useRecipes();
+  const products = useProducts();
   const canEdit = useCanEditRecipes(session.role);
+  // Products are the Owner's alone (brief 17.12, `firestore.rules`): there is
+  // no Kitchen switch here the way D22 gives ingredients and recipes one.
+  const canEditProducts = session.role === "owner";
 
   function close(): void {
     setError(null);
@@ -109,7 +121,34 @@ export function Products({ session }: Props): JSX.Element {
     );
   }
 
-  const live = tab === "ingredients" ? ingredients : recipes;
+  if (view.kind === "product") {
+    const product = view.id === null ? null : (products.items.find((p) => p.id === view.id) ?? null);
+    return (
+      <div class="products" data-testid="screen-more-products">
+        <ProductDetail
+          key={view.id ?? "new"}
+          product={product}
+          canEdit={canEditProducts}
+          error={error}
+          onClose={close}
+          onCreate={(slug: string, input: ProductInput) =>
+            guard(() => createProduct(slug, input, session.uid))
+          }
+          onUpdate={(patch: Partial<ProductInput>) => {
+            if (view.id === null) return Promise.resolve();
+            setError(null);
+            return updateProduct(view.id, patch, session.uid);
+          }}
+        />
+      </div>
+    );
+  }
+
+  const live = tab === "ingredients" ? ingredients : tab === "recipes" ? recipes : products;
+  const showReadOnlyNote = tab === "products" ? !canEditProducts : !canEdit;
+
+  const heroes = products.items.filter((p) => p.type === "hero");
+  const pipeline = products.items.filter((p) => p.type === "pipeline");
 
   return (
     <div class="products" data-testid="screen-more-products">
@@ -134,9 +173,19 @@ export function Products({ session }: Props): JSX.Element {
         >
           {PRODUCTS.recipesTab}
         </button>
+        <button
+          type="button"
+          role="tab"
+          class={`chip${tab === "products" ? " chip-on" : ""}`}
+          aria-selected={tab === "products"}
+          data-testid="products-tab-products"
+          onClick={() => setTab("products")}
+        >
+          {PRODUCTS.productsTab}
+        </button>
       </div>
 
-      {!canEdit ? (
+      {showReadOnlyNote ? (
         <p class="notice-line" data-testid="read-only-note">
           {PRODUCTS.readOnly}
         </p>
@@ -161,7 +210,9 @@ export function Products({ session }: Props): JSX.Element {
             </li>
           ))}
         </ul>
-      ) : (
+      ) : null}
+
+      {tab === "recipes" ? (
         <ul class="more-list" data-testid="recipe-list">
           {recipes.items.map((recipe) => (
             <li key={recipe.id}>
@@ -177,15 +228,36 @@ export function Products({ session }: Props): JSX.Element {
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
+
+      {tab === "products" ? (
+        <>
+          {!live.loading && !live.denied && heroes.length > 0 ? (
+            <>
+              <p class="section-heading">{PRODUCTS.heroesHeading}</p>
+              <ProductRows items={heroes} onOpen={(id) => setView({ kind: "product", id })} />
+            </>
+          ) : null}
+          {!live.loading && !live.denied && pipeline.length > 0 ? (
+            <>
+              <p class="section-heading">{PRODUCTS.pipelineHeading}</p>
+              <ProductRows items={pipeline} onOpen={(id) => setView({ kind: "product", id })} />
+            </>
+          ) : null}
+        </>
+      ) : null}
 
       {!live.loading && !live.denied && live.items.length === 0 ? (
         <p data-testid="products-empty">
-          {tab === "ingredients" ? PRODUCTS.ingredientsEmpty : PRODUCTS.recipesEmpty}
+          {tab === "ingredients"
+            ? PRODUCTS.ingredientsEmpty
+            : tab === "recipes"
+              ? PRODUCTS.recipesEmpty
+              : PRODUCTS.productsEmpty}
         </p>
       ) : null}
 
-      {canEdit ? (
+      {tab !== "products" && canEdit ? (
         <>
           <div class="hairline" />
           <button
@@ -197,6 +269,45 @@ export function Products({ session }: Props): JSX.Element {
           </button>
         </>
       ) : null}
+
+      {tab === "products" && canEditProducts ? (
+        <>
+          <div class="hairline" />
+          <button type="button" data-testid="new-product" onClick={() => setView({ kind: "product", id: null })}>
+            {PRODUCTS.newProduct}
+          </button>
+        </>
+      ) : null}
     </div>
+  );
+}
+
+function ProductRows({
+  items,
+  onOpen,
+}: {
+  readonly items: readonly ProductDoc[];
+  readonly onOpen: (id: string) => void;
+}): JSX.Element {
+  return (
+    <ul class="more-list" data-testid="product-list">
+      {items.map((product) => (
+        <li key={product.id}>
+          <button
+            type="button"
+            class="more-row"
+            data-testid={`product-row-${product.id}`}
+            onClick={() => onOpen(product.id)}
+          >
+            <span class="more-row-label">{product.name}</span>
+            <span class="more-row-aside">
+              {product.priceInStock === undefined ? "" : formatINR(product.priceInStock)}
+              {product.jarGrams === undefined ? "" : ` · ${product.jarGrams} g`}
+              {product.active === false ? ` · ${PRODUCTS.activeNo}` : ""}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }

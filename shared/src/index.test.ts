@@ -162,6 +162,9 @@ const EXPECTED_EXPORTS = [
   "parseIngredientsLine",
   "compareLabelText",
   "verifyAgainstPrintedLabel",
+  // catalogue
+  "isValidMonthDay",
+  "isWithinSeasonWindow",
 ] as const;
 
 describe("the barrel", () => {

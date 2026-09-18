@@ -318,3 +318,20 @@ break.
   printed, and the new figures apply from the next print run. The verifier pins the
   difference to 14 known cells so a fifteenth fails the build. Status: open, and worth
   Shefin's eye at the M2 break.
+- A55 (M2.2, 18 Sep): pipeline products are named plainly (Duck, Yam, Rabbit) and seeded
+  inactive; every product launches at the same price and jar size because nothing in the
+  docs varies them; beef carries `shippingRule: flatFee` built and off, while the global
+  off switch is a Settings field (§17.11), not a product field; a season window with only
+  one end set means no restriction. Status: open.
+- A56 (M2.2, 18 Sep): product photos live in Cloud Storage under `products/{slug}/`, with
+  their order and which one is the note photo held in the object's own metadata rather
+  than a Firestore field, because the brief's `products/{slug}` shape has no photos field.
+  The note photo always sorts last. Status: open.
+- A57 (M2.2, 18 Sep): Storage `delete` is now its own clause on `products/**` and
+  `batches/**` and belongs to the Owner alone. The old single `write` rule could never
+  permit a delete, because the image and size check has nothing to look at when a file is
+  being removed. Uploads still require an image of at most 8 MB. Status: open.
+- A58 (M2.2, 18 Sep): a product price must be a whole number of paise from 1 up to the
+  ₹649 MRP; a custom line amount must be a whole number of 0 or more, with no MRP bound
+  because a custom line is not a jar. Both are refused on screen with a plain line.
+  Status: open.

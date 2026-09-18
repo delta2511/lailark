@@ -74,16 +74,31 @@ service firebase.storage {
       allow write: if false;
     }
 
-    /** Kitchen photos: the batch updates and the bottling shots. */
+    /**
+     * Kitchen photos: the batch updates and the bottling shots. Kitchen may
+     * upload and update, but only the Owner may remove. `isImageUnder8Mb()` is
+     * always false on a delete (`request.resource` is null then), so delete is
+     * its own clause so the Owner can still take a photo down. Matches the
+     * products rule and the pattern in firestore.rules.
+     */
     match /batches/{allPaths=**} {
       allow read: if isAdmin();
-      allow write: if isStaff() && isImageUnder8Mb();
+      allow create, update: if isStaff() && isImageUnder8Mb();
+      allow delete: if isOwner();
     }
 
-    /** Catalogue images. Prices and products are the Owner's. */
+    /**
+     * Catalogue images. Prices and products are the Owner's, and so is
+     * removing a photo (M2.2, brief section 17.8: "note photo last",
+     * removable). `isImageUnder8Mb()` is always false on a delete
+     * (`request.resource` is null then), so a plain `allow write` here would
+     * quietly forbid every removal; `delete` is its own clause so the Owner
+     * can still take a photo down.
+     */
     match /products/{allPaths=**} {
       allow read: if isAdmin();
-      allow write: if isOwner() && isImageUnder8Mb();
+      allow create, update: if isOwner() && isImageUnder8Mb();
+      allow delete: if isOwner();
     }
 
     /** Courier labels, fetched from Shiprocket by a function and printed by

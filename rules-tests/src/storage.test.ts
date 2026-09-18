@@ -11,7 +11,7 @@
  * what it says.
  */
 
-import { getMetadata, ref, uploadBytes } from "firebase/storage";
+import { deleteObject, getMetadata, ref, uploadBytes } from "firebase/storage";
 import type { RulesTestContext, RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
@@ -38,6 +38,8 @@ const putJpeg = (ctx: RulesTestContext, path: string) => {
   const { bytes, type } = jpeg();
   return put(ctx, path, bytes, type);
 };
+
+const remove = (ctx: RulesTestContext, path: string) => deleteObject(ref(ctx.storage(), path));
 
 beforeAll(async () => {
   env = await makeTestEnvironment();
@@ -108,6 +110,17 @@ describe("batch photos", () => {
     const nineMegabytes = new Uint8Array(9 * 1024 * 1024);
     await assertFails(put(who.kitchen, "batches/001/updates/huge.jpg", nineMegabytes, "image/jpeg"));
   });
+
+  // Batch photos are removable by the Owner only. `isImageUnder8Mb()` is always
+  // false on a delete (`request.resource` is null then), so this only holds
+  // while `delete` is split out of `write` in `storage.rules` rather than
+  // folded into the same 8 MB check.
+  it("are the Owner's to remove, and nobody else's", async () => {
+    await assertSucceeds(remove(who.owner, PHOTO));
+    await assertFails(remove(who.kitchen, PHOTO));
+    await assertFails(remove(who.viewer, PHOTO));
+    await assertFails(remove(who.unauth, PHOTO));
+  });
 });
 
 describe("bills and receipts", () => {
@@ -156,6 +169,16 @@ describe("catalogue images", () => {
     await assertSucceeds(putJpeg(who.owner, "products/prawns-and-dates/second.jpg"));
     await assertFails(putJpeg(who.kitchen, "products/prawns-and-dates/second.jpg"));
     await assertSucceeds(readAt(who.kitchen, PRODUCT_IMAGE));
+  });
+
+  // M2.2: a product photo is removable, and only the Owner may remove one.
+  // `isImageUnder8Mb()` is always false on a delete (`request.resource` is
+  // null then), so this only holds while `delete` is split out of `write`
+  // in `storage.rules` rather than folded into the same 8 MB check.
+  it("are the Owner's to remove, and nobody else's", async () => {
+    await assertSucceeds(remove(who.owner, PRODUCT_IMAGE));
+    await assertFails(remove(who.kitchen, PRODUCT_IMAGE));
+    await assertFails(remove(who.viewer, PRODUCT_IMAGE));
   });
 });
 

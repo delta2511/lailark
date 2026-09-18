@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test:unit": "vitest run",
-    "test": "npm run test:unit && npm run build:emulator && firebase emulators:exec --only auth,firestore --project lailark --config ../firebase.json \"playwright test\"",
+    "test": "npm run test:unit && npm run build:emulator && firebase emulators:exec --only auth,firestore,storage --project lailark --config ../firebase.json \"playwright test\"",
     "test:e2e": "playwright test",
     "test:install": "playwright install chromium",
     "icons": "node scripts/make-icons.mjs"
