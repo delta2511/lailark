@@ -7,6 +7,7 @@ import { Batches } from "../screens/Batches";
 import { More } from "../screens/More";
 import { MoreEmptyScreen } from "../screens/MoreEmptyScreen";
 import { Orders } from "../screens/Orders";
+import { Products } from "../screens/Products";
 import { Sell } from "../screens/Sell";
 import { Settings } from "../screens/Settings";
 import { Today } from "../screens/Today";
@@ -45,7 +46,7 @@ function Screen({ path, session, onSignOut }: ShellProps & { path: RoutePath }):
     case "/more/concerns":
       return <MoreEmptyScreen rowKey="concerns" />;
     case "/more/products":
-      return <MoreEmptyScreen rowKey="products" />;
+      return <Products session={session} />;
     case "/more/customers":
       return <MoreEmptyScreen rowKey="customers" />;
     case "/more/agent":

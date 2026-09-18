@@ -129,7 +129,7 @@ export function App() {
     confirmation.current = null;
     clearVerifier();
 
-    setSession({ name, role, phone: phoneNumber });
+    setSession({ uid: user.uid, name, role, phone: phoneNumber });
     setDenied(false);
     setError(null);
     setStep("signedIn");

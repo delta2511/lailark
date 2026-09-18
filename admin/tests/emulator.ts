@@ -55,3 +55,63 @@ export async function acceptFixedOtp(page: Page): Promise<void> {
     return route.continue({ postData: JSON.stringify({ ...body, code: match.code }) });
   });
 }
+
+/* -------------------------------------------------------------------------- */
+/* Seeding, with admin rights (M2.1)                                          */
+/* -------------------------------------------------------------------------- */
+
+const DOCUMENTS = `${FIRESTORE_EMULATOR}/v1/projects/${PROJECT}/databases/(default)/documents`;
+
+/**
+ * The Firestore emulator treats `Authorization: Bearer owner` as the Admin
+ * SDK, so a seed written this way bypasses the security rules exactly the way
+ * a Cloud Function would. That is what lets a test flip the Owner's
+ * `settings/permissions.kitchenCanEditRecipes` switch, which no client role
+ * but the Owner may write.
+ */
+const ADMIN_HEADERS = {
+  Authorization: "Bearer owner",
+  "Content-Type": "application/json",
+};
+
+type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
+function typedValue(value: Json): Record<string, unknown> {
+  if (value === null) return { nullValue: null };
+  if (typeof value === "string") return { stringValue: value };
+  if (typeof value === "boolean") return { booleanValue: value };
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
+  }
+  if (Array.isArray(value)) {
+    return { arrayValue: { values: value.map(typedValue) } };
+  }
+  return { mapValue: { fields: typedFields(value) } };
+}
+
+function typedFields(data: Record<string, Json>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(data).map(([key, value]) => [key, typedValue(value)]));
+}
+
+/** Creates or replaces `documents/{path}` as the Admin SDK would. */
+export async function seedDocument(path: string, data: Record<string, Json>): Promise<void> {
+  const res = await fetch(`${DOCUMENTS}/${path}`, {
+    method: "PATCH",
+    headers: ADMIN_HEADERS,
+    body: JSON.stringify({ fields: typedFields(data) }),
+  });
+  if (!res.ok) throw new Error(`seeding ${path} returned ${res.status}: ${await res.text()}`);
+}
+
+/** Removes `documents/{path}`. Deleting something that is not there is fine. */
+export async function deleteDocument(path: string): Promise<void> {
+  const res = await fetch(`${DOCUMENTS}/${path}`, { method: "DELETE", headers: ADMIN_HEADERS });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`deleting ${path} returned ${res.status}: ${await res.text()}`);
+  }
+}
+
+/** The Owner's Q4 switch (D22): the one setting only the Owner may write. */
+export async function setKitchenCanEditRecipes(on: boolean): Promise<void> {
+  await seedDocument("settings/permissions", { kitchenCanEditRecipes: on });
+}

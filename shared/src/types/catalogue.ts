@@ -44,6 +44,13 @@ export interface Ingredient extends BaseDoc {
   readonly unitCost: Paise;
   readonly unit: string;
   readonly source: string | null;
+  /**
+   * Grams per millilitre, for an ingredient a recipe measures by volume. The
+   * label basis doc's worked example takes "Oil at 0.92 kg/L; vinegar at 1.00
+   * kg/L", and the recipe engine refuses a line in ml or l without one rather
+   * than guessing 1.0.
+   */
+  readonly densityGPerMl?: number | null;
 }
 
 /** One line of a recipe. */
@@ -55,6 +62,13 @@ export interface RecipeLine {
   readonly isMain: boolean;
   /** Water or vinegar that cooks off, so it is out of the label percentage. */
   readonly evaporates: boolean;
+  /**
+   * How much of an evaporating line is still in the jar, in grams whatever
+   * `unit` this line is written in. Batch 001's vinegar is "2 L in, ~400 g
+   * stays" (label basis doc section 4), so qty 2, unit l, residueG 400.
+   * Ignored unless `evaporates` is true.
+   */
+  readonly residueG?: number;
   /** A compound ingredient declares its own parts, as asafoetida does. */
   readonly compoundOf?: readonly string[];
 }
@@ -67,6 +81,12 @@ export interface Recipe extends BaseDoc {
   readonly percentageBasis: string;
   readonly expectedYieldJars: number;
   readonly yieldRatios: Readonly<Record<string, number>>;
+  /**
+   * What the batch weighs once it is in the jars: 22 jars of 200 g is 4,400 g
+   * for batch 001. Percentage basis C and the nutrition panel both divide by
+   * it.
+   */
+  readonly finishedWeightG?: number;
   readonly storageText: string;
   readonly claimsText: string;
   readonly lines: readonly RecipeLine[];

@@ -9,7 +9,13 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
 
 ## Open
 
-(none)
+- Q7 (M2.1, 18 Sep): `docs/strategy/label-ingredient-percentage-basis-fssai.md` §4 column A
+  prints two figures its own weights do not give: gingelly oil 920/6033 is 15.2%, not the
+  printed 15.3%, and mustard 15/6033 is 0.2%, not the printed 0.3%. Every other cell and
+  both totals agree, and column A is never printed on a label (basis B is the decided
+  one), so nothing customer-facing moves either way. Should the doc be corrected? Please
+  confirm with the food consultant. Meanwhile: the engine does the arithmetic and its
+  tests name the two cells so the difference stays visible.
 
 ## Answered
 

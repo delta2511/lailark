@@ -131,6 +131,37 @@ const EXPECTED_EXPORTS = [
   "writableBatchFields",
   "KITCHEN_RECIPE_EDIT_SWITCH",
   "kitchenCanEditRecipes",
+  // recipe
+  "PERCENTAGE_BASES",
+  "DEFAULT_PERCENTAGE_BASIS",
+  "isPercentageBasis",
+  "PERCENTAGE_BASIS_NOTES",
+  "PERCENTAGE_BASIS_LABELS",
+  "COMPOUND_DECLARATION_THRESHOLD_PERCENT",
+  "RECIPE_UNITS",
+  "toGrams",
+  "roundToDecimals",
+  "TABLE_DECIMALS",
+  "declaredPercent",
+  "formatLabelPercent",
+  "indexIngredients",
+  "computeRecipePercentages",
+  "compoundDeclarationRequired",
+  "labelIngredientText",
+  "labelIngredientsLine",
+  "allergenTagsFor",
+  "allergenLine",
+  "NUTRIENT_KEYS",
+  "NUTRIENT_LABELS",
+  "NUTRIENT_UNITS",
+  "nutritionPer100g",
+  "PRINTED_LABEL_BATCH_001",
+  "DEFAULT_CLAIMS_TEXT",
+  "DEFAULT_STORAGE_TEXT",
+  "buildLabelBlock",
+  "parseIngredientsLine",
+  "compareLabelText",
+  "verifyAgainstPrintedLabel",
 ] as const;
 
 describe("the barrel", () => {
@@ -150,5 +181,9 @@ describe("the barrel", () => {
     expect(shared.formatCalDate(shared.bestBefore("2026-09-04"))).toBe("2027-03-04");
     expect(shared.formatCalDate(shared.saleStopOn("2026-09-04"))).toBe("2027-01-02");
     expect(shared.documentNumberFor("bill", "2026-09-04", 1).number).toBe("LK/26-27/0001");
+    expect(shared.DEFAULT_PERCENTAGE_BASIS).toBe("B");
+    expect(shared.PRINTED_LABEL_BATCH_001.claimsText).toBe(
+      "No added preservatives. Prepared by traditional method.",
+    );
   });
 });

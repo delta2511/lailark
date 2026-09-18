@@ -347,3 +347,170 @@ button.quiet {
   width: 0;
   height: 0;
 }
+
+/* ---- Products: ingredients and recipes (M2.1) ---- */
+
+.products,
+.detail {
+  padding-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tab-row,
+.basis-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/*
+ * A chip is a quiet toggle: ink on paper, ink on ink when it is on. Never
+ * rust, which is a number colour only (Flow section 10).
+ */
+.chip {
+  width: auto;
+  flex: 0 1 auto;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+}
+
+.chip-on {
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.field-help {
+  margin: 0 0 var(--space-2);
+  color: var(--grey);
+  font-size: var(--font-size-small);
+}
+
+.notice-line {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--ink);
+  background: var(--hairline);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-small);
+}
+
+.more-row-aside {
+  color: var(--grey);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+
+.section-heading {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: var(--font-size-heading-sm);
+  line-height: var(--line-height-heading);
+  margin: var(--space-4) 0 0;
+}
+
+.label-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.label-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label-text {
+  margin: 0;
+}
+
+/* Leaf only ever touches a claim (CLAUDE.md section 3). */
+.claim-text {
+  color: var(--leaf);
+}
+
+.percent-list,
+.line-list,
+.drift-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.percent-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.percent-name {
+  font-size: var(--font-size-small);
+}
+
+/* Rust is the number colour, and these are numbers. */
+.percent-value,
+.field-value.number {
+  color: var(--rust);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.drift-list li {
+  padding: var(--space-1) 0;
+  color: var(--grey);
+  font-size: var(--font-size-small);
+}
+
+.line-row {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  color: var(--ink);
+  font-size: var(--font-size-body);
+}
+
+.check-row input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+select,
+textarea {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.7rem 0.85rem;
+  font-family: var(--font-body);
+  font-size: var(--font-size-body);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+
+textarea {
+  line-height: var(--line-height-body);
+  resize: vertical;
+}

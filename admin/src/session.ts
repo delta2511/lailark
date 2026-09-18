@@ -8,6 +8,8 @@ import { ROLES, type Role } from "@lailark/shared";
 
 /** The signed-in admin user, as the shell and its screens need it. */
 export interface Session {
+  /** The Firebase Auth uid, which is what `createdBy` records. */
+  readonly uid: string;
   readonly name: string;
   readonly role: Role;
   readonly phone: string;

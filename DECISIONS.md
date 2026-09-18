@@ -300,3 +300,21 @@ break.
 - A51 (M1.12, 18 Sep): testers default to `[sonnet]`, and `[opus]` is kept for money,
   rules, auth, webhooks, the agent and customer-facing copy, per CLAUDE.md §4.2 and
   Shefin's note on 18 Sep to be mindful of model choice. Status: open.
+- A52 (M2.1, 18 Sep): the engine rounds half up, one decimal in the working table and a
+  whole number on the label; ordering follows whichever basis is switched on (under B
+  vinegar sits fourth, under A and C it leads), with ties on the recorded line order;
+  allergens are listed in recorded line order so the allergen line never moves when the
+  basis is flipped; a percentage is printed only for a line flagged as a main ingredient
+  (batch 001: prawns and dates). Status: open.
+- A53 (M2.1, 18 Sep): three optional fields were added to the brief §18.1 shapes because
+  the worked example needs them: `Ingredient.densityGPerMl`, `RecipeLine.residueG` and
+  `Recipe.finishedWeightG`. The engine refuses a volume line with no density and basis C
+  with no finished weight rather than guessing. A missing nutrition figure is reported by
+  ingredient name, never counted as zero. Status: open.
+- A54 (M2.1, 18 Sep): **the label the engine generates for batch 001 reads Prawns 35% and
+  Dates 23%, where the 22 printed jars read Prawns 59% and Dates 22%.** That is the
+  decided change of basis (basis B on cleaned raw weight, against the printed label's
+  basis C on market weight), not a fault: the batch 001 record page stays exactly as
+  printed, and the new figures apply from the next print run. The verifier pins the
+  difference to 14 known cells so a fifteenth fails the build. Status: open, and worth
+  Shefin's eye at the M2 break.
