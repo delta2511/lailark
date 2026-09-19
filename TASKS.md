@@ -157,7 +157,7 @@ bill PDF; day close works.
       the three weights, per-ingredient actuals prefilled from the recipe with drift
       warning, costs per batch, P&L placeholder. Done when: Playwright walks a batch
       through the kitchen transitions as Kitchen and the owner transitions as Owner.
-- [ ] M2.5 [opus] Approvals and Today v1. `approvals` collection (brief §18.1),
+- [x] M2.5 [opus] Approvals and Today v1. (64c8302) `approvals` collection (brief §18.1),
       created by the half and full triggers and by kitchen photo updates (D5). Today
       screen "Waiting on you" section with Yes / Not yet with reason / Edit then yes.
       Clocks section (5-day and 3-day). Done when: a half-reached batch shows on Today
