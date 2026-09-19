@@ -148,6 +148,10 @@ bill PDF; day close works.
       Firestore triggers. Enforces D15 (one open batch per product). Race and
       permission tests. Done when: a scripted batch walks Draft → Archived on the
       emulator with every side effect asserted.
+- [x] M2.3a [opus] Shefin's answers folded in (0b0dde8): the printed number stamped at
+      bottling with a fixed internal reference before it (D21c), pausing from every
+      selling or cooking state (D23), and the three customer messages drafted and
+      editable in settings (D24).
 - [ ] M2.4 [sonnet] Batches screens. List cards with state chip, fill bar with the half
       mark, clock, approval badge. Detail per brief §17.4 with the one big state button,
       the three weights, per-ingredient actuals prefilled from the recipe with drift
