@@ -17,14 +17,6 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
   confirm with the food consultant. Meanwhile: the engine does the arithmetic and its
   tests name the two cells so the difference stays visible.
 
-- Q9 (M2.2, 18 Sep): seeding data straight into staging needs Google application default
-  credentials on the Mac, which do not exist (`gcloud` is not installed). Two ways round
-  it: run `brew install --cask google-cloud-sdk` then `gcloud auth application-default
-  login` once, and the seed scripts can write to staging; or create the products by
-  tapping through the admin as Owner, which doubles as a test of the screens. Which do
-  you want? Meanwhile: every seed runs against the emulator, and the staging half of a
-  done-when is recorded as skipped.
-
 ## Answered
 
 - ~~Q1 (M1, 16 Sep): Is the `lailark` Firebase project on the Blaze plan yet? Functions and Storage will not deploy without it. Meanwhile: everything runs on the emulator.~~ Answered 17 Sep: Blaze is on for `lailark`. Recorded as D18 in DECISIONS.md.
@@ -38,3 +30,4 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
 - ~~Q11 (M2.3, 18 Sep): three customer messages have no drafted wording anywhere: the "batch open" message to the opted-in list, the half-reached message for any product other than prawns (the prawns one is drafted in brief §7.2), and the back-in-stock message to the notify-me list. Please draft each, or say the Owner will write them by hand each time in the approval. Meanwhile: every approval carries a `TODO(Q11)` draft naming the product, so nothing can be sent without the Owner editing it first.~~ Answered 19 Sep: Claude drafts them, the Owner edits. Recorded as D24, built in M2.3a.
 - ~~Q12 (M2.3, 18 Sep): when should a batch take its number? Brief §8.2 allocates it at Draft to Open, but §18.1 makes the number the document id, so a Draft needs one the moment it exists. The build currently allocates at Draft, which means an abandoned draft keeps its number and the published batches can have a gap (draft 002 abandoned, so the next printed jar reads 003 and `/batch/002` never resolves). The alternative is to hold drafts under a temporary id and stamp the real number at Open, so published numbers are always unbroken. Batch lifecycle is on the never-assume list, so this is yours. Meanwhile: numbers are allocated at Draft, still global, sequential and never reused.~~ Answered 19 Sep: the number is stamped when the batch goes live, with a temporary internal reference before that. Recorded as D21b, built in M2.3a.
 - ~~Q13 (M2.3, 18 Sep): the brief contradicts itself on pausing. §8.2's table says "Any to Paused", while §8.1's diagram says a batch may be paused only from Open, Half reached, Sourcing or Cooking. The build follows §8.1, which means an **In stock** batch cannot be paused, so there is no way to freeze sales on a jar that turns out to be bad. Should In stock and Sold out be pausable too? Meanwhile: four states, with a `TODO(Q13)` comment where the list is defined.~~ Answered 19 Sep: pausing allowed from every selling or cooking state. Recorded as D23, built in M2.3a.
+- ~~Q9 (M2.2, 18 Sep): seeding data straight into staging needs Google application default credentials on the Mac, which do not exist (`gcloud` is not installed). Two ways round it: run `brew install --cask google-cloud-sdk` then `gcloud auth application-default login` once, and the seed scripts can write to staging; or create the products by tapping through the admin as Owner, which doubles as a test of the screens. Which do you want? Meanwhile: every seed runs against the emulator, and the staging half of a done-when is recorded as skipped.~~ Answered 19 Sep: Shefin installed the Google Cloud SDK and signed in; staging is seeded with the seven products and both user records. Recorded as D27.

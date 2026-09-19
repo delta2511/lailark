@@ -135,7 +135,7 @@ bill PDF; day close works.
       the edit inputs only when the Owner's switch is on (D22).
       Done when: the batch 001 recipe produces
       Prawns 35%, Dates 23% on basis B.
-- [x] M2.2 [sonnet] Products screen. (4e06456; staging seed pending Q9, HSN TODO(Q10)) Heroes and pipeline (Flow §2), photos to Storage
+- [x] M2.2 [sonnet] Products screen. (4e06456; staging seeded 19 Sep, HSN codes filled per D26) Heroes and pipeline (Flow §2), photos to Storage
       (note photo last), HSN, prices, jar size, shipping rule (built, off), Koorka
       season window, custom lines with set amounts (brief §17.8). Every number editable
       in place with an undo toast (brief §17.1). Done when: the four heroes and three
@@ -222,7 +222,7 @@ the exact commands), Razorpay webhook URL registered in the test dashboard.
       shipping line per the switch, shelf-life stop hides Buy. Done when: the four hero
       pages render with counts from the emulator and degrade to "count unavailable"
       when the API is down.
-- [ ] M3.4 [sonnet] Batch pages. `/batch/[nnn]` from `site/content/batches/<nnn>.json`
+- [ ] M3.4 [sonnet] Batch pages. **D21c changes this task**: `/batch/<nnn>` exists only from bottling and is always a record, so there is no open-batch view here. An open batch is booked and watched on its product page (M3.3), which carries the live counts, the promise from brief §7.4 and the share link. `/batch/[nnn]` from `site/content/batches/<nnn>.json`
       (the record) with the v0 batch 001 page as the template for the record view, and
       an open-batch view (bookable, paid, to half, ₹599, the promise from brief §7.4,
       no cancellation line). `001.json` seeded from the handoff. Done when: the built
