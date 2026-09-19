@@ -152,7 +152,7 @@ bill PDF; day close works.
       bottling with a fixed internal reference before it (D21c), pausing from every
       selling or cooking state (D23), and the three customer messages drafted and
       editable in settings (D24).
-- [ ] M2.4 [sonnet] Batches screens. List cards with state chip, fill bar with the half
+- [x] M2.4 [sonnet] Batches screens. (04cc083) List cards with state chip, fill bar with the half
       mark, clock, approval badge. Detail per brief §17.4 with the one big state button,
       the three weights, per-ingredient actuals prefilled from the recipe with drift
       warning, costs per batch, P&L placeholder. Done when: Playwright walks a batch
