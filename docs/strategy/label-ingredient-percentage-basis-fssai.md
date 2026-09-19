@@ -1,10 +1,18 @@
 # Ingredient percentage basis for the Lailark label: the clause, the reading, the numbers
 
-Prepared 14 Sep 2026. For Prawns & Dates Pickle, batch 001. Not legal advice. Take this to the consultant as a starting position, not a conclusion.
+Prepared 14 Sep 2026, updated 19 Sep 2026. For Prawns & Dates Pickle. Not legal advice. The basis below was decided by Shefin on 19 Sep 2026 (D28). Written confirmation from the FSSAI designated officer or the food consultant is still to be obtained.
 
 Verification note: the clause text below was pulled from the FSSAI-hosted consolidated compendium, Version VIII dated 09.09.2025, and cross-checked for 5(2)(b) and 5(2)(g) against an independent bare-act copy. Read the two clauses on the PDF yourself before a print run.
 
-For the build: this doc settles what the recipe engine's "percentage basis" switch computes. The recommended basis is column B below (ingoing weight over ingoing total minus evaporated water). Build the switch with three positions (A, B, C as defined in section 4) and default to B.
+## Decision (19 Sep 2026)
+
+1. **Basis B.** Ingoing weight over the ingoing total minus the evaporated water. Of the 2 kg of vinegar, about 400 g is taken as retained after the boil and stays in the denominator; the other 1,600 g is out. The 400 g is an estimate until the pot is weighed before and after a boil.
+2. **The prawn weight is the cleaned raw weight.** Not the market weight, not the fried weight. The 1,550 g used below is an estimate and must be replaced by the recorded cleaned weight.
+3. **Declared figures on the placeholder weights below: Prawns 35%, Dates 23%.** They move when the recorded weights go in.
+4. **Batch 001:** the web page shows no ingredient percentages. The 22 printed jars carry Prawns (59%), Dates (22%) as printed, which is a record of the print and not the basis. **From batch 002** the label and the page both show the basis B figures.
+5. The recipe engine still carries positions A and C of the switch. They are for comparison only and are never printed.
+
+For the build: this doc settles what the recipe engine's "percentage basis" switch computes. The basis is column B below (ingoing weight over ingoing total minus evaporated water). Build the switch with three positions (A, B, C as defined in section 4) and default to B.
 
 ---
 
@@ -82,9 +90,9 @@ Both numbers are ingoing weight divided by finished weight. The dates go in at 1
 
 **The cleaned raw weight is the best fit for "ingoing at the time of manufacture."** This is the defensible answer.
 
-**The fried weight is the "as present in the finished product" figure.** It is the conservative choice.
+**The fried weight is the "as present in the finished product" figure.** It is not used.
 
-So: **not 2.7 kg. Either 1.55 kg (ingoing, literal reading) or 1.12 kg (in-jar, consumer reading).** Weigh the cleaned prawns on the next batch and record it. That single measurement is the weakest link in the whole declaration. This is why the Batch object records three weights: raw, cleaned, cooked.
+So: **not 2.7 kg and not the fried 1.12 kg. The ingoing figure is the cleaned raw weight, about 1.55 kg (estimated, not yet recorded).** Weigh the cleaned prawns on the next batch and record it. That single measurement is the weakest link in the whole declaration. This is why the Batch object records three weights: raw, cleaned, cooked.
 
 ---
 
@@ -97,14 +105,14 @@ Quantities in grams. Spice weights are illustrative placeholders. **Replace ever
 | Prawns, cleaned raw | 1,550 | 25.7% | **35.0%** | 35.2 |
 | Vinegar (2 L in, ~400 g stays) | 2,000 | 33.2% | 9.0% | 45.5 |
 | Dates | 1,000 | 16.6% | **22.6%** | 22.7 |
-| Gingelly oil (1 L) | 920 | 15.3% | 20.8% | 20.9 |
+| Gingelly oil (1 L) | 920 | 15.2% | 20.8% | 20.9 |
 | Garlic | 150 | 2.5% | 3.4% | 3.4 |
 | Green chilli | 100 | 1.7% | 2.3% | 2.3 |
 | Salt | 90 | 1.5% | 2.0% | 2.0 |
 | Ginger | 80 | 1.3% | 1.8% | 1.8 |
 | Chilli powders (Kashmiri + hot) | 60 | 1.0% | 1.4% | 1.4 |
 | Sugar | 40 | 0.7% | 0.9% | 0.9 |
-| Mustard | 15 | 0.3% | 0.3% | 0.3 |
+| Mustard | 15 | 0.2% | 0.3% | 0.3 |
 | Curry leaves | 10 | 0.2% | 0.2% | 0.2 |
 | Turmeric | 8 | 0.1% | 0.2% | 0.2 |
 | Fenugreek | 5 | 0.1% | 0.1% | 0.1 |
@@ -121,9 +129,7 @@ Column C: ingoing over finished weight, the method used on the printed label. Su
 
 The adjusted ingoing total, 4,433 g, lands within 1% of the finished weight of 4,400 g. Once you take out the water that boiled off, what remains is the jar. Column B is simultaneously an ingoing declaration (what 5(2)(g) asks for) and an accurate description of the jar (what a consumer and an inspector will check). It sums to 100%.
 
-**Declared figures on basis B: Prawns 35%, Dates 23%.**
-
-Maximally conservative alternative: fried weight, Prawns 25%, Dates 23%.
+**Declared figures on basis B: Prawns 35%, Dates 23%.** These use the placeholder weights above, so they move when the recorded weights go in.
 
 Do not use 59% as a bare percentage. If the prawn-buying story belongs on the pack, it is a separate sentence: *"Made with 2.7 kg of fresh prawns per 22 jars."*
 

@@ -42,7 +42,9 @@ If the answer is in none of these, see section 5 (assumptions and questions).
 - **Never run `firebase init`.** It overwrites files. All config is hand-written.
 - **`/batch/001` must keep resolving, with the same content**, on every deploy of the
   customer site, forever. It is printed on 22 jars. Every deploy task verifies it with
-  curl before finishing. `/batch/1` and `/batch/01` 301 to it.
+  curl before finishing. `/batch/1` and `/batch/01` 301 to it. The one deliberate
+  difference from the printed jar: its ingredient line shows no percentages (D28). From
+  batch 002 the record pages show them.
 - **Money is written only by functions.** Client apps never write `orders.payment`,
   `documents`, `counters`, `refunds`, `settlements`, `webhookEvents`. Rules enforce it.
 - **Money is integers in paise.** Never floats, never rupees, anywhere in code or data.
@@ -60,7 +62,8 @@ If the answer is in none of these, see section 5 (assumptions and questions).
 - **No em dashes in any customer-facing text.** Periods, commas, colons. Lailark speaks
   as "we". Warm, sparse, plain. Nothing that sounds like a brand or a bot.
 - **Claims and ingredient lines copy the label character for character.** Never
-  paraphrase them.
+  paraphrase them. The one exception is the `/batch/001` page, which carries the same
+  list without the two percentages (D28).
 - **No dark patterns.** No countdowns, no fake scarcity, no "12 people looking", no
   surprise charges at payment. Every count on the site is computed, never typed.
 - **Rust (#A34A28) is a number colour, never a button or heading. Leaf (#2F5D3A) only

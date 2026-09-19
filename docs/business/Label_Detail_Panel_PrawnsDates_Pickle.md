@@ -112,18 +112,11 @@ Email: [NOT CONFIRMED — supply the address]
 
 ## Ingredient order, basis
 
-Listed in descending ingoing weight, which is what "at the time of manufacture" means under
-the FSSAI labelling regulations. That is why vinegar sits second and the oil third, even
-though most of the vinegar water boils off during the two-hour cook. The alternative basis
-is what remains in the finished jar, which would read: Gingelly Oil, Prawns, Dates, Vinegar,
-Garlic and so on. The ingoing basis is easier to defend to an inspector. Confirm before print.
+Batch 001 was printed in the order given in `lailark-site-v0-handoff.md` section 2. From batch 002 the order follows basis B, which leaves the evaporated vinegar out and puts vinegar fourth. See `label-ingredient-percentage-basis-fssai.md`.
 
 ## QUID
 
-Prawns and dates are named in the product name, so their percentages must appear.
-On ingoing weight against the 4,600 g finished batch: prawns 59%, dates 22%.
-On fried prawn weight the figure would be 24%. FSSAI QUID uses ingoing weight, so 59% is
-the number to print, and it is also the better one for the shelf.
+Prawns and dates are named in the product name, so their percentages must appear on the label. Batch 001 was printed as Prawns (59%), Dates (22%), and the batch 001 web page shows no percentages. From batch 002 the figures come from basis B (Prawns 35%, Dates 23% on the placeholder weights), in `label-ingredient-percentage-basis-fssai.md`.
 
 ## Shelf-life note (Best Before)
 

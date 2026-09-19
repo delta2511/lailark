@@ -2,7 +2,7 @@
 
 Draft v2, 10 Sep 2026. Percentage basis: cleaned ingoing weight over ingoing total minus evaporated water (FSSAI L&D 2020, reg 5(2)(g) with 5(2)(f)).
 
-Note for the build: this is the pre-print draft. The label that was actually printed on batch 001 is transcribed in `lailark-site-v0-handoff.md`, section 2, and that transcription is the source of truth for anything that appears on both the jar and the website. Where the two differ (prawns 59% printed vs 35% here, storage wording, customer care number), the printed label wins for batch 001, and the percentage basis question is settled in `label-ingredient-percentage-basis-fssai.md` before batch 002.
+Note for the build: this is the pre-print draft. The label that was actually printed on batch 001 is transcribed in `lailark-site-v0-handoff.md`, section 2, and that transcription is the source of truth for anything that appears on both the jar and the website. Where the two differ (prawns 59% printed vs 35% here, storage wording, customer care number), the printed label wins for batch 001. The percentage basis is now settled (basis B, D28): the 35% and 23% here are the starting point for the batch 002 label, to be recomputed from recorded weights. The batch 001 web page shows no percentages.
 
 Items in [square brackets] need a confirmed number before print.
 

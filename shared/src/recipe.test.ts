@@ -81,35 +81,19 @@ const DOC_TABLE: readonly (readonly [string, number, number, number, number])[] 
   ["prawns", 1550, 25.7, 35.0, 35.2],
   ["vinegar", 2000, 33.2, 9.0, 45.5],
   ["dates", 1000, 16.6, 22.6, 22.7],
-  ["oil", 920, 15.3, 20.8, 20.9],
+  ["oil", 920, 15.2, 20.8, 20.9],
   ["garlic", 150, 2.5, 3.4, 3.4],
   ["greenChilli", 100, 1.7, 2.3, 2.3],
   ["salt", 90, 1.5, 2.0, 2.0],
   ["ginger", 80, 1.3, 1.8, 1.8],
   ["chilliPowders", 60, 1.0, 1.4, 1.4],
   ["sugar", 40, 0.7, 0.9, 0.9],
-  ["mustard", 15, 0.3, 0.3, 0.3],
+  ["mustard", 15, 0.2, 0.3, 0.3],
   ["curryLeaves", 10, 0.2, 0.2, 0.2],
   ["turmeric", 8, 0.1, 0.2, 0.2],
   ["fenugreek", 5, 0.1, 0.1, 0.1],
   ["asafoetida", 5, 0.1, 0.1, 0.1],
 ];
-
-/**
- * Two cells of the doc's column A do not follow from the doc's own weights.
- * 920 / 6,033 is 15.2494%, which is 15.2 at one decimal, not the 15.3 printed;
- * 15 / 6,033 is 0.2486%, which is 0.2, not the 0.3 printed. Columns B and C,
- * both totals, and every other cell agree with the engine to the last digit.
- *
- * The engine does the arithmetic. This map is the doc's two printed cells, so
- * the difference is visible in the test rather than buried, and so the test
- * still walks the whole table row by row. BLOCKED, question Q7: the doc is
- * the spec, and a spec cannot be corrected by a builder.
- */
-const DOC_COLUMN_A_ERRATA: Readonly<Record<string, { printed: number; arithmetic: number }>> = {
-  oil: { printed: 15.3, arithmetic: 15.2 },
-  mustard: { printed: 0.3, arithmetic: 0.2 },
-};
 
 /**
  * Batch 001 as the recipe document records it: the doc's weights, but the
@@ -221,8 +205,7 @@ describe("label basis doc section 4, the worked example", () => {
   it("column A: every ingoing weight over the ingoing total of 6,033 g", () => {
     const values = valuesByIngredient("A");
     for (const [id, , columnA] of DOC_TABLE) {
-      const expected = DOC_COLUMN_A_ERRATA[id]?.arithmetic ?? columnA;
-      expect(values[id], `${id} column A`).toBe(expected);
+      expect(values[id], `${id} column A`).toBe(columnA);
     }
   });
 
@@ -261,17 +244,6 @@ describe("label basis doc section 4, the worked example", () => {
     // "Sums to 137 g per 100 g, which proves it cannot be expressed as a set
     // of percentages." Doc section 4.
     expect(totalOf("C")).toBe(137.1);
-  });
-
-  it("the doc's column A prints two cells its own weights do not give (BLOCKED, Q7)", () => {
-    const values = valuesByIngredient("A");
-    for (const [id, { printed, arithmetic }] of Object.entries(DOC_COLUMN_A_ERRATA)) {
-      expect(values[id], `${id} column A`).toBe(arithmetic);
-      expect(values[id], `${id} column A still differs from the doc`).not.toBe(printed);
-    }
-    // Everything outside this map matches the doc exactly, so the map is the
-    // whole of the disagreement.
-    expect(Object.keys(DOC_COLUMN_A_ERRATA).sort()).toEqual(["mustard", "oil"]);
   });
 
   it("basis B is the default when nothing asks for one", () => {

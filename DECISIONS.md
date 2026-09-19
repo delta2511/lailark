@@ -54,6 +54,7 @@ confirm or replace at the next milestone break.
 | D24 | **Q11: Claude drafts the three missing customer messages, and the Owner can edit them** | Batch open, half reached for a product other than prawns, and back in stock. They live in a Settings document the Owner can change without a deploy, with the drafts as the fallback. Every one still reaches the Owner as an approval to edit and approve; nothing sends by itself |
 | D25 | **Q8: Cloud Storage started on both projects** | Buckets exist on `lailark` and `tree-quiz-74e04`, and the Lailark Storage rules are deployed to both (a new bucket starts permissive, so this mattered) |
 | D26 | **Q10: HSN codes filled in from public classification, editable, CA to confirm** | Prawns 16052900, squid 16055400, beef 16025000, duck 16023900, rabbit 16029000, koorka and yam 20019000. Each is editable in place on the Products screen. GST is off at launch, so nothing depends on them yet |
+| D28 | **Ingredient percentages: the `/batch/001` page shows none; from batch 002 the page and the label show them, on basis B** | Decided by Shefin, 19 Sep 2026. Basis B: the main ingredient's cleaned raw weight over the ingoing total minus the evaporated vinegar, with about 400 g of the 2 kg vinegar taken as retained after the boil (an estimate until weighed; the denominator is 4,433 g on the doc's placeholder weights). Batch 001: the page's ingredient line reads "Prawns, dates, vinegar, ..." with no percentages. The 22 printed jars still read Prawns (59%), Dates (22%); that stays in the handoff as the record of the print, not as the basis. From batch 002 both come from the recipe engine on basis B, and only for lines flagged as main (Prawns 35%, Dates 23% on the placeholder weights). Supersedes the part of A54 that said the batch 001 record page stays as printed, and answers Q7. Still to do: weigh the cleaned prawns and the vinegar residue on the next batch, and get written confirmation of the basis from the FSSAI designated officer or the food consultant |
 | D21 | `www.lailark.in` redirects to `lailark.in` with its own certificate | Answers Q3. Set up by Shefin in the Firebase console and GoDaddy. Verified 17 Sep: `https://www.lailark.in/batch/001` 301s to `https://lailark.in/batch/001` |
 | D22 | **Ingredients and recipes: Owner edits, Kitchen views.** A switch lets the Kitchen edit them later | Answers Q4. Kitchen and Viewer read every ingredient and recipe with all their details. The Owner's switch `settings/permissions.kitchenCanEditRecipes` (off by default, a missing setting is off) lets the Kitchen create and edit both when turned on. Only the Owner flips it, like the discount cap (D17). Deleting stays the Owner's either way. The toggle appears in the admin Settings screen (M5.8) and the Recipes screen honours it (M2.1) |
 
@@ -320,10 +321,9 @@ break.
 - A54 (M2.1, 18 Sep): **the label the engine generates for batch 001 reads Prawns 35% and
   Dates 23%, where the 22 printed jars read Prawns 59% and Dates 22%.** That is the
   decided change of basis (basis B on cleaned raw weight, against the printed label's
-  basis C on market weight), not a fault: the batch 001 record page stays exactly as
-  printed, and the new figures apply from the next print run. The verifier pins the
-  difference to 14 known cells so a fifteenth fails the build. Status: open, and worth
-  Shefin's eye at the M2 break.
+  basis C on market weight), not a fault: the batch 001 page shows no ingredient
+  percentages (D28), and the new figures apply from batch 002. The verifier pins the
+  difference to 14 known cells so a fifteenth fails the build. Status: settled by D28.
 - A55 (M2.2, 18 Sep): pipeline products are named plainly (Duck, Yam, Rabbit) and seeded
   inactive; every product launches at the same price and jar size because nothing in the
   docs varies them; beef carries `shippingRule: flatFee` built and off, while the global

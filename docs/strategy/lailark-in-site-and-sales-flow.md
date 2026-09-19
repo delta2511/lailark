@@ -248,7 +248,10 @@ Over time the ratios become the recipe's yield assumptions, so a planned 20 jars
 a confident 22.
 
 **Percentage basis.** Settled in `label-ingredient-percentage-basis-fssai.md`: one
-switch in the recipe engine, default basis B.
+switch in the recipe engine, default basis B (the main ingredient's cleaned raw weight
+over the ingoing total minus the evaporated vinegar, about 400 g of the 2 kg taken as
+retained). The `/batch/001` page shows no percentages; from batch 002 they are shown
+(D28).
 
 **Nutrition.** Total nutrients ingoing, divided by finished weight, accounting for
 absorbed frying oil. Calculated values are an accepted basis in India; send the first

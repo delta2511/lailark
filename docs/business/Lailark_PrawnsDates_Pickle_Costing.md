@@ -91,11 +91,11 @@ Vinegar is 4% acetic acid + water; after ~30 min boiling once added, most of the
 
 **SESAME IS NOW A DECLARED ALLERGEN.** The oil is gingelly (sesame), confirmed 2026-09-04. Sesame and its products sit in the FSSAI allergen list, so it must appear in the allergen advice. Any label printed without it is non-compliant.
 
-Ordering basis: the list above is in descending ingoing weight, which is what "at the time of manufacture" means under the FSSAI labelling regulations. That puts vinegar second and the oil third even though most of the vinegar water boils off. The alternative is to list by what remains in the finished jar (oil, prawns, dates, vinegar 400 g, garlic...). Both are defensible; the ingoing basis is the safer one to defend to an inspector. Decision still open.
+Ordering basis: the list above is an earlier draft. The order actually printed on batch 001 is in `lailark-site-v0-handoff.md` section 2. From batch 002 the order follows basis B, which leaves the evaporated vinegar out and puts vinegar fourth, after Prawns, Dates and Gingelly Oil. See `label-ingredient-percentage-basis-fssai.md`.
 
 Notes:
 - Compound-ingredient rule: asafoetida's sub-ingredients must be shown in brackets exactly as above.
-- QUID: Prawns and Dates are named in the product name, so their % must appear. On ingoing weight against the measured 4,600 g finished batch: **prawns 59%, dates 22%**. (On fried prawn weight the figure would be 24%; FSSAI QUID uses ingoing weight, so 59% is the one to print.)
+- QUID: Prawns and Dates are named in the product name, so their % must appear on the label. The 22 jars of batch 001 were printed with Prawns (59%), Dates (22%) (`lailark-site-v0-handoff.md` section 2); the batch 001 web page shows no percentages. From batch 002 the basis is B, in `label-ingredient-percentage-basis-fssai.md` (Prawns 35%, Dates 23% on the placeholder weights).
 - Salt weight not yet confirmed; it sits in the salt/vinegar/ginger band and may shift the order there.
 - Gluten-free option: switching to rice-flour-based (gluten-free) compounded asafoetida removes wheat and lets you label the pickle "gluten-free" — a selling point for premium/NRI buyers.
 - Oil is **gingelly (sesame) oil at ₹230 per litre**, confirmed 4 Sep 2026. An earlier note in this file claiming a switch to mustard oil was wrong and has been removed. Mustard seed is still in the recipe (16 g), so the mustard allergen stays declared, and sesame is now declared alongside it.

@@ -9,16 +9,11 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
 
 ## Open
 
-- Q7 (M2.1, 18 Sep): `docs/strategy/label-ingredient-percentage-basis-fssai.md` §4 column A
-  prints two figures its own weights do not give: gingelly oil 920/6033 is 15.2%, not the
-  printed 15.3%, and mustard 15/6033 is 0.2%, not the printed 0.3%. Every other cell and
-  both totals agree, and column A is never printed on a label (basis B is the decided
-  one), so nothing customer-facing moves either way. Should the doc be corrected? Please
-  confirm with the food consultant. Meanwhile: the engine does the arithmetic and its
-  tests name the two cells so the difference stays visible.
+None.
 
 ## Answered
 
+- ~~Q7 (M2.1, 18 Sep): the label basis doc §4 column A printed gingelly oil as 15.3% and mustard as 0.3%, where 920/6033 is 15.2% and 15/6033 is 0.2%. Should the doc be corrected?~~ Answered 19 Sep: yes. Corrected in the doc (both were double rounding), and the test table in `shared/src/recipe.test.ts` follows. Recorded as D28.
 - ~~Q1 (M1, 16 Sep): Is the `lailark` Firebase project on the Blaze plan yet? Functions and Storage will not deploy without it. Meanwhile: everything runs on the emulator.~~ Answered 17 Sep: Blaze is on for `lailark`. Recorded as D18 in DECISIONS.md.
 - ~~Q2 (M1, 16 Sep): Please create the `lailark-staging` project (Firestore in `asia-south1`, Phone Auth enabled, Blaze) or say if you would rather M1 run on emulators only and staging is set up at the M1 break. Meanwhile: `.firebaserc` will carry the `staging` alias and every staging deploy is skipped with a note until it exists.~~ Answered 17 Sep: staging is the repurposed project `tree-quiz-74e04`, created by Shefin. Recorded as D19.
 - ~~Q5 (M1.8a, 17 Sep): Phone sign-in on the staging admin will be refused until `tree-quiz-74e04-admin.web.app` is an authorised domain. Firebase console, project tree-quiz-74e04, Authentication, Settings, Authorised domains, Add domain. The same is needed on production for `lailark-admin.web.app`, where Authentication itself is not yet enabled. Meanwhile: sites deployed, sign-in untested.~~ Answered 17 Sep: Shefin added `tree-quiz-74e04-admin.web.app`. Production still needs Authentication enabled and `lailark-admin.web.app` authorised before its admin can sign in.

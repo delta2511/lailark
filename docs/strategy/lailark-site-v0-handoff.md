@@ -46,6 +46,8 @@ Transcribed from the final print file, 14 Sep 2026. Do not paraphrase these.
 > Compounded Asafoetida (Gum Arabic, Wheat Flour, Asafoetida), Mustard, Curry
 > Leaves, Fenugreek, Turmeric.
 
+Note (19 Sep 2026, D28): this is what is printed on the 22 jars, and it stays here as the record of the print. The `/batch/001` web page does not repeat the two percentages: its ingredient line reads "Prawns, dates, vinegar, ..." with none. That is the one place the page differs from the jar. The percentage basis for batch 002 onward is in `label-ingredient-percentage-basis-fssai.md`.
+
 **Allergens**
 
 > Contains: Crustacean (Prawns), Sesame, Wheat (Gluten) and Mustard.
@@ -248,7 +250,7 @@ want to know what is in their hand. They are not shopping. They already bought.
 > ninth out of this pot.
 >
 > **What is in it**
-> Prawns (59%), dates (22%), vinegar, gingelly (sesame) oil, garlic, green
+> Prawns, dates, vinegar, gingelly (sesame) oil, garlic, green
 > chilli, ginger, salt, Kashmiri chilli powder, red chilli powder, sugar,
 > compounded asafoetida (gum arabic, wheat flour, asafoetida), mustard, curry
 > leaves, fenugreek, turmeric.

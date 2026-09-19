@@ -126,7 +126,7 @@ Branch `milestone-2-kitchen-and-counter`. Brief §23 steps 2 and 3. Shefin's bre
 batch 001 entered with its real numbers; a cash sale at the door produces a numbered
 bill PDF; day close works.
 
-- [x] M2.1 [opus] Ingredients and recipes. (732c4b5; TODO(Q7) doc column A) Admin screens under Products for
+- [x] M2.1 [opus] Ingredients and recipes. (732c4b5; Q7 answered 19 Sep, doc corrected) Admin screens under Products for
       `ingredients` and `recipes` (brief §18.1). Recipe engine in `shared/`: ingredient
       order and percentages under the basis switch (A, B, C from the label basis doc,
       default B), allergen line from tags, nutrition per 100 g from ingoing nutrients
@@ -226,8 +226,10 @@ the exact commands), Razorpay webhook URL registered in the test dashboard.
       (the record) with the v0 batch 001 page as the template for the record view, and
       an open-batch view (bookable, paid, to half, ₹599, the promise from brief §7.4,
       no cancellation line). `001.json` seeded from the handoff. Done when: the built
-      `/batch/001` HTML is equivalent to v0 (same copy, same facts, passes the v0
-      acceptance checklist) and `/batch/002` renders an open batch.
+      `/batch/001` HTML is equivalent to v0 (same copy and facts, passes the v0
+      acceptance checklist, and its ingredient line carries no percentages: D28) and
+      `/batch/002` renders an open batch. Record pages show ingredient percentages from
+      batch 002 on (D28).
 - [ ] M3.5 [opus] Checkout. Callable `createCheckout`: validates lines against the
       per-person limit across the customer's orders in the batch, pincode against the
       serviceable list and the product's shipping rule, takes a 15-minute hold in a
@@ -360,7 +362,8 @@ token with contents scope for the publish workflow, Shiprocket account if ready.
       builds `site/` and deploys `hosting:customer` to production → function polls the
       run and shows the result in the batch screen. Label data for the printer
       generated from the same record. Done when: `/batch/002` from a staging record
-      matches its label data character for character.
+      matches its label data character for character, percentages included (D28: batch
+      001's page has none, batch 002 onward has them).
 - [ ] M5.7 [opus] Policy pages: Orders (D2 wording), shipping, terms, privacy, contact
       with grievance officer, each versioned in `policyVersions` and the version
       recorded on every order. Copy reviewed against the story doc voice rules. Brief
