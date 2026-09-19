@@ -772,3 +772,97 @@ textarea {
 .pnl-numbers .settings-field {
   min-width: 8rem;
 }
+
+/* ---- Today (M2.5, brief section 17.2): Waiting on you, and the clocks ---- */
+
+.today {
+  padding-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.today-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.approval-list,
+.clock-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.approval-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+
+.approval-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.approval-batch {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-heading-sm);
+}
+
+.approval-ask {
+  margin: 0;
+}
+
+/* The message a customer would read, set apart from the admin's own words so
+   the two can never be mistaken for each other on a small screen. */
+.approval-message {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--hairline);
+  color: var(--ink);
+}
+
+.approval-answers,
+.approval-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.clock-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.clock-batch {
+  font-family: var(--font-heading);
+}
+
+.clock-kind {
+  color: var(--grey);
+  font-size: var(--font-size-small);
+}
+
+/* Rust is a number colour (Flow section 10), and days left is a number. */
+.clock-left {
+  margin-left: auto;
+  color: var(--rust);
+}
+
+.clock-row.overdue .clock-left {
+  font-weight: 600;
+}

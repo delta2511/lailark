@@ -391,6 +391,64 @@ export const BATCHES = {
   fieldChanged: (label: string, value: string) => `${label} changed to ${value}.`,
 } as const;
 
+/**
+ * Today (brief section 17.2), as far as M2.5 builds it: "Waiting on you" and
+ * the Clocks.
+ *
+ * Every line here is **admin** wording, which CLAUDE.md section 5 lets the
+ * build assume. The customer-facing lines are not here at all: they are the
+ * `draft` on the approval document, written by `@lailark/shared`'s templates
+ * or by the Owner in Settings (D24), or typed by the Kitchen beside her photo
+ * (D5). Nothing on this screen invents a word a customer reads.
+ */
+export const TODAY = {
+  waitingHeading: "Waiting on you",
+  clocksHeading: "Clocks",
+  loading: "Loading...",
+  readDenied: "This screen could not be read. Ask Shefin to check your role.",
+
+  /* ---- what each kind is asking ---- */
+  askHalfReached: (paid: number, bookable: number) =>
+    `Half the jars are paid for: ${paid} of ${bookable}. Start sourcing and tell the customers who booked?`,
+  askFull: "The batch is full. Tell the customers who booked?",
+  askBatchOpen: "The batch is open. Offer it to the people on the notify list?",
+  askBackInStock: "There are jars left over. Offer them to the people on the notify list?",
+  askBroadcast: "A message to the notify list is ready.",
+  askPhotoUpdate: "The kitchen has added an update. Send it to the customers who booked?",
+
+  /* ---- the message ---- */
+  messageHeading: "Message to customers",
+  noMessage: "No message to send with this one.",
+  messageLabel: "Message to customers, edited",
+
+  /* ---- the three answers (brief 7.3) ---- */
+  yes: "Yes",
+  notYet: "Not yet",
+  editThenYes: "Edit then yes",
+  reasonLabel: "Why not yet",
+  confirmNotYet: "Save reason",
+  confirmEdit: "Save and yes",
+  cancel: "Cancel",
+  working: "Saving...",
+  reasonRequired: "Please say why, so tomorrow's card makes sense.",
+  messageRequired: "Please leave a message, or answer yes without editing.",
+  answerRefused: "That did not go through.",
+
+  /** What the answer records. Nothing is sent here: M5 sends. */
+  approvedPending: "Approved. It goes out when sending is switched on.",
+  ownerOnly: "Only Shefin answers these.",
+  putOffUntilTomorrow: (reason: string) => `Put off: ${reason}`,
+
+  /**
+   * The clocks (brief 7.3 and 8.2, A61). The days themselves are formatted by
+   * `admin/src/batches/clock.ts` from the approval's own `dueAt`, in the same
+   * words the batch cards use, so there is one clock in the admin and not two.
+   */
+  clockHalf: "5 day production clock",
+  clockFull: "3 day production clock",
+  clocksEmpty: "No batch is on a clock.",
+} as const;
+
 /** The one line shown on an empty More sub-screen, keyed by row. */
 export const MORE_EMPTY_BODY: Record<Exclude<MoreRowKey, "settings" | "products">, string> = {
   concerns: "No concerns right now. This is where they will wait for you, oldest first.",

@@ -148,3 +148,49 @@ export function productWordsFromSlug(slug: string): string {
 export function messagePrice(paise: number): string {
   return formatINR(paise);
 }
+
+/* -------------------------------------------------------------------------- */
+/* What a customer may be shown, CLAUDE.md section 3                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The dashes Lailark does not use. CLAUDE.md section 3: "No em dashes in any
+ * customer-facing text. Periods, commas, colons."
+ *
+ * The em dash (—) is the rule as written. The en dash (–) and the horizontal
+ * bar (―) are here too because they are what a phone keyboard, a paste from
+ * a web page or an autocorrect actually produces when someone reaches for a
+ * long dash, and a rule that catches only the character the rule names would
+ * be a rule about typography rather than about how Lailark sounds.
+ *
+ * A hyphen is untouched: "best-before", "prawns-dates" and "9446587027" all
+ * stay exactly as they are.
+ */
+export const FORBIDDEN_DASHES = ["—", "–", "―"] as const;
+
+/** True when this text carries a dash Lailark does not use. */
+export function hasForbiddenDash(text: string): boolean {
+  return typeof text === "string" && FORBIDDEN_DASHES.some((dash) => text.includes(dash));
+}
+
+/**
+ * The plain line a person reads when their message carries one. Written for
+ * the Owner, who is the only one who types a customer message, and it says
+ * what to do rather than naming a Unicode code point at him.
+ */
+export const FORBIDDEN_DASH_MESSAGE =
+  "Lailark does not use long dashes. Please use a comma, a colon or a full stop instead.";
+
+/**
+ * The one gate every customer-facing sentence passes before it is recorded.
+ * Returns the text when it is fine, or the line to show when it is not.
+ *
+ * This is deliberately in `shared`, not in one callable: the Owner's edited
+ * wording arrives through three different doors (`transitionBatch`'s yes on a
+ * half-reached batch, `approveBatchFull`, and `answerApproval`), and a rule
+ * about what a customer reads that lived in one of them would be absent from
+ * the other two.
+ */
+export function checkCustomerText(text: string): { readonly ok: true } | { readonly ok: false; readonly message: string } {
+  return hasForbiddenDash(text) ? { ok: false, message: FORBIDDEN_DASH_MESSAGE } : { ok: true };
+}

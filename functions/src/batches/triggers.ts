@@ -8,6 +8,9 @@
  *   In stock -> Sold out      automatic when no jar is free
  *   Sold out -> Archived      automatic once every order is closed
  *
+ * and, beside them, the one trigger that is not a state hop at all: a kitchen
+ * photo update raising the approval that waits for the Owner (D5).
+ *
  * How the loop is stopped. Every one of these writes the same document that
  * fires the trigger, so each write fires it again. Three things end it:
  *
@@ -34,6 +37,7 @@ import { getAdminApp } from "../lib/admin";
 import { DEFAULT_MAX_INSTANCES, REGION } from "../lib/options";
 import {
   BATCHES,
+  batchUpdateViewFrom,
   batchViewFrom,
   cancelApprovalClocks,
   heldJarsFrom,
@@ -41,10 +45,15 @@ import {
   ordersInBatch,
   readExisting,
   SYSTEM_ACTOR,
+  UPDATES,
   withStamps,
   writeApprovals,
 } from "./store";
-import { type AutomaticStep, nextAutomaticStep } from "./transitions";
+import {
+  type AutomaticStep,
+  nextAutomaticStep,
+  planPhotoUpdateApproval,
+} from "./transitions";
 
 function doesNothing(step: AutomaticStep): boolean {
   return step.to === null && step.stampFields.length === 0;
@@ -135,6 +144,42 @@ export const onBatchWritten = onDocumentWritten(
     if (doesNothing(probe) && batch.state !== "soldOut") return;
 
     await advanceBatch(after.id);
+  },
+);
+
+/**
+ * **Decision D5: a kitchen photo update waits for the Owner.**
+ *
+ * The Kitchen writes `batches/{ref}/updates/{id}` straight from the admin
+ * (A42 gives her `photoPath` and `kitchenLine`, and never `approvedBy` or
+ * `sentAt`). This raises the `approvals` document that puts it in front of
+ * Shefin, with the line she wrote as the draft. Nothing is sent here, and no
+ * copy is written here: the draft is her words, and the approval sits with
+ * `sentAt: null` until M5 sends it, after the Owner has said yes.
+ *
+ * The approval id is deterministic (A63), so an at-least-once delivery or a
+ * second edit of the same update raises one approval, and an update that has
+ * already been approved raises none at all.
+ */
+export const onBatchUpdateWritten = onDocumentWritten(
+  {
+    document: `${BATCHES}/{batchRef}/${UPDATES}/{updateId}`,
+    region: REGION,
+    maxInstances: DEFAULT_MAX_INSTANCES,
+  },
+  async (event) => {
+    const after = event.data?.after;
+    if (!after?.exists) return;
+
+    const batchRef = event.params.batchRef;
+    const planned = planPhotoUpdateApproval(batchUpdateViewFrom(after, batchRef));
+    if (planned === null) return;
+
+    const db = getFirestore(getAdminApp());
+    await db.runTransaction(async (tx) => {
+      const existing = await readExisting(tx, db, { approvals: [planned], concerns: [] });
+      writeApprovals(tx, db, [planned], existing, SYSTEM_ACTOR);
+    });
   },
 );
 

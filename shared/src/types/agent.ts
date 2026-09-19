@@ -73,6 +73,25 @@ export interface Approval extends BaseDoc {
   readonly answeredBy: ActorId | null;
   readonly at: Timestamp | null;
   /**
+   * Brief 7.3's second answer: "Not yet, with a reason". The reason the Owner
+   * typed, kept as the record of why nothing was sent. It stays on the
+   * document after a later yes, because "we waited a week for prawns" is the
+   * history of the batch, not a field that stops being true.
+   */
+  readonly reason: string | null;
+  /**
+   * When a deferred approval comes back to Today: brief 7.3's "the card comes
+   * back next morning". Null on an approval nobody has deferred, and cleared
+   * when it is finally answered.
+   */
+  readonly remindAt: Timestamp | null;
+  /**
+   * `batches/{batchRef}/updates/{updateId}` for a `photoUpdate` approval, and
+   * null for every other kind. Decision D5: the Kitchen writes the photo and
+   * the line, and the Owner's yes here is what stamps `approvedBy` on it.
+   */
+  readonly updateId: string | null;
+  /**
    * The production clock this approval starts: five days at half reached,
    * three days once the batch is full (brief 7.3 and 8.2). Null for an
    * approval with no clock, such as a broadcast offer.

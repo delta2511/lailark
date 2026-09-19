@@ -27,6 +27,7 @@ import {
 } from "@lailark/shared";
 
 import type {
+  BatchUpdateView,
   BatchView,
   PaidOrderView,
   PlannedApproval,
@@ -42,6 +43,8 @@ export const BATCHES = "batches";
 export const APPROVALS = "approvals";
 export const CONCERNS = "concerns";
 export const ORDERS = "orders";
+/** `batches/{ref}/updates/{id}`: the kitchen photo updates of D5. */
+export const UPDATES = "updates";
 export const PRODUCTS = "products";
 export const RECIPES = "recipes";
 export const INGREDIENTS = "ingredients";
@@ -93,6 +96,55 @@ export function batchViewFrom(snap: DocumentSnapshot): BatchView {
     fullReachedAt: millisOf(d.fullReachedAt),
     fullApprovedAt: millisOf(d.fullApprovedAt),
     pausedFrom: typeof d.pausedFrom === "string" ? d.pausedFrom : null,
+  };
+}
+
+/**
+ * `batches/{ref}/updates/{id}` as the pure planner reads it (D5).
+ *
+ * Every field is read defensively: the Kitchen writes this document directly
+ * from the admin (A42), so a missing `messageText` is an update with no
+ * message, not an error.
+ */
+export function batchUpdateViewFrom(snap: DocumentSnapshot, batchRef: string): BatchUpdateView {
+  const d = (snap.data() ?? {}) as Record<string, unknown>;
+  return {
+    id: snap.id,
+    batchRef,
+    messageText: typeof d.messageText === "string" ? d.messageText : "",
+    kitchenLine: typeof d.kitchenLine === "string" ? d.kitchenLine : "",
+    photoPath: typeof d.photoPath === "string" && d.photoPath !== "" ? d.photoPath : null,
+    approvedBy: typeof d.approvedBy === "string" && d.approvedBy !== "" ? d.approvedBy : null,
+  };
+}
+
+/**
+ * An `approvals/{id}` document as the pure answer planner reads it: plain
+ * values only, and never trusting a field to be the type it should be.
+ */
+export interface ApprovalView {
+  readonly id: string;
+  readonly kind: string;
+  readonly batchRef: string | null;
+  readonly updateId: string | null;
+  readonly draft: string;
+  readonly status: string;
+  readonly remindAtMillis: number | null;
+  /** Non-null only once M5 has actually sent the message. */
+  readonly sentAtMillis: number | null;
+}
+
+export function approvalViewFrom(snap: DocumentSnapshot): ApprovalView {
+  const d = (snap.data() ?? {}) as Record<string, unknown>;
+  return {
+    id: snap.id,
+    kind: typeof d.kind === "string" ? d.kind : "",
+    batchRef: typeof d.batchRef === "string" && d.batchRef !== "" ? d.batchRef : null,
+    updateId: typeof d.updateId === "string" && d.updateId !== "" ? d.updateId : null,
+    draft: typeof d.draft === "string" ? d.draft : "",
+    status: typeof d.status === "string" ? d.status : "",
+    remindAtMillis: millisOf(d.remindAt),
+    sentAtMillis: millisOf(d.sentAt),
   };
 }
 
@@ -450,6 +502,10 @@ export function writeApprovals(
           status: approval.status,
           answeredBy: actor,
           at: now,
+          // An answered approval is not waiting for a morning any more. The
+          // `reason` of an earlier "not yet" is left where it is: it is the
+          // record of why this waited, and answering does not make it untrue.
+          remindAt: null,
           updatedAt: now,
           updatedBy: actor,
           ...(there
@@ -457,6 +513,8 @@ export function writeApprovals(
             : {
                 createdAt: now,
                 createdBy: actor,
+                updateId: approval.updateId ?? null,
+                reason: null,
                 dueAt: null,
                 dueAtSupersededBy: null,
                 sentAt: null,
@@ -471,10 +529,17 @@ export function writeApprovals(
     tx.set(ref, {
       kind: approval.kind,
       batchRef: approval.batchRef,
+      // D5: which kitchen photo update this is about, null for every other kind.
+      updateId: approval.updateId ?? null,
       draft: approval.draft,
       status: approval.status,
       answeredBy: null,
       at: null,
+      // Brief 7.3's "not yet, with a reason" fills these in. A fresh approval
+      // has neither, written as explicit nulls so "nobody has deferred this"
+      // is a fact on the document rather than a missing field.
+      reason: null,
+      remindAt: null,
       dueAt: approval.dueAtMillis === null ? null : Timestamp.fromMillis(approval.dueAtMillis),
       dueAtSupersededBy: null,
       sentAt: null,

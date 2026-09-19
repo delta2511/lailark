@@ -6,5 +6,12 @@
 import "./lib/options";
 
 export { api } from "./api";
+export { answerApproval } from "./approvals";
 export { setRole } from "./auth";
-export { approveBatchFull, onBatchWritten, onOrderWritten, transitionBatch } from "./batches";
+export {
+  approveBatchFull,
+  onBatchUpdateWritten,
+  onBatchWritten,
+  onOrderWritten,
+  transitionBatch,
+} from "./batches";

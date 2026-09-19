@@ -429,10 +429,27 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // An approval is raised by a trigger and answered through a callable. The
+    // Owner's update right here is the fallback, not the road: the admin app
+    // always answers through `answerApproval`, `transitionBatch` or
+    // `approveBatchFull`, which decide what an answer may say.
+    //
+    // `sentAt` is the one field that must never be reachable from a client at
+    // all. It is the record that a customer has actually been messaged, so a
+    // client that can write it can make Lailark believe a message went out
+    // that never did, or that one is finished with when it is still waiting.
+    // Every callable deliberately leaves it alone and says so in a comment;
+    // this is what makes that a fact rather than an intention. Sending lands
+    // in M5 and will write it with the Admin SDK, which is not bound by these
+    // rules.
+    function approvalServerFields() {
+      return ['sentAt', 'kind', 'batchRef', 'updateId', 'dueAt', 'dueAtSupersededBy'];
+    }
+
     match /approvals/{approvalId} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update: if isOwner();
+      allow update: if isOwner() && !touches(approvalServerFields());
       allow delete: if false;
     }
 

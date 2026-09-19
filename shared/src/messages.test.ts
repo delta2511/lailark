@@ -11,9 +11,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  checkCustomerText,
   CUSTOMER_MESSAGE_NAMES,
   customerMessage,
   DEFAULT_CUSTOMER_MESSAGES,
+  FORBIDDEN_DASH_MESSAGE,
+  hasForbiddenDash,
   ingredientInSentence,
   messagePrice,
   productWordsFromSlug,
@@ -202,6 +205,43 @@ describe("what the drafts may not say", () => {
       const sentences = text.split(".").filter((part) => part.trim() !== "");
       expect(sentences.length, name).toBeLessThanOrEqual(2);
       expect(sentences.length, name).toBeGreaterThanOrEqual(1);
+    }
+  });
+});
+
+describe("what a customer may be shown", () => {
+  it("refuses the three long dashes", () => {
+    for (const dash of ["—", "–", "―"]) {
+      expect(hasForbiddenDash(`We are arranging the prawns ${dash} they landed today.`)).toBe(true);
+      expect(checkCustomerText(`A batch is open ${dash} book now.`).ok).toBe(false);
+    }
+  });
+
+  it("leaves a hyphen alone: best-before, prawns-dates, a phone number", () => {
+    for (const text of [
+      "Best-before 4 March 2027.",
+      "Our prawns-dates pickle is open for booking.",
+      "Call us on 9446587027.",
+      "Half the batch is paid for. We are arranging the prawns now.",
+    ]) {
+      expect(hasForbiddenDash(text)).toBe(false);
+      expect(checkCustomerText(text).ok).toBe(true);
+    }
+  });
+
+  it("says what to do instead, without naming a code point", () => {
+    const result = checkCustomerText("A batch is open — book now.");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toBe(FORBIDDEN_DASH_MESSAGE);
+      expect(result.message).toMatch(/comma/);
+      expect(result.message).not.toMatch(/u2014|unicode|dash character/i);
+    }
+  });
+
+  it("passes every message Lailark ships by default", () => {
+    for (const template of Object.values(DEFAULT_CUSTOMER_MESSAGES)) {
+      expect(hasForbiddenDash(template)).toBe(false);
     }
   });
 });

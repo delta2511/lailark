@@ -13,6 +13,7 @@ export * from "./dates.js";
 export * from "./batch.js";
 export * from "./numbers.js";
 export * from "./messages.js";
+export * from "./approvals.js";
 export * from "./rules.js";
 export * from "./recipe.js";
 export * from "./catalogue.js";

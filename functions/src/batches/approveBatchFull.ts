@@ -19,8 +19,16 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 import { getAdminApp } from "../lib/admin";
 import { DEFAULT_MAX_INSTANCES, REGION } from "../lib/options";
-import { BATCHES, batchViewFrom, readExisting, withStamps, writeApprovals } from "./store";
 import {
+  APPROVALS,
+  BATCHES,
+  batchViewFrom,
+  readExisting,
+  withStamps,
+  writeApprovals,
+} from "./store";
+import {
+  approvalId,
   type BatchView,
   parseFullApprovalRequest,
   planFullApproval,
@@ -54,6 +62,12 @@ export const approveBatchFull = onCall(
       const snap = await tx.get(batchDoc);
       const batch: BatchView | null = snap.exists ? batchViewFrom(snap) : null;
 
+      // The sentence the Owner was shown is the sentence he is approving.
+      const raised = await tx.get(db.collection(APPROVALS).doc(approvalId("full", input.ref)));
+      const raisedDraft = raised.get("draft");
+      const existingApprovalDraft =
+        typeof raisedDraft === "string" && raisedDraft.trim() !== "" ? raisedDraft : null;
+
       /* ---- plan ------------------------------------------------------ */
 
       const context: TransitionContext = {
@@ -62,6 +76,7 @@ export const approveBatchFull = onCall(
         siblings: [],
         paidOrders: [],
         mainIngredientId: null,
+        existingApprovalDraft,
         nowMillis: Date.now(),
       };
 

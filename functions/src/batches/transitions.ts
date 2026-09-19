@@ -26,10 +26,13 @@ import {
   customerMessage,
   formatCalDate,
   formatINR,
+  FULL_CLOCK_DAYS,
+  HALF_CLOCK_DAYS,
   halfOfBookable,
   inStockAvailability,
   ingredientInSentence,
   isBatchRef,
+  checkCustomerText,
   isPaise,
   isProtectedBatchField,
   MRP_PAISE,
@@ -385,6 +388,18 @@ export interface TransitionContext {
    */
   readonly messages?: Partial<MessagesSettings> | null;
   /**
+   * The draft already sitting on the approval the Owner is answering, when
+   * there is one.
+   *
+   * **What is approved is what he read.** The approval was raised carrying a
+   * draft, that draft is the sentence Today put in front of him, and his yes
+   * records it rather than a fresh render of the template. The two are
+   * normally the same sentence; they stop being the same the moment
+   * `settings/messages` (D24) is edited between the raise and the yes, and at
+   * that moment re-rendering would quietly approve a line nobody had read.
+   */
+  readonly existingApprovalDraft?: string | null;
+  /**
    * The printed number this transaction has just taken from `counters/batch`,
    * or null on every row that does not allocate one. D21c: only Cooking ->
    * Bottled allocates, and the callable reads the counter before it plans, so
@@ -408,6 +423,12 @@ export interface PlannedApproval {
   readonly id: string;
   readonly kind: "halfReached" | "full" | "broadcast" | "photoUpdate";
   readonly batchRef: string;
+  /**
+   * `batches/{batchRef}/updates/{updateId}` for a photo update (D5), absent
+   * for every other kind: the Owner's yes has to know which update it is
+   * stamping `approvedBy` on.
+   */
+  readonly updateId?: string;
   readonly draft: string;
   readonly status: "waiting" | "approved" | "edited";
   /** The production clock, in epoch millis, or null when the row has none. */
@@ -481,10 +502,16 @@ export type Planned = { readonly ok: true; readonly value: TransitionPlan };
 /* -------------------------------------------------------------------------- */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** "Starts 5-day clock", brief 8.2 and 7.3. */
-export const HALF_CLOCK_DAYS = 5;
-/** "3-day production clock replaces the 5-day" once the batch is full. */
-export const FULL_CLOCK_DAYS = 3;
+
+/**
+ * "Starts 5-day clock" (brief 8.2 and 7.3) and "3-day production clock
+ * replaces the 5-day" once the batch is full.
+ *
+ * Both live in `@lailark/shared` from M2.5 on, because Today's Clocks section
+ * has to name the same two numbers this table starts, and re-exported here so
+ * every caller of the transition table still finds them where they were.
+ */
+export { FULL_CLOCK_DAYS, HALF_CLOCK_DAYS };
 
 /* -------------------------------------------------------------------------- */
 /* Messages that wait for the Owner                                           */
@@ -559,6 +586,58 @@ export function approvalId(kind: string, batchRef: string): string {
 /** The same, for a concern. Same reason, same key. */
 export function concernId(kind: string, batchRef: string, orderId?: string | null): string {
   return orderId ? `${kind}-${batchRef}-${orderId}` : `${kind}-${batchRef}`;
+}
+
+/**
+ * The approval a kitchen photo update raises. **Decision D5.**
+ *
+ * One per update, keyed on the batch reference and the update's own id, so a
+ * kitchen that adds three photos to one batch raises three approvals and a
+ * trigger that fires twice on one update raises one (A63).
+ */
+export function photoUpdateApprovalId(batchRef: string, updateId: string): string {
+  return `photo-${batchRef}-${updateId}`;
+}
+
+/** `batches/{ref}/updates/{id}` as the pure planner reads it. */
+export interface BatchUpdateView {
+  readonly id: string;
+  readonly batchRef: string;
+  /** What the Kitchen wrote for the customers, or "" if she wrote nothing. */
+  readonly messageText: string;
+  /** The Kitchen's own note beside the photo. */
+  readonly kitchenLine: string;
+  readonly photoPath: string | null;
+  /** Set once the Owner has said yes. An update already approved raises nothing. */
+  readonly approvedBy: string | null;
+}
+
+/**
+ * The approval for one kitchen photo update, or null when there is nothing to
+ * raise: an update the Owner has already approved does not come back.
+ *
+ * **Nothing here is written by Claude.** The draft is what the Kitchen typed,
+ * her message if she wrote one and her line beside the photo if she did not.
+ * An update with neither raises an approval with an empty draft, which Today
+ * shows as a photo to approve with no message to send, and offers no edit.
+ * That is deliberate: the Owner still has to say yes before the photo reaches
+ * anyone (D5), and no copy is invented on the way (CLAUDE.md section 5).
+ */
+export function planPhotoUpdateApproval(update: BatchUpdateView): PlannedApproval | null {
+  if (update.approvedBy !== null && update.approvedBy !== "") return null;
+  const draft = update.messageText.trim() !== "" ? update.messageText.trim() : update.kitchenLine.trim();
+  return {
+    id: photoUpdateApprovalId(update.batchRef, update.id),
+    kind: "photoUpdate",
+    batchRef: update.batchRef,
+    updateId: update.id,
+    draft,
+    status: "waiting",
+    // A photo update has no production clock: brief 7.3 and 8.2 put the 5 day
+    // and 3 day clocks on half reached and full, and on nothing else.
+    dueAtMillis: null,
+    answer: false,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -793,6 +872,19 @@ function isoDate(value: unknown, field: string): string | Failure {
   }
 }
 
+/**
+ * The Owner's own wording for a message a customer will read. Everything
+ * `text()` checks, and then CLAUDE.md section 3's rule about how Lailark
+ * sounds: no long dashes. The check lives in `@lailark/shared` because the
+ * same sentence can arrive through three different callables.
+ */
+function customerText(value: unknown, field: string): string | Failure {
+  const parsed = text(value, field, MAX_MESSAGE);
+  if (isFailure(parsed)) return parsed;
+  const check = checkCustomerText(parsed);
+  return check.ok ? parsed : invalid(check.message);
+}
+
 function isFailure(value: unknown): value is Failure {
   return typeof value === "object" && value !== null && (value as Failure).ok === false;
 }
@@ -887,7 +979,14 @@ export function planTransition(
     case "draft->open":
       return planOpen(row, request, context, batch as BatchView);
     case "halfReached->sourcing":
-      return planApproveHalf(row, request, batch as BatchView, nowMillis, context.messages);
+      return planApproveHalf(
+        row,
+        request,
+        batch as BatchView,
+        nowMillis,
+        context.messages,
+        context.existingApprovalDraft,
+      );
     case "sourcing->cooking":
       return planStartCooking(row, request, context, batch as BatchView);
     case "cooking->bottled":
@@ -1104,10 +1203,11 @@ function planApproveHalf(
   batch: BatchView,
   nowMillis: number,
   messages: Partial<MessagesSettings> | null | undefined,
+  existingDraft: string | null | undefined,
 ): Planned | Failure {
   let message: string | null = null;
   if (request.data.messageText !== undefined && request.data.messageText !== null) {
-    const parsed = text(request.data.messageText, "messageText", MAX_MESSAGE);
+    const parsed = customerText(request.data.messageText, "messageText");
     if (isFailure(parsed)) return parsed;
     message = parsed;
   }
@@ -1125,7 +1225,10 @@ function planApproveHalf(
           id: approvalId("half", batch.ref),
           kind: "halfReached",
           batchRef: batch.ref,
-          draft: message ?? APPROVAL_DRAFTS.half(batch, messages),
+          // What the Owner approved, in order: his own edit, then the draft
+          // he was shown, then a fresh render for an approval that has gone
+          // missing (a batch moved by hand, a replay).
+          draft: message ?? existingDraft ?? APPROVAL_DRAFTS.half(batch, messages),
           status: message === null ? "approved" : "edited",
           dueAtMillis: null,
           answer: true,
@@ -1512,7 +1615,7 @@ export function planFullApproval(
 
   let message: string | null = null;
   if (request.data.messageText !== undefined && request.data.messageText !== null) {
-    const parsed = text(request.data.messageText, "messageText", MAX_MESSAGE);
+    const parsed = customerText(request.data.messageText, "messageText");
     if (isFailure(parsed)) return parsed;
     message = parsed;
   }
@@ -1528,7 +1631,7 @@ export function planFullApproval(
           id: approvalId("full", batch.ref),
           kind: "full",
           batchRef: batch.ref,
-          draft: message ?? APPROVAL_DRAFTS.full(),
+          draft: message ?? context.existingApprovalDraft ?? APPROVAL_DRAFTS.full(),
           status: message === null ? "approved" : "edited",
           dueAtMillis: null,
           answer: true,

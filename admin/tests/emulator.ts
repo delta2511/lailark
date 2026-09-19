@@ -122,6 +122,76 @@ export async function ensureAdminUser(phone: string, role: string): Promise<void
 }
 
 /* -------------------------------------------------------------------------- */
+/* Calling a callable as a role, without a browser (M2.5)                     */
+/* -------------------------------------------------------------------------- */
+
+export const FUNCTIONS_EMULATOR = "http://127.0.0.1:5001";
+export const REGION = "asia-south1";
+const API_KEY = "fake-api-key";
+
+/**
+ * A real ID token for one of the seeded numbers, carrying its role claim.
+ *
+ * The same route the app takes, over plain `fetch`: ask the Auth emulator for
+ * a verification code, read the code it issued out of its own debug endpoint,
+ * and sign in with it. `ensureAdminUser` must have set the claim first, or the
+ * token comes back without a role, which is the whole thing being tested.
+ *
+ * This exists so "Owner only" can be tested where it is enforced. A screen
+ * with no button on it proves nothing: the Kitchen's phone can call the
+ * callable directly, so the test does exactly that and expects a refusal.
+ */
+export async function idTokenFor(phone: string): Promise<string> {
+  const e164 = phone.replace(/\s+/g, "");
+  const sent = await fetch(
+    `${AUTH_EMULATOR}/identitytoolkit.googleapis.com/v1/accounts:sendVerificationCode?key=${API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phoneNumber: e164, recaptchaToken: "ignored" }),
+    },
+  );
+  const { sessionInfo } = (await sent.json()) as { sessionInfo?: string };
+  if (!sessionInfo) throw new Error(`no sessionInfo for ${e164}`);
+
+  const match = (await verificationCodes()).find((c) => c.sessionInfo === sessionInfo);
+  if (!match) throw new Error(`no verification code for ${e164}`);
+
+  const signedIn = await fetch(
+    `${AUTH_EMULATOR}/identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key=${API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionInfo, code: match.code }),
+    },
+  );
+  const body = (await signedIn.json()) as { idToken?: string };
+  if (!body.idToken) throw new Error(`no idToken for ${e164}: ${JSON.stringify(body)}`);
+  return body.idToken;
+}
+
+/** Calls a callable over the functions emulator as the holder of `token`. */
+export async function callCallable(
+  name: string,
+  token: string | null,
+  data: Record<string, unknown>,
+): Promise<{ status: number; result?: unknown; error?: { status?: string; message?: string } }> {
+  const res = await fetch(`${FUNCTIONS_EMULATOR}/${PROJECT}/${REGION}/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ data }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    result?: unknown;
+    error?: { status?: string; message?: string };
+  };
+  return { status: res.status, result: body.result, error: body.error };
+}
+
+/* -------------------------------------------------------------------------- */
 /* Seeding, with admin rights (M2.1)                                          */
 /* -------------------------------------------------------------------------- */
 
@@ -324,10 +394,15 @@ export async function seedApproval(
   await seedDocument(`approvals/${id}`, {
     kind: "halfReached",
     batchRef: "",
+    // M2.5: which kitchen photo update this is about (D5), the Owner's "not
+    // yet" reason, and the morning that deferral brings the card back on.
+    updateId: null,
     draft: "",
     status: "waiting",
     answeredBy: null,
     at: null,
+    reason: null,
+    remindAt: null,
     dueAt: null,
     dueAtSupersededBy: null,
     sentAt: null,

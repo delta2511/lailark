@@ -398,3 +398,25 @@ break.
 - A70 (M2.4, 19 Sep): a typed amount finer than a paisa rounds to the nearest paise
   rather than being refused (₹12.345 is ₹12.35), which is what `rupeesToPaise` has done
   for every price box since M2.2. Money is still only ever an integer. Status: open.
+- A71 (M2.5, 20 Sep): a card put off with "not yet" comes back at 07:00 Asia/Kolkata the
+  next morning. Brief §7.3 says next morning and names no hour. Status: open.
+- A72 (M2.5, 20 Sep): the Clocks section covers batches in Open, Half reached and
+  Sourcing only. Once the kitchen is cooking the promise the clock stands for has been
+  kept, so the old `dueAt` stops counting at the Owner. A paused batch is off the list
+  too: its customers are on a Concern, which is a card of its own. Status: open.
+- A73 (M2.5, 20 Sep): the reason given with a "not yet" stays on the approval after a
+  later yes, as the record of why it waited. A second "not yet" overwrites it and pushes
+  the reminder. Status: open.
+- A74 (M2.5, 20 Sep): saying yes to a kitchen photo update writes the approved wording
+  onto the update document as well as the approval, so the two cannot disagree about
+  what was approved. Status: open.
+- A75 (M2.5, 20 Sep): the ask lines, buttons and clock labels on Today are the build's
+  own wording, kept in `admin/src/copy.ts`. Admin copy, not customer copy (CLAUDE.md
+  section 5). Status: open.
+- A76 (M2.5, 20 Sep): the no-long-dash rule is enforced on every customer sentence the
+  Owner can type, and it catches the en dash and the horizontal bar as well as the em
+  dash CLAUDE.md names, because those are what a phone keyboard and a paste from a web
+  page actually produce. A hyphen is untouched. `firestore.rules` also stops any client
+  writing `sentAt`, `kind`, `batchRef`, `updateId` or `dueAt` on an approval: the
+  callables never do, and from M5 `sentAt` is the record that a customer was really
+  messaged. Status: open.

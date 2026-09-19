@@ -32,7 +32,7 @@ function activeTab(pathname: string): RoutePath {
 function Screen({ path, session, onSignOut }: ShellProps & { path: RoutePath }): JSX.Element {
   switch (path) {
     case "/":
-      return <Today />;
+      return <Today session={session} />;
     case "/sell":
       return <Sell />;
     case "/batches":

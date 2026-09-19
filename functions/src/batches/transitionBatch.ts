@@ -26,6 +26,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getAdminApp } from "../lib/admin";
 import { DEFAULT_MAX_INSTANCES, REGION } from "../lib/options";
 import {
+  APPROVALS,
   BATCHES,
   batchNoTaken,
   batchViewFrom,
@@ -42,6 +43,7 @@ import {
   writeConcerns,
 } from "./store";
 import {
+  approvalId,
   type BatchView,
   type PaidOrderView,
   parseTransitionRequest,
@@ -93,6 +95,7 @@ export const transitionBatch = onCall(
         let productName: string | null = null;
         let mainIngredientName: string | null = null;
         let messages: Awaited<ReturnType<typeof messagesSettings>> = null;
+        let existingApprovalDraft: string | null = null;
 
         if (batch !== null) {
           if (input.to === "open") {
@@ -108,6 +111,16 @@ export const transitionBatch = onCall(
           // Owner's wording. Everything else never looks at it.
           if (input.to === "open" || input.to === "sourcing") {
             messages = await messagesSettings(tx, db);
+          }
+          // The Owner's yes approves the sentence he was shown, so the draft
+          // already on the approval is read here, before anything is planned,
+          // and only re-rendered if the approval has gone missing.
+          if (input.to === "sourcing") {
+            const raised = await tx.get(
+              db.collection(APPROVALS).doc(approvalId("half", batch.ref)),
+            );
+            const draft = raised.get("draft");
+            if (typeof draft === "string" && draft.trim() !== "") existingApprovalDraft = draft;
           }
         }
 
@@ -158,6 +171,7 @@ export const transitionBatch = onCall(
           productName,
           mainIngredientName,
           messages,
+          existingApprovalDraft,
           allocatedBatchNo,
           nowMillis: Date.now(),
         };

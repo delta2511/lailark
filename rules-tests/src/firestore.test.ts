@@ -693,6 +693,40 @@ describe("concerns and approvals", () => {
     await assertFails(write(who.owner, "approvals/new-1", { ...base, kind: "broadcast" }));
     await assertFails(remove(who.owner, "concerns/con-1"));
   });
+
+  /**
+   * `sentAt` is the record that a customer was actually messaged. A client
+   * that can write it can make Lailark believe a message went out that never
+   * did. Every callable leaves it alone on purpose; this is what makes that a
+   * fact rather than an intention (M2.5, and it matters from M5 on).
+   */
+  it("never let a client say a message was sent", async () => {
+    await assertFails(patch(who.owner, "approvals/app-1", { sentAt: new Date() }));
+    await assertFails(patch(who.kitchen, "approvals/app-1", { sentAt: new Date() }));
+    await assertFails(patch(who.viewer, "approvals/app-1", { sentAt: new Date() }));
+    // Not even alongside a legitimate answer.
+    await assertFails(
+      patch(who.owner, "approvals/app-1", { status: "approved", sentAt: new Date() }),
+    );
+  });
+
+  it("never let a client repoint an approval at another batch or change its clock", async () => {
+    await assertFails(patch(who.owner, "approvals/app-1", { batchRef: "b-000000" }));
+    await assertFails(patch(who.owner, "approvals/app-1", { kind: "broadcast" }));
+    await assertFails(patch(who.owner, "approvals/app-1", { dueAt: new Date() }));
+    await assertFails(patch(who.owner, "approvals/app-1", { updateId: "u-1" }));
+  });
+
+  it("still let the Owner record the answer itself", async () => {
+    await assertSucceeds(
+      patch(who.owner, "approvals/app-1", {
+        status: "notYet",
+        reason: "waiting on the boat",
+        draft: "Half the batch is paid for. We are arranging the prawns now.",
+        answeredBy: "owner-uid",
+      }),
+    );
+  });
 });
 
 describe("conversations", () => {

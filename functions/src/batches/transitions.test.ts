@@ -35,7 +35,9 @@ import {
   type PaidOrderView,
   parseFullApprovalRequest,
   parseTransitionRequest,
+  photoUpdateApprovalId,
   planFullApproval,
+  planPhotoUpdateApproval,
   planTransition,
   type SiblingBatch,
   transitionRow,
@@ -1237,5 +1239,145 @@ describe("the full approval: automatic flag, then owner yes", () => {
       "invalid-argument",
     );
     expect(refused(parseFullApprovalRequest(null)).code).toBe("invalid-argument");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* M2.5: what a yes actually approves, and the photo update of D5              */
+/* -------------------------------------------------------------------------- */
+
+describe("the Owner's yes approves the sentence he was shown", () => {
+  const halfReached = () => batchView({ state: "halfReached", paidCount: 10 });
+
+  it("records the draft already on the approval, not a fresh render", () => {
+    const shown = "Half the batch is paid for. We are arranging the prawns now.";
+    const value = ok(
+      plan(
+        { ref: REF, to: "sourcing", data: {} },
+        {
+          batch: halfReached(),
+          existingApprovalDraft: shown,
+          // A wording changed in Settings after the approval was raised: the
+          // yes must still record what was on screen, not this.
+          messages: { halfReached: "Something the Owner has not read." },
+        },
+      ),
+    ).value;
+
+    expect(value.approvals[0].draft).toBe(shown);
+    expect(value.approvals[0].status).toBe("approved");
+    expect(value.approvals[0].answer).toBe(true);
+  });
+
+  it("falls back to the template when the approval has gone missing", () => {
+    const value = ok(
+      plan({ ref: REF, to: "sourcing", data: {} }, { batch: halfReached() }),
+    ).value;
+    expect(value.approvals[0].draft).toBe(APPROVAL_DRAFTS.half(halfReached()));
+  });
+
+  it("records the Owner's edit over both", () => {
+    const value = ok(
+      plan(
+        { ref: REF, to: "sourcing", data: { messageText: "  Half the jars are paid for.  " } },
+        { batch: halfReached(), existingApprovalDraft: "something else" },
+      ),
+    ).value;
+    expect(value.approvals[0].draft).toBe("Half the jars are paid for.");
+    expect(value.approvals[0].status).toBe("edited");
+  });
+
+  /**
+   * CLAUDE.md section 3: no long dashes in anything a customer reads. Both
+   * doors that take the Owner's own wording refuse one, so the rule cannot
+   * hold on `answerApproval` and be missing here.
+   */
+  it("refuses a long dash in the Owner's wording, on both doors", () => {
+    for (const dash of ["\u2014", "\u2013", "\u2015"]) {
+      const sourcing = refused(
+        plan(
+          { ref: REF, to: "sourcing", data: { messageText: `Half paid ${dash} prawns Friday.` } },
+          { batch: halfReached() },
+        ),
+      );
+      expect(sourcing.code).toBe("invalid-argument");
+      expect(sourcing.message).toMatch(/comma/);
+
+      const full = refused(
+        fullApproval(
+          { messageText: `The batch is full ${dash} we start Friday.` },
+          { batch: batchView(FULL_BATCH) },
+        ),
+      );
+      expect(full.code).toBe("invalid-argument");
+      expect(full.message).toMatch(/comma/);
+    }
+  });
+
+  it("never marks the approval sent: that is M5", () => {
+    const value = ok(
+      plan({ ref: REF, to: "sourcing", data: {} }, { batch: halfReached() }),
+    ).value;
+    expect(value.stampFields).not.toContain("sentAt");
+    expect(Object.keys(value.patch)).not.toContain("sentAt");
+  });
+
+  it("does the same on the full approval (A62)", () => {
+    const parsed = parseFullApprovalRequest({ ref: REF, data: {} });
+    if (!parsed.ok) throw new Error("expected a parse");
+    const value = ok(
+      planFullApproval(
+        parsed.value,
+        context({
+          batch: batchView({ state: "open", paidCount: 19, fullReachedAt: NOW - DAY_MS }),
+          existingApprovalDraft: "The batch is full.",
+        }),
+      ),
+    ).value;
+    expect(value.approvals[0].draft).toBe("The batch is full.");
+    expect(value.stampFields).not.toContain("sentAt");
+  });
+});
+
+describe("a kitchen photo update raises an approval (D5)", () => {
+  const update = {
+    id: "u1",
+    batchRef: REF,
+    messageText: "",
+    kitchenLine: "The prawns are cleaned and in the pot.",
+    photoPath: `batches/${REF}/u1.jpg`,
+    approvedBy: null,
+  };
+
+  it("is keyed on the batch reference and the update, so a re-fire raises one", () => {
+    expect(photoUpdateApprovalId(REF, "u1")).toBe(`photo-${REF}-u1`);
+    expect(planPhotoUpdateApproval(update)?.id).toBe(`photo-${REF}-u1`);
+  });
+
+  it("drafts the Kitchen's own words and nothing else", () => {
+    const planned = planPhotoUpdateApproval(update);
+    expect(planned?.draft).toBe("The prawns are cleaned and in the pot.");
+    expect(planned?.kind).toBe("photoUpdate");
+    expect(planned?.status).toBe("waiting");
+    expect(planned?.updateId).toBe("u1");
+    // No production clock: those are half reached and full only (7.3, 8.2).
+    expect(planned?.dueAtMillis).toBeNull();
+  });
+
+  it("prefers the message she wrote for customers over her own note", () => {
+    const planned = planPhotoUpdateApproval({
+      ...update,
+      messageText: "The prawns are in the pot today.",
+    });
+    expect(planned?.draft).toBe("The prawns are in the pot today.");
+  });
+
+  it("raises an approval with no message rather than writing one", () => {
+    const planned = planPhotoUpdateApproval({ ...update, kitchenLine: "", messageText: "" });
+    expect(planned?.draft).toBe("");
+  });
+
+  it("raises nothing for an update the Owner has already approved", () => {
+    expect(planPhotoUpdateApproval({ ...update, approvedBy: "owner-uid" })).toBeNull();
   });
 });
