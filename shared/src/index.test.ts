@@ -177,6 +177,8 @@ const EXPECTED_EXPORTS = [
   "parseIngredientsLine",
   "compareLabelText",
   "verifyAgainstPrintedLabel",
+  "INGREDIENT_ACTUAL_DRIFT_THRESHOLD_PERCENT",
+  "ingredientActualDrift",
   // catalogue
   "isValidMonthDay",
   "isWithinSeasonWindow",

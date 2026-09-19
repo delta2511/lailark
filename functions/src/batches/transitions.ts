@@ -32,6 +32,7 @@ import {
   isBatchRef,
   isPaise,
   isProtectedBatchField,
+  MRP_PAISE,
   type MessagesSettings,
   parseCalDate,
   perPersonLimit as perPersonLimitOf,
@@ -755,6 +756,25 @@ function paise(value: unknown, field: string, min = 0): number | Failure {
   return value as number;
 }
 
+/**
+ * A price a customer is charged, as opposed to a cost the kitchen pays.
+ *
+ * CLAUDE.md section 3: never above the ₹649 MRP. That is printed on the jar,
+ * so it is not a preference, and the two screens that set a batch price are
+ * both a typed box. `paise()` only ever had a floor, which left nothing at all
+ * between an Owner's slip of the thumb and a batch open at ₹9,999.
+ */
+function sellingPaise(value: unknown, field: string): number | Failure {
+  const parsed = paise(value, field, 1);
+  if (isFailure(parsed)) return parsed;
+  if (parsed > MRP_PAISE) {
+    return invalid(
+      `${field} is ${formatINR(parsed)}, above the ${formatINR(MRP_PAISE)} printed on the jar. A jar is never sold above its MRP.`,
+    );
+  }
+  return parsed;
+}
+
 function text(value: unknown, field: string, max: number): string | Failure {
   if (typeof value !== "string" || value.trim() === "") {
     return invalid(`${field} must be some text.`);
@@ -897,9 +917,9 @@ function planCreate(
   if (isFailure(recipeId)) return recipeId;
   const plannedJars = wholeNumber(d.plannedJars, "plannedJars", 1);
   if (isFailure(plannedJars)) return plannedJars;
-  const priceOpen = paise(d.priceOpen, "priceOpen", 1);
+  const priceOpen = sellingPaise(d.priceOpen, "priceOpen");
   if (isFailure(priceOpen)) return priceOpen;
-  const priceInStock = paise(d.priceInStock, "priceInStock", 1);
+  const priceInStock = sellingPaise(d.priceInStock, "priceInStock");
   if (isFailure(priceInStock)) return priceInStock;
 
   const maths = batchMaths(plannedJars);
@@ -1000,13 +1020,13 @@ function planOpen(
   }
   let priceOpen = batch.priceOpen;
   if (d.priceOpen !== undefined) {
-    const parsed = paise(d.priceOpen, "priceOpen", 1);
+    const parsed = sellingPaise(d.priceOpen, "priceOpen");
     if (isFailure(parsed)) return parsed;
     priceOpen = parsed;
   }
   let priceInStock = batch.priceInStock;
   if (d.priceInStock !== undefined) {
-    const parsed = paise(d.priceInStock, "priceInStock", 1);
+    const parsed = sellingPaise(d.priceInStock, "priceInStock");
     if (isFailure(parsed)) return parsed;
     priceInStock = parsed;
   }

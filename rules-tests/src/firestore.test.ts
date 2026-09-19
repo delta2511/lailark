@@ -315,6 +315,75 @@ describe("a batch, from the Kitchen", () => {
   });
 });
 
+/* ── batches: `costs` is money, checked by value ─────────────────────────── */
+//
+// CLAUDE.md section 3: money is integers in paise, never floats. `costs` is
+// written straight from the Bottling section of the Batches screen, not
+// through a callable, so the rules are the only thing between a typed box and
+// the database. Checking which keys changed is not enough: the value itself
+// has to be a whole number of paise, zero or more.
+
+describe("a batch's costs, whoever is writing them", () => {
+  const path = `batches/${BATCH_REF}`;
+  const whole = { jarsLids: 0, boxInserts: 0, labelling: 0, gasPower: 0 };
+
+  for (const [name, actor] of [
+    ["the Owner", () => who.owner],
+    ["the Kitchen", () => who.kitchen],
+  ] as const) {
+    describe(name, () => {
+      it("takes zero", async () => {
+        await assertSucceeds(patch(actor(), path, { costs: { ...whole, jarsLids: 0 } }));
+      });
+
+      it("takes a normal amount", async () => {
+        await assertSucceeds(patch(actor(), path, { costs: { ...whole, jarsLids: 45_000 } }));
+      });
+
+      it("refuses a negative cost", async () => {
+        await assertFails(patch(actor(), path, { costs: { ...whole, jarsLids: -5000 } }));
+      });
+
+      it("refuses a fraction of a paisa", async () => {
+        await assertFails(patch(actor(), path, { costs: { ...whole, jarsLids: 1234.5 } }));
+      });
+
+      it("refuses a cost that is not a number", async () => {
+        await assertFails(patch(actor(), path, { costs: { ...whole, jarsLids: "450" } }));
+        await assertFails(patch(actor(), path, { costs: { ...whole, jarsLids: null } }));
+      });
+
+      it("refuses a cost that is not the four named lines", async () => {
+        await assertFails(patch(actor(), path, { costs: { ...whole, somethingElse: 1 } }));
+        await assertFails(patch(actor(), path, { costs: 45_000 }));
+      });
+
+      it("refuses a negative cost on any of the four lines", async () => {
+        for (const key of ["jarsLids", "boxInserts", "labelling", "gasPower"]) {
+          await assertFails(patch(actor(), path, { costs: { ...whole, [key]: -1 } }));
+        }
+      });
+    });
+  }
+
+  it("refuses a negative cost on a create too", async () => {
+    await assertFails(
+      write(who.owner, "batches/b-000010", {
+        ...base,
+        productSlug: "prawns-and-dates",
+        costs: { ...whole, jarsLids: -1 },
+      }),
+    );
+    await assertSucceeds(
+      write(who.owner, "batches/b-000011", {
+        ...base,
+        productSlug: "prawns-and-dates",
+        costs: { ...whole, jarsLids: 45_000 },
+      }),
+    );
+  });
+});
+
 describe("a batch, from the Owner", () => {
   const path = `batches/${BATCH_REF}`;
 

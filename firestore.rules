@@ -113,6 +113,40 @@ service cloud.firestore {
       ];
     }
 
+    /* ── a batch's costs, checked by value ──────────────────────────────── */
+    //
+    // CLAUDE.md section 3: money is integers in paise, never floats. `costs`
+    // is the one money field a client writes directly, straight from the
+    // Bottling section of the Batches screen: no callable sees it, so these
+    // rules are the last line of defence. Checking which keys changed is not
+    // enough, because the *value* is what a typed box controls, and
+    // `parseRupeesToPaise("-50")` is a perfectly well-formed -5000.
+    //
+    // The four lines are brief 17.4's "jar and lid cost, box and insert cost,
+    // labelling and stickering cost" plus 14.1's gas and power. The key list
+    // is closed so no fifth cost can be smuggled in unchecked, and
+    // `get(key, 0)` means a map that simply omits one is read as zero rather
+    // than refused.
+
+    function batchCostLines() {
+      return ['boxInserts', 'gasPower', 'jarsLids', 'labelling'];
+    }
+
+    function costLineOk(costs, key) {
+      return costs.get(key, 0) is int && costs.get(key, 0) >= 0;
+    }
+
+    /** True when this write carries no `costs`, or a `costs` made of whole paise, zero or more. */
+    function costsOk() {
+      return !('costs' in request.resource.data)
+             || (request.resource.data.costs is map
+                 && request.resource.data.costs.keys().hasOnly(batchCostLines())
+                 && costLineOk(request.resource.data.costs, 'boxInserts')
+                 && costLineOk(request.resource.data.costs, 'gasPower')
+                 && costLineOk(request.resource.data.costs, 'jarsLids')
+                 && costLineOk(request.resource.data.costs, 'labelling'));
+    }
+
     /** Weights, dates, sourcing note and packaging costs. Kitchen's own. */
     function kitchenBatchFields() {
       return [
@@ -243,13 +277,21 @@ service cloud.firestore {
       // number. `transitionBatch` (M2.3) puts it into `draft` and moves it
       // from there.
       allow create: if isOwner()
-                    && !request.resource.data.keys().hasAny(protectedBatchFields());
+                    && !request.resource.data.keys().hasAny(protectedBatchFields())
+                    && costsOk();
 
       // Owner: everything except the counts and the computed fields.
       // Kitchen: the weights, dates, sourcing note and costs, and nothing
       // else. Brief 18.2, "checked by comparing which keys changed".
-      allow update: if (isOwner() && !touches(protectedBatchFields()))
-                    || (isKitchen() && onlyChanged(kitchenBatchFields()));
+      // `costsOk()` is asked first and of both roles: the costs map is money,
+      // and the one money field a client writes to a batch without a callable
+      // in the way. On a merge write `request.resource.data` is the merged
+      // post-state, so this is checked on every update whether or not that
+      // update touched the costs — which is the right way round, because it
+      // can only ever refuse a write, never admit one.
+      allow update: if costsOk()
+                    && ((isOwner() && !touches(protectedBatchFields()))
+                        || (isKitchen() && onlyChanged(kitchenBatchFields())));
 
       // A batch is archived, never deleted. Numbers are never reused.
       allow delete: if false;

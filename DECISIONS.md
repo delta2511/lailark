@@ -371,3 +371,30 @@ break.
 - A64 (M2.3a, 19 Sep): the batch document id is an internal reference that never changes
   (`b-` and six characters); `batchNo` is a field, absent until bottling. Anything reading
   a batch by number resolves it through that field. Status: open.
+- A65 (M2.4, 19 Sep): the per-ingredient drift warning fires above 15% away from the
+  recipe's own quantity, reduced to grams on both sides so a line written in litres
+  compares honestly. Named as `INGREDIENT_ACTUAL_DRIFT_THRESHOLD_PERCENT` so it moves in
+  one place. The brief asks for the warning and names no number. Status: open.
+- A66 (M2.4, 19 Sep): on the batch screens an empty box is "not given", never a zero. An
+  in-place weight or cost box that is cleared leaves the stored value alone and puts it
+  back, because a person retyping a weight or interrupted mid-edit has no reason to
+  expect that clearing a box is how you say "this is gone". A deliberate 0 still saves.
+  Status: open.
+- A67 (M2.4, 19 Sep): each box of the per-ingredient actuals writes only its own field.
+  The weight box cannot carry a cost and the cost box cannot carry a weight, so neither
+  can overwrite the other with a value it read from a snapshot that had not caught up.
+  Status: open.
+- A68 (M2.4, 19 Sep): Fill and Price are read-only on the batch detail after the batch
+  exists, although brief §17.4 says planned is editable while Open. §8.2 has no
+  transition row after Draft -> Open that changes `plannedJars`, and a raw write would
+  leave `bookableJars` (server-computed, protected) stale. Deferred rather than built
+  unsafely; it needs a row of its own. Status: open, and the one piece of §17.4 M2.4
+  does not deliver.
+- A69 (M2.4, 19 Sep): the batch screens hold a trimmed, presentation-only copy of the
+  transition table (`admin/src/batches/transitionRows.ts`) to decide what the one big
+  state button offers. Every submit still goes through the real table on the server, so a
+  copy that drifted fails safe: no button, or a plain refusal, never a wrong write.
+  Moving the whole state machine into `shared` is the better end state. Status: open.
+- A70 (M2.4, 19 Sep): a typed amount finer than a paisa rounds to the nearest paise
+  rather than being refused (₹12.345 is ₹12.35), which is what `rupeesToPaise` has done
+  for every price box since M2.2. Money is still only ever an integer. Status: open.

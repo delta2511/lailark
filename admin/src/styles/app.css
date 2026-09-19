@@ -590,3 +590,185 @@ textarea {
   flex-direction: column;
   gap: var(--space-2);
 }
+
+/* ---- Batches (M2.4, brief section 17.4) ---- */
+
+.batches {
+  padding-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.batch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.batch-card {
+  width: 100%;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+
+.batch-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.batch-card-label {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-heading-sm);
+}
+
+.batch-card-product {
+  margin: 0;
+  color: var(--grey);
+  font-size: var(--font-size-small);
+}
+
+.batch-card-bottom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-6);
+}
+
+/* A state chip is a label, not a toggle: never rust, which is a number
+   colour only (Flow section 10). */
+.state-chip {
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  width: fit-content;
+  color: var(--ink);
+  background: var(--hairline);
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+}
+
+.approval-badge,
+.clock-pill {
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  width: fit-content;
+  color: var(--paper);
+  background: var(--ink);
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+}
+
+/* ---- The fill bar, brief 17.4: paid of bookable, half mark drawn ---- */
+
+.fill-bar {
+  width: 100%;
+  margin: var(--space-1) 0;
+}
+
+.fill-bar-track {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  background: var(--hairline);
+  border-radius: 999px;
+  overflow: visible;
+}
+
+/* Rust is the number colour (Flow section 10); this bar visualises a count
+   of jars, the same way a percentage figure does elsewhere on screen. */
+.fill-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  min-width: 0;
+  background: var(--rust);
+  border-radius: 999px;
+}
+
+.fill-bar-half-mark {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 16px;
+  background: var(--ink);
+  transform: translateX(-1px);
+}
+
+.fill-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.fill-numbers .settings-field {
+  min-width: 6rem;
+}
+
+/* ---- Batch detail ---- */
+
+.batch-detail-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.state-button-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.state-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* The one big state button, brief 17.4: taller and larger than a normal
+   button, so it reads as the primary action on the screen. Never rust,
+   which is a number colour only. */
+.state-button {
+  min-height: calc(var(--tap) + var(--space-3));
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.pause-form,
+.full-approval {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.drift-section {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.pnl-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.pnl-numbers .settings-field {
+  min-width: 8rem;
+}

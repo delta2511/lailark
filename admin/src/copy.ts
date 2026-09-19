@@ -253,6 +253,144 @@ export const PRODUCTS = {
   fieldChanged: (label: string, value: string) => `${label} changed to ${value}.`,
 } as const;
 
+/**
+ * The Batches screens (brief section 17.4): the list, the detail, and the
+ * one big state button (section 8.2).
+ */
+export const BATCHES = {
+  loading: "Loading...",
+  readDenied: "This screen could not be read. Ask Shefin to check your role.",
+  empty: "No batches yet.",
+  newBatch: "New batch",
+  backToBatches: "Back to Batches",
+
+  stateLabel: {
+    draft: "Draft",
+    open: "Open",
+    halfReached: "Half reached",
+    sourcing: "Sourcing",
+    cooking: "Cooking",
+    bottled: "Bottled",
+    inStock: "In stock",
+    soldOut: "Sold out",
+    archived: "Archived",
+    paused: "Paused",
+  } as Record<string, string>,
+
+  clock: (label: string) => `Clock: ${label}`,
+  clockOverdue: "overdue",
+  clockDueToday: "due today",
+  clockDays: (days: number) => (days === 1 ? "1 day left" : `${days} days left`),
+  approvalWaiting: "Waiting on you",
+
+  /* ---- Create (none -> draft, Owner) ---- */
+  createBatchHeading: "New batch",
+  productSlug: "Product",
+  recipe: "Recipe",
+  plannedJars: "Planned jars",
+  priceOpen: "Price, open batch",
+  priceInStock: "Price in stock",
+  createBatch: "Create batch",
+  creating: "Creating...",
+  productRequired: "Please choose a product.",
+  recipeRequired: "Please choose a recipe.",
+  plannedJarsInvalid: "Please enter a whole number of jars.",
+  priceInvalid: "Please enter a price in rupees.",
+  priceAboveMrp: "A jar is never priced above ₹649. Please enter ₹649 or less.",
+  costInvalid: "Please enter a cost in rupees, zero or more.",
+  weightInvalid: "Please enter a weight in grams, zero or more.",
+  bookableZero: "That many planned jars leaves no bookable jar at the 90% cap. Please plan for more.",
+
+  /* ---- Fill (brief 17.4) ---- */
+  fillHeading: "Fill",
+  bookable: "Bookable",
+  paid: "Paid",
+  heldNow: "Held now",
+  limitPerPerson: "Limit per person",
+
+  /* ---- Price, Owner only ---- */
+  priceHeading: "Price",
+
+  /* ---- Sourcing ---- */
+  sourcingHeading: "Sourcing",
+  source: "Source",
+  landedOn: "Landed on",
+  weightRaw: "Raw weight, g",
+  costRaw: "Price paid",
+
+  /* ---- Cooking ---- */
+  cookingHeading: "Cooking",
+  cookedOn: "Cooked on",
+  weightCleaned: "Cleaned weight, g",
+  weightCooked: "Cooked weight, g",
+  actualsHeading: "Per-ingredient actuals",
+  actualsHelp: "Prefilled from the recipe. Type what the pot actually used.",
+  recipeQty: "Recipe",
+  actualWeight: "Actual weight, g",
+  actualCost: "Actual cost",
+  driftWarning: (percent: number) =>
+    `This is ${Math.round(percent)}% off the recipe. Check it before the label is printed.`,
+
+  /* ---- Bottling ---- */
+  bottlingHeading: "Bottling",
+  packedOn: "Packed on",
+  jarCount: "Jar count",
+  bestBefore: "Best before",
+  saleStopOn: "Sale stop",
+  surplus: "Surplus",
+  jarsLids: "Jars and lids",
+  boxInserts: "Box and inserts",
+  labelling: "Labelling and stickering",
+  gasPower: "Gas and power",
+
+  /* ---- P&L ---- */
+  pnlHeading: "P&L",
+  pnlNotYet: "P&L arrives in M4.8.",
+  revenue: "Revenue",
+  ingredientCost: "Ingredient cost",
+  packagingCost: "Packaging cost",
+  shippingCost: "Shipping cost",
+  gatewayFees: "Gateway fees",
+  writeOffCost: "Write-off cost",
+  margin: "Margin",
+
+  /* ---- The state button, section 8.2 ---- */
+  openBatch: "Open the batch",
+  sayYesSourcing: "Say yes: start sourcing",
+  messageText: "Message to customers, optional edit",
+  startCooking: "Start cooking",
+  bottleBatch: "Bottle the batch",
+  submit: "Save",
+  saving: "Saving...",
+  fieldRequired: "Please fill in every field this step asks for.",
+
+  pause: "Pause",
+  pauseReason: "Reason",
+  confirmPause: "Confirm pause",
+  resume: "Resume",
+
+  fullWaitingLine: "The batch is full.",
+  answerFull: "Say yes",
+
+  waitingOpen: "Waiting for half of the bookable jars to be paid.",
+  waitingHalfReached: "Waiting on the Owner to say yes to start sourcing.",
+  waitingSourcingKitchenOnly: "Waiting on the kitchen to start cooking.",
+  waitingCookingKitchenOnly: "Waiting on the kitchen to bottle the batch.",
+  waitingBottled: "Waiting to go on sale or sell out.",
+  waitingInStock: "Waiting to sell out.",
+  waitingSoldOut: "Waiting for every order to close.",
+  waitingArchived: "This batch is archived. Its P&L is locked.",
+  waitingDraftNotOwner: "Waiting on the Owner to open this batch.",
+  waitingNoAction: "Nothing to do here right now.",
+
+  transitionRefused: "That did not go through.",
+  saveRefused: "That did not save. Please check your role.",
+  saveFailed: "That did not save. Please check the signal and try again.",
+
+  undo: "Undo",
+  fieldChanged: (label: string, value: string) => `${label} changed to ${value}.`,
+} as const;
+
 /** The one line shown on an empty More sub-screen, keyed by row. */
 export const MORE_EMPTY_BODY: Record<Exclude<MoreRowKey, "settings" | "products">, string> = {
   concerns: "No concerns right now. This is where they will wait for you, oldest first.",

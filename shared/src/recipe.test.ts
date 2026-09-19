@@ -11,7 +11,9 @@ import {
   compareLabelText,
   compoundDeclarationRequired,
   computeRecipePercentages,
+  INGREDIENT_ACTUAL_DRIFT_THRESHOLD_PERCENT,
   indexIngredients,
+  ingredientActualDrift,
   labelIngredientsLine,
   nutritionPer100g,
   parseIngredientsLine,
@@ -718,5 +720,51 @@ describe("the pieces", () => {
   it("indexes a list of ingredients by id", () => {
     const index = indexIngredients([{ id: "salt", labelName: "Salt" }]);
     expect(index.salt.labelName).toBe("Salt");
+  });
+});
+
+describe("ingredientActualDrift", () => {
+  it("does not drift on ordinary variance", () => {
+    // 1,550 g recipe, 1,600 g actual: 3.2%, well under the 15% threshold.
+    const drift = ingredientActualDrift(1550, "g", 1600);
+    expect(drift.recipeG).toBe(1550);
+    expect(drift.diffG).toBe(50);
+    expect(drift.percent).toBeCloseTo(3.2, 1);
+    expect(drift.isDrifting).toBe(false);
+  });
+
+  it("flags a pot that came in well off the recipe", () => {
+    // 1,550 g recipe, 800 g actual: 48.4% short.
+    const drift = ingredientActualDrift(1550, "g", 800);
+    expect(drift.isDrifting).toBe(true);
+    expect(drift.diffG).toBe(-750);
+  });
+
+  it("sits right at the threshold and does not flag it (strictly greater)", () => {
+    const recipeG = 1000;
+    const atThreshold = recipeG * (1 + INGREDIENT_ACTUAL_DRIFT_THRESHOLD_PERCENT / 100);
+    const drift = ingredientActualDrift(recipeG, "g", atThreshold);
+    expect(drift.percent).toBeCloseTo(INGREDIENT_ACTUAL_DRIFT_THRESHOLD_PERCENT, 6);
+    expect(drift.isDrifting).toBe(false);
+  });
+
+  it("converts a volume line by density before comparing", () => {
+    // 2 L of vinegar at 1.00 g/ml is 2,000 g recipe; 1,000 g actual is 50% short.
+    const drift = ingredientActualDrift(2, "l", 1000, 1.0);
+    expect(drift.recipeG).toBe(2000);
+    expect(drift.isDrifting).toBe(true);
+  });
+
+  it("treats any actual against a zero recipe line as full drift", () => {
+    const drift = ingredientActualDrift(0, "g", 50);
+    expect(drift.percent).toBe(100);
+    expect(drift.isDrifting).toBe(true);
+    const none = ingredientActualDrift(0, "g", 0);
+    expect(none.percent).toBe(0);
+    expect(none.isDrifting).toBe(false);
+  });
+
+  it("refuses a negative actual", () => {
+    expect(() => ingredientActualDrift(100, "g", -1)).toThrow(/actual weight/);
   });
 });

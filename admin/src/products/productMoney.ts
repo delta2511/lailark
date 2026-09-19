@@ -37,12 +37,25 @@ export function isSellablePaise(paise: number | null | undefined): boolean {
 }
 
 /**
- * Validates the amount for a custom line.
- * Returns true only for non-negative integers (a custom line can be zero cost
- * but never negative; the MRP does not apply to custom lines).
+ * Validates money that is spent rather than charged: a batch's jar, box and
+ * labelling costs, an ingredient's actual cost, a packing or courier cost.
+ *
+ * Returns true only for a whole number of paise, zero or more. Zero is
+ * legitimate (a cost genuinely can be nothing), and the ₹649 MRP is a ceiling
+ * on what a jar is sold for, never on what it cost to make, so no upper bound
+ * applies here.
  */
-export function isCustomLineAmountPaise(paise: number | null | undefined): boolean {
+export function isCostPaise(paise: number | null | undefined): boolean {
   if (paise === null || paise === undefined) return false;
   if (!Number.isInteger(paise)) return false;
   return paise >= 0;
+}
+
+/**
+ * Validates the amount for a custom line: the same rule as a cost (a custom
+ * line can be zero but never negative, and the MRP does not apply to it), so
+ * it is that one rule under the name the Products screen reads by.
+ */
+export function isCustomLineAmountPaise(paise: number | null | undefined): boolean {
+  return isCostPaise(paise);
 }

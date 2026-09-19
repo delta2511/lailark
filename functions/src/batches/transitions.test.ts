@@ -11,6 +11,7 @@ import {
   bestBefore,
   DEFAULT_CUSTOMER_MESSAGES,
   formatCalDate,
+  MRP_PAISE,
   PRICE_IN_STOCK_PAISE,
   PRICE_OPEN_PAISE,
   PROTECTED_BATCH_FIELDS,
@@ -484,6 +485,29 @@ describe("none -> draft: the Owner creates a batch", () => {
     }
   });
 
+  /**
+   * CLAUDE.md section 3: never above the Rs 649 MRP, which is printed on the
+   * jar. The screen that sets these is a typed box, so the server is what
+   * actually holds the line.
+   */
+  it("refuses a price above the MRP printed on the jar", () => {
+    for (const field of ["priceOpen", "priceInStock"]) {
+      const result = refused(
+        plan({ to: "draft", data: draftInputs({ [field]: MRP_PAISE + 1 }) }, { batch: null }),
+      );
+      expect(result.code).toBe("invalid-argument");
+      expect(result.message).toContain(field);
+      expect(result.message).toMatch(/MRP/);
+    }
+  });
+
+  it("accepts a price at exactly the MRP", () => {
+    const value = ok(
+      plan({ to: "draft", data: draftInputs({ priceInStock: MRP_PAISE }) }, { batch: null }),
+    ).value;
+    expect(value.patch.priceInStock).toBe(MRP_PAISE);
+  });
+
   it("refuses a pot too small to book a single jar", () => {
     const result = refused(plan({ to: "draft", data: draftInputs({ plannedJars: 1 }) }, { batch: null }));
     expect(result.message).toMatch(/no bookable jar/);
@@ -513,6 +537,19 @@ describe("draft -> open: the Owner publishes the card", () => {
 
   it("refuses a limit above the bookable jars", () => {
     expect(refused(plan({ ref: REF, to: "open", data: { limitPerPerson: 100 } })).ok).toBe(false);
+  });
+
+  it("refuses a price above the MRP on the open row too", () => {
+    for (const field of ["priceOpen", "priceInStock"]) {
+      const result = refused(plan({ ref: REF, to: "open", data: { [field]: MRP_PAISE + 1 } }));
+      expect(result.code).toBe("invalid-argument");
+      expect(result.message).toMatch(/MRP/);
+    }
+  });
+
+  it("accepts a price at exactly the MRP on the open row", () => {
+    const value = ok(plan({ ref: REF, to: "open", data: { priceInStock: MRP_PAISE } })).value;
+    expect(value.patch.priceInStock).toBe(MRP_PAISE);
   });
 
   it("never lets bookable drop below paid (17.4)", () => {

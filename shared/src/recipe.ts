@@ -785,3 +785,55 @@ export function verifyAgainstPrintedLabel(
     storageText: block.storageText,
   });
 }
+
+/* -------------------------------------------------------------------------- */
+/* Cooking actuals against the recipe, brief section 17.4                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How far Kitchen's actual weight for an ingredient may differ from the
+ * recipe's own quantity before the batch screen raises a drift warning for
+ * label review.
+ *
+ * ASSUMED (M2.4): the brief asks for "a drift warning for label review" but
+ * names no threshold. 15% is chosen as a sensible middle ground: normal
+ * cooking variance (a bit more or less of something landed that day) should
+ * not nag on every batch, while a pot that is genuinely different from what
+ * the recipe says (half the dates, say) is caught before the label is
+ * printed. A named constant so Shefin can move it at the milestone break
+ * without hunting for a magic number.
+ */
+export const INGREDIENT_ACTUAL_DRIFT_THRESHOLD_PERCENT = 15;
+
+export interface IngredientActualDrift {
+  /** The recipe's own quantity for this line, in grams. */
+  readonly recipeG: number;
+  /** What Kitchen actually weighed out, in grams. */
+  readonly actualG: number;
+  /** `actualG - recipeG`. Positive when more went in than the recipe calls for. */
+  readonly diffG: number;
+  /** `abs(diffG) / recipeG * 100`, or 100 when the recipe line is 0 g and something went in anyway. */
+  readonly percent: number;
+  readonly isDrifting: boolean;
+}
+
+/**
+ * Compares what Kitchen actually weighed out for one ingredient against what
+ * the recipe calls for, both reduced to grams so a line written in litres or
+ * kilos compares honestly against a scale reading in grams.
+ */
+export function ingredientActualDrift(
+  recipeQty: number,
+  recipeUnit: string,
+  actualG: number,
+  densityGPerMl?: number | null,
+  thresholdPercent: number = INGREDIENT_ACTUAL_DRIFT_THRESHOLD_PERCENT,
+): IngredientActualDrift {
+  const recipeG = toGrams(recipeQty, recipeUnit, densityGPerMl);
+  if (!Number.isFinite(actualG) || actualG < 0) {
+    throw new RangeError(`actual weight must be a number from 0, got ${String(actualG)}`);
+  }
+  const diffG = actualG - recipeG;
+  const percent = recipeG > 0 ? (Math.abs(diffG) / recipeG) * 100 : actualG > 0 ? 100 : 0;
+  return { recipeG, actualG, diffG, percent, isDrifting: percent > thresholdPercent };
+}
