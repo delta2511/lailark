@@ -80,12 +80,36 @@ describe("batch states, brief 8.1", () => {
     expect([...BATCH_STATES_IN_STOCK]).toEqual(["bottled", "inStock"]);
   });
 
-  it("can be paused from open, half reached, sourcing or cooking", () => {
-    expect([...BATCH_STATES_PAUSABLE]).toEqual(["open", "halfReached", "sourcing", "cooking"]);
+  it("can be paused from the six states of decision D23, and resume to each", () => {
+    expect([...BATCH_STATES_PAUSABLE]).toEqual([
+      "open",
+      "halfReached",
+      "sourcing",
+      "cooking",
+      "inStock",
+      "soldOut",
+    ]);
     for (const state of BATCH_STATES_PAUSABLE) {
       expect(canTransitionBatch(state, "paused")).toBe(true);
       expect(canTransitionBatch("paused", state)).toBe(true);
     }
+  });
+
+  it("refuses to pause a draft or an archived batch (D23)", () => {
+    // A draft is not on sale, so there is nothing to freeze. An archived batch
+    // is closed and its P&L is locked by the state.
+    expect(canTransitionBatch("draft", "paused")).toBe(false);
+    expect(canTransitionBatch("archived", "paused")).toBe(false);
+    expect(canTransitionBatch("paused", "draft")).toBe(false);
+    expect(canTransitionBatch("paused", "archived")).toBe(false);
+    expect(canTransitionBatch("paused", "bottled")).toBe(false);
+    expect([...BATCH_STATES_PAUSABLE]).not.toContain("draft");
+    expect([...BATCH_STATES_PAUSABLE]).not.toContain("archived");
+  });
+
+  it("lets D23's two new rows in without losing the old ones", () => {
+    expect(BATCH_TRANSITIONS.inStock).toEqual(["soldOut", "paused"]);
+    expect(BATCH_TRANSITIONS.soldOut).toEqual(["archived", "paused"]);
   });
 
   it("names a transition table entry for every state", () => {
@@ -245,7 +269,7 @@ describe("the rest", () => {
     expect([...SHIPPING_RULES]).toEqual(["free", "flatFee", "freeOnTwo"]);
   });
 
-  it("carries the nine settings names of brief 18.1, plus the Q4 permissions switch", () => {
+  it("carries brief 18.1's names, the Q4 switch and D24's customer messages", () => {
     expect([...SETTINGS_NAMES]).toEqual([
       "gst",
       "shipping",
@@ -257,6 +281,7 @@ describe("the rest", () => {
       "discountCap",
       "pincodes",
       "permissions",
+      "messages",
     ]);
   });
 });

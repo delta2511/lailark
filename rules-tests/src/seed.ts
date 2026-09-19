@@ -9,7 +9,12 @@ import type { RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { KITCHEN_UID, OWNER_UID, VIEWER_UID } from "./env.js";
 
 export const CUSTOMER_PHONE = "+917736110087";
-export const BATCH_NO = "001";
+/**
+ * The batch's internal reference, which is its document id. Decision D21c: the
+ * printed number is the `batchNo` field, and it is null until bottling. This
+ * seeded batch is open, so it has none.
+ */
+export const BATCH_REF = "b-7f3a2c";
 export const ORDER_ID = "ord-1";
 export const DOCUMENT_ID = "LK-26-27-0001";
 export const UPDATE_ID = "upd-1";
@@ -21,8 +26,12 @@ const base = { createdAt: now, updatedAt: now, createdBy: OWNER_UID };
 /** A whole batch document, every field of `Batch` in `shared`. */
 export const BATCH_DOC = {
   ...base,
+  // D21c: open, so not yet numbered.
+  batchNo: null,
   productSlug: "prawns-and-dates",
+  productName: "Prawns and dates",
   recipeId: "rec-1",
+  mainIngredientName: "Prawns",
   state: "open",
   plannedJars: 22,
   bookableJars: 19,
@@ -47,6 +56,7 @@ export const BATCH_DOC = {
   fullReachedAt: null,
   fullApprovedAt: null,
   pausedReason: null,
+  pausedFrom: null,
   costs: { jarsLids: 0, boxInserts: 0, labelling: 0, gasPower: 0 },
   pnl: {
     revenue: 0,
@@ -90,9 +100,9 @@ export async function seedFirestore(env: RulesTestEnvironment): Promise<void> {
       put(`orders/${ORDER_ID}/events/e1`, { ...base, kind: "created" }),
 
       // kitchen
-      put(`batches/${BATCH_NO}`, BATCH_DOC),
-      put(`batches/${BATCH_NO}/lines/l1`, { ...base, ingredientId: "i1", qtyActual: 1 }),
-      put(`batches/${BATCH_NO}/updates/${UPDATE_ID}`, {
+      put(`batches/${BATCH_REF}`, BATCH_DOC),
+      put(`batches/${BATCH_REF}/lines/l1`, { ...base, ingredientId: "i1", qtyActual: 1 }),
+      put(`batches/${BATCH_REF}/updates/${UPDATE_ID}`, {
         ...base,
         createdBy: KITCHEN_UID,
         photoPath: null,
@@ -101,7 +111,7 @@ export async function seedFirestore(env: RulesTestEnvironment): Promise<void> {
         approvedBy: null,
         sentAt: null,
       }),
-      put(`batches/${BATCH_NO}/updates/approved-1`, {
+      put(`batches/${BATCH_REF}/updates/approved-1`, {
         ...base,
         createdBy: KITCHEN_UID,
         photoPath: null,
@@ -110,7 +120,7 @@ export async function seedFirestore(env: RulesTestEnvironment): Promise<void> {
         approvedBy: OWNER_UID,
         sentAt: now,
       }),
-      put(`batches/${BATCH_NO}/writeOffs/w1`, { ...base, qty: 1, reason: "cracked", by: KITCHEN_UID }),
+      put(`batches/${BATCH_REF}/writeOffs/w1`, { ...base, qty: 1, reason: "cracked", by: KITCHEN_UID }),
 
       // catalogue
       put("products/prawns-and-dates", { ...base, name: "Prawns and dates" }),
@@ -138,7 +148,7 @@ export async function seedFirestore(env: RulesTestEnvironment): Promise<void> {
       put(`users/${KITCHEN_UID}`, { name: "Sumayya", phone: "+919446587027", role: "kitchen" }),
       put(`users/${VIEWER_UID}`, { name: "CA", phone: "+910000000000", role: "viewer" }),
       put("policyVersions/p1", { ...base, kind: "orders", text: "..." }),
-      put("audit/aud-1", { object: "batches/001", action: "update", by: OWNER_UID, at: now }),
+      put("audit/aud-1", { object: `batches/${BATCH_REF}`, action: "update", by: OWNER_UID, at: now }),
     ]);
   });
 }

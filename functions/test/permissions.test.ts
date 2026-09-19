@@ -22,26 +22,26 @@ async function newBatch(productSlug: string): Promise<string> {
       priceInStock: PRICE_IN_STOCK,
     },
   });
-  return created.batchNo;
+  return created.ref;
 }
 
 /** A batch carried to `state` by the callers who are allowed to do it. */
 async function batchIn(state: string, productSlug: string): Promise<string> {
-  const batchNo = await newBatch(productSlug);
-  if (state === "draft") return batchNo;
-  await mustTransition("owner", { batchNo, to: "open", data: {} });
-  if (state === "open") return batchNo;
-  await db().collection("batches").doc(batchNo).update({ paidCount: 10 });
-  await waitForState(batchNo, "halfReached");
-  if (state === "halfReached") return batchNo;
-  await mustTransition("owner", { batchNo, to: "sourcing", data: {} });
-  if (state === "sourcing") return batchNo;
+  const ref = await newBatch(productSlug);
+  if (state === "draft") return ref;
+  await mustTransition("owner", { ref, to: "open", data: {} });
+  if (state === "open") return ref;
+  await db().collection("batches").doc(ref).update({ paidCount: 10 });
+  await waitForState(ref, "halfReached");
+  if (state === "halfReached") return ref;
+  await mustTransition("owner", { ref, to: "sourcing", data: {} });
+  if (state === "sourcing") return ref;
   await mustTransition("kitchen", {
-    batchNo,
+    ref,
     to: "cooking",
     data: { landedOn: "2026-09-01", source: "Beypore", weightRaw: 12_000, costRaw: 480_000 },
   });
-  return batchNo;
+  return ref;
 }
 
 describe("who may move a batch", () => {
@@ -75,10 +75,10 @@ describe("who may move a batch", () => {
     const sourcing = await batchIn("sourcing", "viewer-test-sourcing");
     for (const call of [
       { to: "draft", data: { productSlug: "x", recipeId: "y", plannedJars: 22, priceOpen: PRICE_OPEN, priceInStock: PRICE_IN_STOCK } },
-      { batchNo: draft, to: "open", data: {} },
-      { batchNo: open, to: "paused", data: { reason: "no" } },
+      { ref: draft, to: "open", data: {} },
+      { ref: open, to: "paused", data: { reason: "no" } },
       {
-        batchNo: sourcing,
+        ref: sourcing,
         to: "cooking",
         data: { landedOn: "2026-09-01", source: "Beypore", weightRaw: 1, costRaw: 1 },
       },
@@ -89,58 +89,58 @@ describe("who may move a batch", () => {
   });
 
   it("lets the Kitchen move Sourcing, Cooking and Bottled", async () => {
-    const batchNo = await batchIn("sourcing", "kitchen-test");
+    const ref = await batchIn("sourcing", "kitchen-test");
 
     await mustTransition("kitchen", {
-      batchNo,
+      ref,
       to: "cooking",
       data: { landedOn: "2026-09-01", source: "Beypore", weightRaw: 12_000, costRaw: 480_000 },
     });
-    expect((await batchDoc(batchNo)).state).toBe("cooking");
+    expect((await batchDoc(ref)).state).toBe("cooking");
 
     await mustTransition("kitchen", {
-      batchNo,
+      ref,
       to: "bottled",
       data: { weightCleaned: 9_000, weightCooked: 7_000, jarCount: 22, packedOn: "2026-09-04" },
     });
-    const batch = await batchDoc(batchNo);
+    const batch = await batchDoc(ref);
     expect(batch.state).toBe("bottled");
     expect(batch.bestBefore).toBe("2027-03-04");
   });
 
   it("refuses the Kitchen the Owner's moves: opening, approving half, pausing", async () => {
     const draft = await batchIn("draft", "kitchen-refused");
-    expect((await transition("kitchen", { batchNo: draft, to: "open", data: {} })).error?.status).toBe(
+    expect((await transition("kitchen", { ref: draft, to: "open", data: {} })).error?.status).toBe(
       "PERMISSION_DENIED",
     );
 
     const half = await batchIn("halfReached", "kitchen-refused-half");
-    expect((await transition("kitchen", { batchNo: half, to: "sourcing", data: {} })).error?.status).toBe(
+    expect((await transition("kitchen", { ref: half, to: "sourcing", data: {} })).error?.status).toBe(
       "PERMISSION_DENIED",
     );
     expect(
-      (await transition("kitchen", { batchNo: half, to: "paused", data: { reason: "no prawns" } })).error?.status,
+      (await transition("kitchen", { ref: half, to: "paused", data: { reason: "no prawns" } })).error?.status,
     ).toBe("PERMISSION_DENIED");
   });
 
   it("lets the Owner open, pause and resume", async () => {
-    const batchNo = await batchIn("open", "owner-test");
+    const ref = await batchIn("open", "owner-test");
 
-    await mustTransition("owner", { batchNo, to: "paused", data: { reason: "no prawns this week" } });
-    let batch = await batchDoc(batchNo);
+    await mustTransition("owner", { ref, to: "paused", data: { reason: "no prawns this week" } });
+    let batch = await batchDoc(ref);
     expect(batch.state).toBe("paused");
     expect(batch.pausedReason).toBe("no prawns this week");
 
-    await mustTransition("owner", { batchNo, to: "open", data: {} });
-    batch = await batchDoc(batchNo);
+    await mustTransition("owner", { ref, to: "open", data: {} });
+    batch = await batchDoc(ref);
     expect(batch.state).toBe("open");
     expect(batch.pausedReason).toBeNull();
   });
 
   it("refuses every automatic transition to every caller", async () => {
-    const batchNo = await batchIn("open", "automatic-test");
+    const ref = await batchIn("open", "automatic-test");
     for (const who of ["owner", "kitchen"] as const) {
-      const out = await transition(who, { batchNo, to: "halfReached", data: {} });
+      const out = await transition(who, { ref, to: "halfReached", data: {} });
       expect(out.error?.status).toBe("FAILED_PRECONDITION");
       expect(out.error?.message).toMatch(/happens on its own/);
     }
@@ -148,17 +148,17 @@ describe("who may move a batch", () => {
 });
 
 describe("the callable writes no protected field on a client's behalf", () => {
-  let batchNo = "";
+  let ref = "";
 
   beforeAll(async () => {
     await clearFirestore();
-    batchNo = await newBatch("protected-test");
+    ref = await newBatch("protected-test");
   });
 
   it("refuses all fourteen of them, from the Owner", async () => {
     for (const field of PROTECTED_BATCH_FIELDS) {
       const out = await transition("owner", {
-        batchNo,
+        ref,
         to: "open",
         data: { [field]: field === "state" ? "archived" : 999 },
       });
@@ -166,14 +166,14 @@ describe("the callable writes no protected field on a client's behalf", () => {
       expect(out.error?.message).toContain(field);
     }
     // And nothing was written: the batch is still the draft it was.
-    const batch = await batchDoc(batchNo);
+    const batch = await batchDoc(ref);
     expect(batch.state).toBe("draft");
     expect(batch.bookableJars).toBe(19);
     expect(batch.paidCount).toBe(0);
   });
 
   it("refuses an input no transition asks for", async () => {
-    const out = await transition("owner", { batchNo, to: "open", data: { sneaky: true } });
+    const out = await transition("owner", { ref, to: "open", data: { sneaky: true } });
     expect(out.error?.status).toBe("INVALID_ARGUMENT");
     expect(out.error?.message).toContain("sneaky");
   });

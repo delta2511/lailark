@@ -108,6 +108,29 @@ export interface PermissionsSettings {
   readonly kitchenCanEditRecipes: boolean;
 }
 
+/**
+ * `settings/messages`. Decision D24, answering Q11: Claude drafts the three
+ * customer messages and the Owner can edit them. This document is the edit.
+ *
+ * Each field is a template whose `{product}`, `{ingredient}` and `{price}` are
+ * substituted from the batch, so a message never types a price or a count.
+ * A missing document, a missing field or an empty string all mean "the Owner
+ * has not written one", and `DEFAULT_CUSTOMER_MESSAGES` in `messages.ts` is
+ * used instead. Settings are Owner-write and read by all three roles.
+ *
+ * Editing these changes the **draft** the Owner is offered. It never sends
+ * anything: every message still becomes an `approvals` document with `sentAt`
+ * null and waits for his yes (D5).
+ */
+export interface MessagesSettings {
+  /** Draft -> Open, to the people who asked to be told. */
+  readonly batchOpen: string;
+  /** Open -> Half reached, brief 7.2 step 7. */
+  readonly halfReached: string;
+  /** Bottled -> In stock, to the notify-me list. */
+  readonly backInStock: string;
+}
+
 /** `settings/{name}`, keyed by name. */
 export interface SettingsByName {
   readonly gst: GstSettings;
@@ -120,6 +143,7 @@ export interface SettingsByName {
   readonly discountCap: DiscountCapSettings;
   readonly pincodes: PincodesSettings;
   readonly permissions: PermissionsSettings;
+  readonly messages: MessagesSettings;
 }
 
 /** One settings document, whichever name it carries. */

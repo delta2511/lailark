@@ -13,8 +13,12 @@ browser bundle as well as by the server.
   only door from an instant to a date.
 - `src/batch.ts` — the 90% cap (brief 7.1), shelf life and sale stop (6.2), holds and
   the last-jar arithmetic (9.3).
-- `src/numbers.ts` — batch numbers (`001`) and document numbers (`LK/26-27/0001`),
-  their Firestore id forms, and the financial year.
+- `src/numbers.ts` — a batch's two names (decision D21c: the internal reference
+  `b-7f3a2c`, which is its document id for life, and the printed number `001`, a field
+  stamped at bottling), document numbers (`LK/26-27/0001`), their Firestore id forms,
+  and the financial year.
+- `src/messages.ts` — the three customer messages a batch offers the Owner (D24), with
+  the Owner's `settings/messages` wording winning over the drafts. Nothing sends.
 - `src/types/` — a TypeScript interface for every collection document in brief 18.1.
 
 Timestamps are typed as `{ seconds, nanoseconds }`. Both the admin SDK and the web SDK

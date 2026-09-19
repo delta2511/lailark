@@ -249,7 +249,7 @@ export function daysToSaleStop(
 /* Holds and the last jar, brief section 9.3                                  */
 /* -------------------------------------------------------------------------- */
 
-/** One entry of `batches/{nnn}.heldJars`, keyed by order id. */
+/** One entry of `batches/{ref}.heldJars`, keyed by order id. */
 export interface HeldJar {
   readonly qty: number;
   readonly expiresAt: InstantInput;

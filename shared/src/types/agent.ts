@@ -40,7 +40,12 @@ export interface Concern extends BaseDoc {
   readonly type: ConcernType;
   readonly customerPhone: PhoneE164 | null;
   readonly orderId: string | null;
-  readonly batchNo: string | null;
+  /**
+   * The batch's internal reference, `"b-7f3a2c"`, or null. D21c: never the
+   * printed number, so a concern raised on an open batch still points at the
+   * same document after bottling stamps that batch's `batchNo`.
+   */
+  readonly batchRef: string | null;
   readonly summary: string;
   readonly proposal: string | null;
   readonly draftMessage: string | null;
@@ -57,7 +62,12 @@ export interface Concern extends BaseDoc {
 /** `approvals/{id}`: nothing goes to a customer without one. */
 export interface Approval extends BaseDoc {
   readonly kind: ApprovalKind;
-  readonly batchNo: string | null;
+  /**
+   * The batch's internal reference, `"b-7f3a2c"`, or null. D21c: an approval
+   * is raised long before the batch has a printed number, and is never
+   * re-pointed when it gets one.
+   */
+  readonly batchRef: string | null;
   readonly draft: string;
   readonly status: ApprovalStatus;
   readonly answeredBy: ActorId | null;

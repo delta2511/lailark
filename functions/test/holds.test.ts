@@ -23,9 +23,10 @@ const PRICE_IN_STOCK = 64_900;
 const ASHA = "+919000000101";
 const BINU = "+919000000102";
 
-let batchNo = "";
+let ref = "";
 
-/** A fresh open batch of 22 planned jars: 19 bookable, limit 4. */
+/** A fresh open batch of 22 planned jars: 19 bookable, limit 4. Returns its
+ * internal reference, which is how a batch is addressed (D21c). */
 async function openBatch(productSlug: string): Promise<string> {
   const created = await mustTransition("owner", {
     to: "draft",
@@ -37,9 +38,9 @@ async function openBatch(productSlug: string): Promise<string> {
       priceInStock: PRICE_IN_STOCK,
     },
   });
-  await mustTransition("owner", { batchNo: created.batchNo, to: "open", data: {} });
-  await waitForState(created.batchNo, "open");
-  return created.batchNo;
+  await mustTransition("owner", { ref: created.ref, to: "open", data: {} });
+  await waitForState(created.ref, "open");
+  return created.ref;
 }
 
 async function refusal(promise: Promise<unknown>): Promise<HoldRefused> {
@@ -53,7 +54,7 @@ async function refusal(promise: Promise<unknown>): Promise<HoldRefused> {
 
 /** That customer's live held jars on the batch document, right now. */
 async function heldBy(phone: string): Promise<number> {
-  const held = (await batchDoc(batchNo)).heldJars as Record<
+  const held = (await batchDoc(ref)).heldJars as Record<
     string,
     { qty: number; expiresAt: { toMillis(): number }; customerPhone?: string }
   >;
@@ -68,15 +69,15 @@ async function heldBy(phone: string): Promise<number> {
 describe("the per-person limit, brief 7.2 step 3", () => {
   beforeEach(async () => {
     await clearFirestore();
-    batchNo = await openBatch("prawns-pickle");
-    expect((await batchDoc(batchNo)).perPersonLimit).toBe(4);
+    ref = await openBatch("prawns-pickle");
+    expect((await batchDoc(ref)).perPersonLimit).toBe(4);
   });
 
   it("refuses a second hold that would take one customer past the limit", async () => {
-    await takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-a1", qty: 3 });
+    await takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-a1", qty: 3 });
 
     const refused = await refusal(
-      takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-a2", qty: 2 }),
+      takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-a2", qty: 2 }),
     );
     expect(refused.reason).toBe("over-limit");
     // The refusal says how many they may still take.
@@ -90,42 +91,42 @@ describe("the per-person limit, brief 7.2 step 3", () => {
 
   it("refuses a single hold above the limit outright", async () => {
     const refused = await refusal(
-      takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-a1", qty: 7 }),
+      takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-a1", qty: 7 }),
     );
     expect(refused.reason).toBe("over-limit");
     expect(refused.message).toContain("You may still take 4 jars.");
     expect(await heldBy(ASHA)).toBe(0);
 
     // Seven jars were free the whole time: this is the limit, not the stock.
-    expect((await batchDoc(batchNo)).bookableJars).toBe(19);
+    expect((await batchDoc(ref)).bookableJars).toBe(19);
   });
 
   it("allows a hold exactly at the limit, and nothing after it", async () => {
-    const taken = await takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-a1", qty: 4 });
+    const taken = await takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-a1", qty: 4 });
     expect(taken.qty).toBe(4);
     expect(taken.customerJarsBefore).toBe(0);
     expect(taken.remainingAllowance).toBe(0);
     expect(await heldBy(ASHA)).toBe(4);
 
     const refused = await refusal(
-      takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-a2", qty: 1 }),
+      takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-a2", qty: 1 }),
     );
     expect(refused.reason).toBe("over-limit");
     expect(refused.message).toContain("You cannot take any more from this batch.");
   });
 
   it("is per person: two customers may each take the limit", async () => {
-    await takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-a1", qty: 4 });
-    await takeHold({ batchNo, customerPhone: BINU, orderId: "ord-b1", qty: 4 });
+    await takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-a1", qty: 4 });
+    await takeHold({ batchRef: ref, customerPhone: BINU, orderId: "ord-b1", qty: 4 });
 
     expect(await heldBy(ASHA)).toBe(4);
     expect(await heldBy(BINU)).toBe(4);
 
     // ...and each is then at their own ceiling, not at each other's.
-    expect((await refusal(takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-a2", qty: 1 }))).reason).toBe(
+    expect((await refusal(takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-a2", qty: 1 }))).reason).toBe(
       "over-limit",
     );
-    expect((await refusal(takeHold({ batchNo, customerPhone: BINU, orderId: "ord-b2", qty: 1 }))).reason).toBe(
+    expect((await refusal(takeHold({ batchRef: ref, customerPhone: BINU, orderId: "ord-b2", qty: 1 }))).reason).toBe(
       "over-limit",
     );
   });
@@ -134,43 +135,43 @@ describe("the per-person limit, brief 7.2 step 3", () => {
     // Money arriving, as M2.8 and M3 will write it.
     await db().collection("orders").doc("ord-paid").set({
       state: "paidWaiting",
-      batchNos: [batchNo],
+      batchRefs: [ref],
       customerPhone: ASHA,
       paidAt: new Date("2026-09-01T06:00:00Z"),
       payment: { status: "captured" },
-      lines: [{ batchNo, qty: 3 }],
+      lines: [{ batchRef: ref, qty: 3 }],
     });
 
     const refused = await refusal(
-      takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-a1", qty: 2 }),
+      takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-a1", qty: 2 }),
     );
     expect(refused.reason).toBe("over-limit");
     expect(refused.message).toContain("you already have 3");
 
     // One more is still theirs to take.
-    const taken = await takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-a1", qty: 1 });
+    const taken = await takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-a1", qty: 1 });
     expect(taken.customerJarsBefore).toBe(3);
     expect(taken.remainingAllowance).toBe(0);
 
     // Somebody else's paid order is not counted against them.
-    await takeHold({ batchNo, customerPhone: BINU, orderId: "ord-b1", qty: 4 });
+    await takeHold({ batchRef: ref, customerPhone: BINU, orderId: "ord-b1", qty: 4 });
     expect(await heldBy(BINU)).toBe(4);
   });
 
   it("frees the allowance again when an earlier hold lapses (9.3)", async () => {
-    await takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-a1", qty: 4, holdMinutes: -1 });
+    await takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-a1", qty: 4, holdMinutes: -1 });
     expect(await heldBy(ASHA)).toBe(0);
 
     // The lapsed hold frees the jar, and with it the allowance.
-    const taken = await takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-a2", qty: 4 });
+    const taken = await takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-a2", qty: 4 });
     expect(taken.customerJarsBefore).toBe(0);
     expect(await heldBy(ASHA)).toBe(4);
   });
 
   it("re-holding the same order replaces that hold rather than adding to it", async () => {
-    await takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-a1", qty: 4 });
+    await takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-a1", qty: 4 });
     // The same order changing its mind is not a fifth jar.
-    const again = await takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-a1", qty: 2 });
+    const again = await takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-a1", qty: 2 });
     expect(again.customerJarsBefore).toBe(0);
     expect(await heldBy(ASHA)).toBe(2);
   });
@@ -178,7 +179,7 @@ describe("the per-person limit, brief 7.2 step 3", () => {
   it("never ends above the limit, however many holds arrive at once", async () => {
     const results = await Promise.allSettled(
       Array.from({ length: 6 }, (_, i) =>
-        takeHold({ batchNo, customerPhone: ASHA, orderId: `ord-sim-${i}`, qty: 1 }),
+        takeHold({ batchRef: ref, customerPhone: ASHA, orderId: `ord-sim-${i}`, qty: 1 }),
       ),
     );
 
@@ -191,7 +192,7 @@ describe("the per-person limit, brief 7.2 step 3", () => {
     expect(await heldBy(ASHA)).toBe(won.length);
 
     // ...and the batch as a whole never oversold either.
-    const batch = await batchDoc(batchNo);
+    const batch = await batchDoc(ref);
     expect(batch.paidCount + liveHeldJars(batch.heldJars, Date.now())).toBeLessThanOrEqual(
       batch.bookableJars,
     );
@@ -201,23 +202,23 @@ describe("the per-person limit, brief 7.2 step 3", () => {
     // Ten of nineteen paid takes it to half reached on its own; from there
     // the Owner and the Kitchen walk it to bottled, and the surplus goes on
     // sale in stock at Rs 649.
-    await db().collection("batches").doc(batchNo).update({ paidCount: 10 });
-    await waitForState(batchNo, "halfReached");
-    await mustTransition("owner", { batchNo, to: "sourcing", data: {} });
+    await db().collection("batches").doc(ref).update({ paidCount: 10 });
+    await waitForState(ref, "halfReached");
+    await mustTransition("owner", { ref, to: "sourcing", data: {} });
     await mustTransition("kitchen", {
-      batchNo,
+      ref,
       to: "cooking",
       data: { landedOn: "2026-09-01", source: "Beypore", weightRaw: 12_000, costRaw: 480_000 },
     });
     await mustTransition("kitchen", {
-      batchNo,
+      ref,
       to: "bottled",
       data: { weightCleaned: 9_000, weightCooked: 7_000, jarCount: 22, packedOn: "2026-09-04" },
     });
-    await waitForState(batchNo, "inStock");
+    await waitForState(ref, "inStock");
 
-    await takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-s1", qty: 4 });
-    expect((await refusal(takeHold({ batchNo, customerPhone: ASHA, orderId: "ord-s2", qty: 1 }))).reason).toBe(
+    await takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-s1", qty: 4 });
+    expect((await refusal(takeHold({ batchRef: ref, customerPhone: ASHA, orderId: "ord-s2", qty: 1 }))).reason).toBe(
       "over-limit",
     );
   });
@@ -225,10 +226,10 @@ describe("the per-person limit, brief 7.2 step 3", () => {
   it("refuses a hold with no customer, or a number that is not E.164", async () => {
     for (const customerPhone of ["", "9000000101", "+91 90000 00101", "phone"]) {
       const refused = await refusal(
-        takeHold({ batchNo, customerPhone, orderId: "ord-bad", qty: 1 }),
+        takeHold({ batchRef: ref, customerPhone, orderId: "ord-bad", qty: 1 }),
       );
       expect(refused.reason, customerPhone).toBe("invalid-customer");
     }
-    expect((await batchDoc(batchNo)).heldJars).toEqual({});
+    expect((await batchDoc(ref)).heldJars).toEqual({});
   });
 });

@@ -94,6 +94,7 @@ service cloud.firestore {
     /** Counts and server-computed fields. No client writes these, ever. */
     function protectedBatchFields() {
       return [
+        'batchNo',
         'bestBefore',
         'bookableJars',
         'bottledJars',
@@ -103,6 +104,7 @@ service cloud.firestore {
         'halfReachedAt',
         'heldJars',
         'paidCount',
+        'pausedFrom',
         'perPersonLimit',
         'pnl',
         'saleStopOn',
@@ -227,14 +229,19 @@ service cloud.firestore {
 
     /* ══ kitchen ════════════════════════════════════════════════════════ */
 
-    match /batches/{batchNo} {
+    // Decision D21c: the document id is the batch's **internal reference**
+    // (`b-7f3a2c`), fixed for its whole life. The printed number is the
+    // `batchNo` field, which is absent until bottling, is allocated from
+    // `counters/batch` inside the Cooking -> Bottled transaction, and is on
+    // `protectedBatchFields()` so no client can write one. Anything that
+    // resolves a batch by its printed number queries that field, not this id.
+    match /batches/{batchRef} {
       allow read: if isAdmin();
 
-      // Owner opens a batch and sets its prices (17.12). The document id is
-      // the batch number and numbers are allocated by the `nextBatchNo`
-      // transaction (M2.2), so a create here is the draft body only: no
-      // counts, no state, no computed dates. `transitionBatch` (M2.3) puts it
-      // into `draft` and moves it from there.
+      // Owner opens a batch and sets its prices (17.12). A create here is the
+      // draft body only: no counts, no state, no computed dates and no batch
+      // number. `transitionBatch` (M2.3) puts it into `draft` and moves it
+      // from there.
       allow create: if isOwner()
                     && !request.resource.data.keys().hasAny(protectedBatchFields());
 

@@ -23,6 +23,7 @@ import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import {
   type BatchAvailability,
   batchAvailability,
+  batchLabelCapitalised,
   BATCH_STATES_IN_STOCK,
   BATCH_STATES_OPEN_FOR_BOOKING,
   canHold,
@@ -63,7 +64,10 @@ export class HoldRefused extends Error {
 }
 
 export interface HoldResult {
-  readonly batchNo: string;
+  /** The batch's internal reference, `"b-7f3a2c"`. D21c: never the number. */
+  readonly batchRef: string;
+  /** The printed number, or null while the batch is still open (D21c). */
+  readonly batchNo: string | null;
   readonly customerPhone: string;
   readonly orderId: string;
   readonly qty: number;
@@ -76,8 +80,13 @@ export interface HoldResult {
 }
 
 /**
- * Holds `qty` jars of `batchNo` for `orderId`, on behalf of `customerPhone`,
+ * Holds `qty` jars of `batchRef` for `orderId`, on behalf of `customerPhone`,
  * or refuses.
+ *
+ * D21c: the batch is addressed by its internal reference. A hold is taken
+ * while the batch is open, long before it has a printed number, and the same
+ * reference still names it after bottling, so the order that took this hold
+ * resolves to the same batch either side of that moment.
  *
  * Never oversells: the count is read and written inside one transaction, and
  * the check is `paid + live holds + requested <= capacity` on the value the
@@ -92,14 +101,14 @@ export interface HoldResult {
  * second is retried against the first.
  */
 export async function takeHold(args: {
-  readonly batchNo: string;
+  readonly batchRef: string;
   /** E.164. The `customers/{phoneE164}` document id of section 18.1. */
   readonly customerPhone: string;
   readonly orderId: string;
   readonly qty: number;
   readonly holdMinutes?: number;
 }): Promise<HoldResult> {
-  const { batchNo, customerPhone, orderId, qty } = args;
+  const { batchRef, customerPhone, orderId, qty } = args;
 
   if (typeof customerPhone !== "string" || !E164.test(customerPhone)) {
     throw new HoldRefused(
@@ -109,14 +118,14 @@ export async function takeHold(args: {
   }
 
   const db = getFirestore(getAdminApp());
-  const ref = db.collection(BATCHES).doc(batchNo);
+  const doc = db.collection(BATCHES).doc(batchRef);
 
   return db.runTransaction(async (tx) => {
     /* ---- read: the batch, then every order in it -------------------- */
 
-    const snap = await tx.get(ref);
+    const snap = await tx.get(doc);
     if (!snap.exists) {
-      throw new HoldRefused("no-such-batch", `There is no batch ${batchNo}.`);
+      throw new HoldRefused("no-such-batch", `There is no batch ${batchRef}.`);
     }
 
     const batch = batchViewFrom(snap);
@@ -124,7 +133,7 @@ export async function takeHold(args: {
     const heldWithCustomer = heldJarsWithCustomerFrom(snap);
     // Every read happens before the write below: the Node SDK refuses a read
     // after a write in the same transaction.
-    const orders = await ordersInBatch(tx, db, batchNo);
+    const orders = await ordersInBatch(tx, db, batchRef);
 
     const now = Date.now();
     const state = batch.state ?? "";
@@ -146,7 +155,10 @@ export async function takeHold(args: {
         now,
       });
     } else {
-      throw new HoldRefused("not-on-sale", `Batch ${batchNo} is not on sale.`);
+      throw new HoldRefused(
+        "not-on-sale",
+        `${batchLabelCapitalised(batch.batchNo, batchRef, state)} is not on sale.`,
+      );
     }
 
     /* ---- the per-person limit, brief 7.2 step 3 --------------------- */
@@ -172,9 +184,12 @@ export async function takeHold(args: {
     const limit = batch.perPersonLimit;
     if (!withinPerPersonLimit(customerJars, qty, limit)) {
       const remaining = remainingPerPersonAllowance(customerJars, limit);
+      // "This batch" rather than a name: before bottling the only name a batch
+      // has is its internal reference (D21c), and `b-7f3a2c` is an admin's
+      // string, not something to put in front of a customer.
       throw new HoldRefused(
         "over-limit",
-        `Batch ${batchNo} is limited to ${jars(limit)} per person and you already have ${customerJars}. ` +
+        `This batch is limited to ${jars(limit)} per person and you already have ${customerJars}. ` +
           (remaining === 0
             ? "You cannot take any more from this batch."
             : `You may still take ${jars(remaining)}.`),
@@ -190,14 +205,17 @@ export async function takeHold(args: {
             "held-by-someone-else",
             "Someone is paying for the last jar, check back in 15 minutes.",
           )
-        : new HoldRefused("sold-out", `Batch ${batchNo} has ${availability.available} jars free.`);
+        : new HoldRefused(
+            "sold-out",
+            `This batch has ${availability.available} jars free.`,
+          );
     }
 
     /* ---- write ------------------------------------------------------ */
 
     const expiresAtMillis = now + (args.holdMinutes ?? HOLD_MINUTES) * 60_000;
     tx.set(
-      ref,
+      doc,
       {
         heldJars: {
           [orderId]: {
@@ -213,7 +231,8 @@ export async function takeHold(args: {
     );
 
     return {
-      batchNo,
+      batchRef,
+      batchNo: batch.batchNo,
       customerPhone,
       orderId,
       qty,

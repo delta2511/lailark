@@ -24,7 +24,7 @@ let who: Callers;
 const BILL = "documents/LK-26-27-0001.pdf";
 const LABEL = "shipments/sh-1/label.pdf";
 const EXPORT = "exports/2026-09.csv";
-const PHOTO = "batches/001/updates/seeded.jpg";
+const PHOTO = "batches/b-7f3a2c/updates/seeded.jpg";
 const PRODUCT_IMAGE = "products/prawns-and-dates/hero.jpg";
 
 const jpeg = () => ({ bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 1, 2, 3, 4]), type: "image/jpeg" });
@@ -71,23 +71,23 @@ describe("the public internet", () => {
   });
 
   it("uploads nothing", async () => {
-    await assertFails(putJpeg(who.unauth, "batches/001/updates/hacked.jpg"));
+    await assertFails(putJpeg(who.unauth, "batches/b-7f3a2c/updates/hacked.jpg"));
     await assertFails(putJpeg(who.unauth, "anywhere/else.jpg"));
   });
 
   it("is what a signed-in caller with no role claim gets too", async () => {
     await assertFails(readAt(who.noRole, PHOTO));
-    await assertFails(putJpeg(who.noRole, "batches/001/updates/x.jpg"));
+    await assertFails(putJpeg(who.noRole, "batches/b-7f3a2c/updates/x.jpg"));
   });
 });
 
 describe("batch photos", () => {
   it("are uploaded by the Kitchen", async () => {
-    await assertSucceeds(putJpeg(who.kitchen, "batches/001/updates/x.jpg"));
+    await assertSucceeds(putJpeg(who.kitchen, "batches/b-7f3a2c/updates/x.jpg"));
   });
 
   it("are uploaded by the Owner", async () => {
-    await assertSucceeds(putJpeg(who.owner, "batches/001/updates/y.jpg"));
+    await assertSucceeds(putJpeg(who.owner, "batches/b-7f3a2c/updates/y.jpg"));
   });
 
   it("are read by all three roles", async () => {
@@ -97,18 +97,18 @@ describe("batch photos", () => {
   });
 
   it("are not uploaded by the Viewer, who is read-only everywhere", async () => {
-    await assertFails(putJpeg(who.viewer, "batches/001/updates/z.jpg"));
+    await assertFails(putJpeg(who.viewer, "batches/b-7f3a2c/updates/z.jpg"));
   });
 
   it("must be an image: a text file is refused", async () => {
     await assertFails(
-      put(who.kitchen, "batches/001/updates/notes.txt", new Uint8Array([104, 105]), "text/plain"),
+      put(who.kitchen, "batches/b-7f3a2c/updates/notes.txt", new Uint8Array([104, 105]), "text/plain"),
     );
   });
 
   it("must be under 8 MB: a 9 MB upload is refused", async () => {
     const nineMegabytes = new Uint8Array(9 * 1024 * 1024);
-    await assertFails(put(who.kitchen, "batches/001/updates/huge.jpg", nineMegabytes, "image/jpeg"));
+    await assertFails(put(who.kitchen, "batches/b-7f3a2c/updates/huge.jpg", nineMegabytes, "image/jpeg"));
   });
 
   // Batch photos are removable by the Owner only. `isImageUnder8Mb()` is always

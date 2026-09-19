@@ -102,10 +102,17 @@ const EXPECTED_EXPORTS = [
   "inStockAvailability",
   "canHold",
   // numbers
+  "BATCH_REF_PREFIX",
+  "BATCH_REF_LENGTH",
+  "BATCH_REF_ALPHABET",
+  "isBatchRef",
+  "batchRefFromBytes",
   "BATCH_NO_MIN_DIGITS",
   "formatBatchNo",
   "parseBatchNo",
   "isBatchNo",
+  "batchLabel",
+  "batchLabelCapitalised",
   "FINANCIAL_YEAR_START_MONTH",
   "FINANCIAL_YEAR_START_DAY",
   "financialYearStartYear",
@@ -123,6 +130,14 @@ const EXPECTED_EXPORTS = [
   "toDocumentId",
   "fromDocumentId",
   "documentNumberFor",
+  // messages
+  "CUSTOMER_MESSAGE_NAMES",
+  "DEFAULT_CUSTOMER_MESSAGES",
+  "renderCustomerMessage",
+  "customerMessage",
+  "ingredientInSentence",
+  "productWordsFromSlug",
+  "messagePrice",
   // rules
   "PROTECTED_BATCH_FIELDS",
   "KITCHEN_BATCH_FIELDS",
@@ -180,6 +195,9 @@ describe("the barrel", () => {
     const maths = shared.batchMaths(22);
     expect(maths.bookableJars).toBe(19);
     expect(shared.formatBatchNo(1)).toBe("001");
+    // D21c: the id is the reference, the printed number is a field.
+    expect(shared.isBatchRef("b-7f3a2c")).toBe(true);
+    expect(shared.batchLabel("001", "b-7f3a2c")).toBe("batch 001");
     expect(shared.formatINR(shared.PRICE_IN_STOCK_PAISE)).toBe("₹649");
     expect(shared.formatCalDate(shared.bestBefore("2026-09-04"))).toBe("2027-03-04");
     expect(shared.formatCalDate(shared.saleStopOn("2026-09-04"))).toBe("2027-01-02");

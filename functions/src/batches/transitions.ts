@@ -19,15 +19,23 @@ import {
   BATCH_STATES,
   BATCH_STATES_PAUSABLE,
   type BatchState,
+  batchLabel,
+  batchLabelCapitalised,
   bestBefore,
   bookableJars,
+  customerMessage,
   formatCalDate,
+  formatINR,
   halfOfBookable,
   inStockAvailability,
+  ingredientInSentence,
+  isBatchRef,
   isPaise,
   isProtectedBatchField,
+  type MessagesSettings,
   parseCalDate,
   perPersonLimit as perPersonLimitOf,
+  productWordsFromSlug,
   ROLES,
   type Role,
   saleStopOn,
@@ -50,8 +58,8 @@ export type Failure = { readonly ok: false; readonly code: ErrorCode; readonly m
 
 /**
  * The "from" of the first row. A batch that does not exist yet has no state,
- * and `none -> draft` is the row that creates it (and allocates its number:
- * see the note on `ALLOCATES_BATCH_NO` below).
+ * and `none -> draft` is the row that creates it. It does **not** allocate a
+ * number: see the note on `ALLOCATES_BATCH_NO` below.
  */
 export const NO_STATE = "none" as const;
 export type TransitionFrom = BatchState | typeof NO_STATE;
@@ -83,26 +91,35 @@ export interface TransitionRow {
 }
 
 /**
- * Where the batch number is allocated.
+ * Where the printed batch number is allocated. **Decision D21c.**
  *
- * Section 8.2 puts "allocates the batch number" on Draft -> Open, and section
- * 18.1 makes the batch number the document id (`batches/{nnn}`). Both cannot
- * be true at once: a Draft is already a document, so it already needs an id.
- * The number is therefore allocated when the Draft is created, and the Draft
- * keeps it. Nothing about section 8.3 is given up by that: numbers stay
- * global, sequential, zero-padded and never reused, and no gap appears in the
- * sequence, because an abandoned Draft keeps its number rather than freeing
- * it. What Draft -> Open does is publish the number, which is the part a
- * customer ever sees.
+ * ⚠ This diverges from brief §8.2 on purpose. §8.2's table puts "allocates the
+ * batch number" on Draft -> Open, and §18.1 makes the number the document id
+ * (`batches/{nnn}`). D21c overrides both. A batch now has two names:
+ *
+ *  - an **internal reference**, `b-7f3a2c`, which is the document id, is fixed
+ *    from the moment the draft is created and never changes, so no order,
+ *    concern, approval, audit entry or subcollection is ever re-pointed;
+ *  - the **printed number**, the `batchNo` field, allocated here, at Cooking
+ *    -> Bottled, inside the same transaction as the rest of that step.
+ *
+ * Allocating at bottling is what makes the number mean something: it sits
+ * beside the label data, so a number always means jars that exist, and the
+ * sequence can never have a hole, because a batch that is abandoned before
+ * bottling never took a number to leave behind.
+ *
+ * Do not "fix" this back to §8.2. If you move this row, `/batch/<nnn>` starts
+ * resolving to batches that were never cooked, and the printed sequence gets
+ * gaps where drafts were abandoned.
  */
-export const ALLOCATES_BATCH_NO = { from: NO_STATE, to: "draft" } as const;
+export const ALLOCATES_BATCH_NO = { from: "cooking", to: "bottled" } as const;
 
 const PAUSABLE: readonly BatchState[] = BATCH_STATES_PAUSABLE;
 
 /**
  * Brief section 8.2, row for row. `pause` and `resume` are generated from
- * `BATCH_STATES_PAUSABLE` so section 8.1's "Paused <- from Open, Half reached,
- * Sourcing or Cooking" is stated once.
+ * `BATCH_STATES_PAUSABLE`, which decision D23 settled as Open, Half reached,
+ * Sourcing, Cooking, In stock and Sold out, so the list is stated once.
  */
 export const BATCH_TRANSITION_TABLE: readonly TransitionRow[] = [
   {
@@ -111,9 +128,11 @@ export const BATCH_TRANSITION_TABLE: readonly TransitionRow[] = [
     callers: ["owner"],
     requires: ["productSlug", "recipeId", "plannedJars", "priceOpen", "priceInStock"],
     optional: [],
-    computes: ["batchNo", "bookableJars", "perPersonLimit"],
+    // D21c: no `batchNo` here. The draft gets its fixed internal reference as
+    // its document id and stays unnumbered until it is bottled.
+    computes: ["bookableJars", "perPersonLimit"],
     flags: [],
-    note: "Creates the batch and allocates its number from counters/batch.",
+    note: "Creates the batch under a fixed internal reference. No number until it is bottled (D21c).",
   },
   {
     from: "draft",
@@ -123,7 +142,13 @@ export const BATCH_TRANSITION_TABLE: readonly TransitionRow[] = [
     optional: ["plannedJars", "priceOpen", "priceInStock", "limitPerPerson"],
     computes: ["bookableJars", "perPersonLimit"],
     flags: ["approval:broadcast"],
-    note: "Publishes the card. The opted-in list is offered a message, which waits for the Owner.",
+    // ⚠ Brief §8.2 puts "allocates the batch number" on this row and §8.4 shows
+    // an open batch at `/batch/<nnn>` with live counts. Decision D21c moved
+    // both: the number is stamped at bottling (see ALLOCATES_BATCH_NO), and an
+    // open batch is booked and watched on its **product page**, because
+    // `/batch/<nnn>` exists only from bottling and is always a record. Do not
+    // put an allocation back on this row.
+    note: "Publishes the card on the product page. The opted-in list is offered a message, which waits for the Owner.",
   },
   {
     from: "open",
@@ -166,6 +191,10 @@ export const BATCH_TRANSITION_TABLE: readonly TransitionRow[] = [
     requires: ["weightCleaned", "weightCooked", "jarCount", "packedOn"],
     optional: [],
     computes: [
+      // D21c: the printed number is stamped here, from counters/batch, inside
+      // this same transaction. It sits beside the label data, so a number
+      // always means jars that exist.
+      "batchNo",
       "weightCleaned",
       "weightCooked",
       "bottledJars",
@@ -179,10 +208,11 @@ export const BATCH_TRANSITION_TABLE: readonly TransitionRow[] = [
       // Section 8.2's "Issues bills for open-batch orders". Bills need the
       // document series and the order, neither of which exists yet.
       "M2.9: issue bills for the open-batch orders of this batch",
-      // Section 8.2's "Generates label data and the /batch/<nnn> page".
+      // Section 8.2's "Generates label data and the /batch/<nnn> page", which
+      // D21c makes possible only from here: the number exists from this row on.
       "M5.6: generate the label data and publish the /batch/<nnn> page",
     ],
-    note: "Computes best before, the shelf-life stop and the surplus. Raises a yield Concern if short.",
+    note: "Stamps the printed batch number (D21c), computes best before, the shelf-life stop and the surplus. Raises a yield Concern if short.",
   },
   {
     from: "bottled",
@@ -224,6 +254,9 @@ export const BATCH_TRANSITION_TABLE: readonly TransitionRow[] = [
     flags: [],
     note: "Automatic once every order in the batch is closed. The P&L is locked by the state.",
   },
+  // D23: pausable from Open, Half reached, Sourcing, Cooking, In stock and
+  // Sold out. Draft is not on sale, so there is nothing to freeze; Archived is
+  // closed with its P&L locked by the state. Neither is on PAUSABLE.
   ...PAUSABLE.map(
     (from): TransitionRow => ({
       from,
@@ -231,7 +264,9 @@ export const BATCH_TRANSITION_TABLE: readonly TransitionRow[] = [
       callers: ["owner"],
       requires: ["reason"],
       optional: [],
-      computes: ["pausedReason"],
+      // `pausedFrom` is how resume knows where to go back to: the batch
+      // remembers, rather than the Owner choosing again at resume time.
+      computes: ["pausedReason", "pausedFrom"],
       flags: ["concern:batchPaused"],
       note: "Freezes sales. A Concern per paid customer. Customers hear nothing until the Owner answers.",
     }),
@@ -243,9 +278,9 @@ export const BATCH_TRANSITION_TABLE: readonly TransitionRow[] = [
       callers: ["owner"],
       requires: [],
       optional: [],
-      computes: ["pausedReason"],
+      computes: ["pausedReason", "pausedFrom"],
       flags: [],
-      note: "The Owner resumes the batch into the state it was paused from.",
+      note: "The Owner resumes the batch into the state it was paused from (D23).",
     }),
   ),
 ];
@@ -268,8 +303,13 @@ export function isAutomatic(row: TransitionRow): boolean {
 /* -------------------------------------------------------------------------- */
 
 export interface TransitionRequest {
-  /** Absent only for the row that creates a batch. */
-  readonly batchNo?: string;
+  /**
+   * The batch's internal reference, `"b-7f3a2c"`, which is its document id.
+   * Absent only for the row that creates a batch. D21c: a batch is never
+   * addressed by its printed number, because it has none until it is bottled
+   * and the reference works at every point in its life.
+   */
+  readonly ref?: string;
   readonly to: BatchState;
   /** The row's inputs, unvalidated. Validated per row by `planTransition`. */
   readonly data: Readonly<Record<string, unknown>>;
@@ -277,10 +317,17 @@ export interface TransitionRequest {
 
 /** The batch as the transaction read it. Plain values, no Firestore types. */
 export interface BatchView {
-  readonly batchNo: string;
+  /** The document id: the fixed internal reference, `"b-7f3a2c"` (D21c). */
+  readonly ref: string;
+  /** The printed number, `"001"`, or null before bottling (D21c). */
+  readonly batchNo: string | null;
   readonly state: string | undefined;
   readonly productSlug: string;
+  /** `products/{slug}.name`, copied onto the batch when it was created. */
+  readonly productName: string | null;
   readonly recipeId: string;
+  /** The main ingredient's label name, for the half-reached message (D24). */
+  readonly mainIngredientName: string | null;
   readonly plannedJars: number;
   readonly bookableJars: number;
   readonly perPersonLimit: number;
@@ -293,11 +340,14 @@ export interface BatchView {
   readonly halfReachedAt: number | null;
   readonly fullReachedAt: number | null;
   readonly fullApprovedAt: number | null;
+  /** The state this batch was paused from, or null. D23 resumes into it. */
+  readonly pausedFrom: string | null;
 }
 
 /** Another batch of the same product, for decision D15. */
 export interface SiblingBatch {
-  readonly batchNo: string;
+  readonly ref: string;
+  readonly batchNo: string | null;
   readonly state: string;
 }
 
@@ -320,6 +370,26 @@ export interface TransitionContext {
   readonly paidOrders: readonly PaidOrderView[];
   /** The main ingredient of the batch's recipe, when it could be read. */
   readonly mainIngredientId: string | null;
+  /**
+   * The product's name and the main ingredient's label name, read once when
+   * the batch is created and then kept on the batch document. Only the create
+   * row uses these; every later row reads them off the `BatchView` instead, so
+   * no transaction after the first pays for the catalogue lookup.
+   */
+  readonly productName?: string | null;
+  readonly mainIngredientName?: string | null;
+  /**
+   * `settings/messages` as read, or null. D24: the Owner's wording for the
+   * three customer messages, which wins over the drafts in `@lailark/shared`.
+   */
+  readonly messages?: Partial<MessagesSettings> | null;
+  /**
+   * The printed number this transaction has just taken from `counters/batch`,
+   * or null on every row that does not allocate one. D21c: only Cooking ->
+   * Bottled allocates, and the callable reads the counter before it plans, so
+   * the number is issued and written in one transaction.
+   */
+  readonly allocatedBatchNo?: string | null;
   readonly nowMillis: number;
 }
 
@@ -328,10 +398,15 @@ export interface TransitionContext {
 /* -------------------------------------------------------------------------- */
 
 export interface PlannedApproval {
-  /** Deterministic, so a re-run cannot raise the same approval twice. */
+  /**
+   * Deterministic, so a re-run cannot raise the same approval twice, and keyed
+   * on the batch's **internal reference**, not its printed number (D21c). An
+   * approval is raised long before the batch has a number, and bottling must
+   * not change the id of anything already written.
+   */
   readonly id: string;
   readonly kind: "halfReached" | "full" | "broadcast" | "photoUpdate";
-  readonly batchNo: string;
+  readonly batchRef: string;
   readonly draft: string;
   readonly status: "waiting" | "approved" | "edited";
   /** The production clock, in epoch millis, or null when the row has none. */
@@ -356,9 +431,10 @@ export interface PlannedClockCancel {
 }
 
 export interface PlannedConcern {
+  /** Deterministic, and keyed on the internal reference for D21c's reason. */
   readonly id: string;
   readonly type: "yieldShortfall" | "batchPaused";
-  readonly batchNo: string;
+  readonly batchRef: string;
   readonly customerPhone: string | null;
   readonly orderId: string | null;
   readonly summary: string;
@@ -366,7 +442,7 @@ export interface PlannedConcern {
   readonly urgent: boolean;
 }
 
-/** `batches/{nnn}/lines/{id}`: what the pot actually used. */
+/** `batches/{ref}/lines/{id}`: what the pot actually used. */
 export interface PlannedLine {
   readonly id: string;
   readonly ingredientId: string;
@@ -376,7 +452,15 @@ export interface PlannedLine {
 
 export interface TransitionPlan {
   readonly row: TransitionRow;
-  /** null on the create row: the transaction allocates the number. */
+  /**
+   * The batch's internal reference, or null on the create row, where the
+   * transaction mints one (D21c).
+   */
+  readonly ref: string | null;
+  /**
+   * The printed number this row stamps, or null on every row that does not.
+   * Only Cooking -> Bottled stamps one (D21c).
+   */
   readonly batchNo: string | null;
   /** Plain field values to merge onto the batch document. */
   readonly patch: Readonly<Record<string, unknown>>;
@@ -407,30 +491,73 @@ export const FULL_CLOCK_DAYS = 3;
 
 /**
  * Nothing in this file is sent. Every line below lands in an `approvals`
- * document and waits for the Owner (CLAUDE.md section 3, decision D5).
+ * document with `sentAt` null and waits for the Owner (CLAUDE.md section 3,
+ * decision D5).
  *
- * Two of the four are drafted in the brief and are copied character for
- * character. The other two are not drafted anywhere, and customer-facing
- * wording may never be invented here, so they carry a TODO(Q11) the Owner
- * edits before the message can go out.
+ * **Decision D24, answering Q11.** The batch-open, half-reached and
+ * back-in-stock wording used to be a `TODO(Q11)` here, because customer-facing
+ * copy may not be invented in a function. Shefin's answer: Claude drafts the
+ * three and the Owner can edit them. The drafts now live in `@lailark/shared`
+ * (`DEFAULT_CUSTOMER_MESSAGES`), the Owner's edits live in `settings/messages`,
+ * and `customerMessage` picks the edit when there is one. "The batch is full."
+ * stays as it is: it is drafted in brief 7.2 step 9 and names no product.
+ *
+ * Every draft is rendered from the batch, never typed: the product name and
+ * the main ingredient are read off the batch document, and the price is
+ * formatted from paise, so no message can quote a price the batch does not
+ * carry.
  */
+
+/** What a message is rendered against, taken off the batch itself. */
+function messageValues(
+  batch: Pick<BatchView, "productSlug" | "productName" | "mainIngredientName">,
+  pricePaise: number,
+) {
+  return {
+    product: batch.productName ?? productWordsFromSlug(batch.productSlug),
+    ingredient: ingredientInSentence(batch.mainIngredientName ?? ""),
+    price: formatINR(pricePaise),
+  };
+}
+
 export const APPROVAL_DRAFTS = {
-  /** Brief 7.2 step 7, drafted for prawns. Any other product needs wording. */
-  half: (productSlug: string): string =>
-    productSlug === "prawns-pickle" || productSlug === "prawn-pickle"
-      ? "Half the batch is paid for. We are arranging the prawns now."
-      : `TODO(Q11) half-reached wording for ${productSlug}. Brief 7.2 drafts the prawns line: "Half the batch is paid for. We are arranging the prawns now."`,
+  /** Brief 7.2 step 7, now rendered for whatever the main ingredient is. */
+  half: (
+    batch: Pick<BatchView, "productSlug" | "productName" | "mainIngredientName" | "priceOpen">,
+    messages?: Partial<MessagesSettings> | null,
+  ): string => customerMessage("halfReached", messageValues(batch, batch.priceOpen), messages),
   /** Brief 7.2 step 9 and 8.2, drafted and product-neutral. */
   full: (): string => "The batch is full.",
-  open: (productSlug: string): string =>
-    `TODO(Q11) batch-open wording for ${productSlug}. Brief 8.2 says the opted-in list is offered a "batch open" message and the Owner approves the send.`,
-  inStock: (productSlug: string): string =>
-    `TODO(Q11) back-in-stock wording for ${productSlug}. Brief 8.2 says the notify-me list is offered a message and the Owner approves the send.`,
+  /** Brief 8.2, Draft -> Open, at the open price. */
+  open: (
+    batch: Pick<BatchView, "productSlug" | "productName" | "mainIngredientName" | "priceOpen">,
+    messages?: Partial<MessagesSettings> | null,
+  ): string => customerMessage("batchOpen", messageValues(batch, batch.priceOpen), messages),
+  /** Brief 8.2, Bottled -> In stock, at the in-stock price. */
+  inStock: (
+    batch: Pick<
+      BatchView,
+      "productSlug" | "productName" | "mainIngredientName" | "priceInStock"
+    >,
+    messages?: Partial<MessagesSettings> | null,
+  ): string => customerMessage("backInStock", messageValues(batch, batch.priceInStock), messages),
 } as const;
 
-/** Deterministic approval ids, so a trigger that fires twice raises one. */
-export function approvalId(kind: string, batchNo: string): string {
-  return `${kind}-${batchNo}`;
+/**
+ * Deterministic approval ids, so a trigger that fires twice raises one.
+ *
+ * Keyed on the batch's internal reference (D21c). Approval and concern ids
+ * must be stable across bottling: the half approval raised while the batch was
+ * open is the same document the Owner answers after it is numbered, and
+ * nothing re-points it.
+ */
+export function approvalId(kind: string, batchRef: string): string {
+  return `${kind}-${batchRef}`;
+}
+
+/** The same, for a concern. Same reason, same key. */
+export function concernId(kind: string, batchRef: string, orderId?: string | null): string {
+  return orderId ? `${kind}-${batchRef}-${orderId}` : `${kind}-${batchRef}`;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -464,17 +591,23 @@ export function blockingOpenBatch(siblings: readonly SiblingBatch[]): SiblingBat
 }
 
 export function d15Message(blocker: SiblingBatch, productSlug: string): string {
+  // D21c: the blocker is named by its printed number if it has one, and by its
+  // internal reference if it does not. A batch that blocks another is open,
+  // half reached, sourcing or paused, so in practice it never has a number yet
+  // and Shefin reads the reference, which is what the admin list shows too.
+  const named = batchLabel(blocker.batchNo, blocker.ref, blocker.state);
+  const Named = batchLabelCapitalised(blocker.batchNo, blocker.ref, blocker.state);
   if (blocker.state === "paused") {
     return (
-      `Batch ${blocker.batchNo} of ${productSlug} is paused, which is not cooking. ` +
-      `Only one batch of a product is open at a time (D15): resume batch ` +
-      `${blocker.batchNo} and get it cooking before opening a second.`
+      `${Named} of ${productSlug} is paused, which is not cooking. ` +
+      `Only one batch of a product is open at a time (D15): resume ${named} ` +
+      `and get it cooking before opening a second.`
     );
   }
   return (
-    `Batch ${blocker.batchNo} of ${productSlug} is still ${stateWords(blocker.state)}. ` +
-    `Only one batch of a product is open at a time (D15): a second can open once batch ` +
-    `${blocker.batchNo} is cooking.`
+    `${Named} of ${productSlug} is still ${stateWords(blocker.state)}. ` +
+    `Only one batch of a product is open at a time (D15): a second can open once ` +
+    `${named} is cooking.`
   );
 }
 
@@ -547,12 +680,10 @@ function invalid(message: string): Failure {
   return fail("invalid-argument", message);
 }
 
-const BATCH_NO = /^\d{3,}$/;
-
 /** The shape check, before anything is read from Firestore. */
 export function parseTransitionRequest(raw: unknown): { ok: true; value: TransitionRequest } | Failure {
   if (typeof raw !== "object" || raw === null) {
-    return invalid("transitionBatch needs an object with `to`, and `batchNo` unless it is a new batch.");
+    return invalid("transitionBatch needs an object with `to`, and `ref` unless it is a new batch.");
   }
   const data = raw as Record<string, unknown>;
 
@@ -560,12 +691,16 @@ export function parseTransitionRequest(raw: unknown): { ok: true; value: Transit
     return invalid(`to must be one of ${BATCH_STATES.join(", ")}.`);
   }
 
-  let batchNo: string | undefined;
-  if (data.batchNo !== undefined && data.batchNo !== null) {
-    if (typeof data.batchNo !== "string" || !BATCH_NO.test(data.batchNo)) {
-      return invalid("batchNo must be the zero-padded batch number, for example \"001\".");
+  // D21c: a batch is addressed by its internal reference, which it has from
+  // the moment it is a draft. The printed number is a field and is not an
+  // address: `batchNo` is on the protected list and is refused below with the
+  // rest of them.
+  let ref: string | undefined;
+  if (data.ref !== undefined && data.ref !== null) {
+    if (typeof data.ref !== "string" || !isBatchRef(data.ref)) {
+      return invalid('ref must be the batch reference, for example "b-7f3a2c".');
     }
-    batchNo = data.batchNo;
+    ref = data.ref;
   }
 
   const inputs = data.data;
@@ -590,7 +725,7 @@ export function parseTransitionRequest(raw: unknown): { ok: true; value: Transit
   return {
     ok: true,
     value: {
-      ...(batchNo === undefined ? {} : { batchNo }),
+      ...(ref === undefined ? {} : { ref }),
       to: data.to as BatchState,
       data: (inputs as Record<string, unknown> | undefined) ?? {},
     },
@@ -669,11 +804,14 @@ export function planTransition(
 
   const from: TransitionFrom = batch === null ? NO_STATE : ((batch.state ?? NO_STATE) as TransitionFrom);
 
-  if (batch === null && request.batchNo !== undefined) {
-    return fail("not-found", `There is no batch ${request.batchNo}.`);
+  if (batch === null && request.ref !== undefined) {
+    return fail("not-found", `There is no batch ${request.ref}.`);
   }
   if (batch !== null && request.to === "draft") {
-    return fail("failed-precondition", `Batch ${batch.batchNo} already exists.`);
+    return fail(
+      "failed-precondition",
+      `${batchLabelCapitalised(batch.batchNo, batch.ref, batch.state)} already exists.`,
+    );
   }
 
   const row = transitionRow(from, request.to);
@@ -718,11 +856,18 @@ export function planTransition(
 
   switch (`${row.from}->${row.to}`) {
     case "none->draft":
-      return planCreate(row, request, caller.uid, nowMillis);
+      return planCreate(
+        row,
+        request,
+        caller.uid,
+        nowMillis,
+        context.productName,
+        context.mainIngredientName,
+      );
     case "draft->open":
       return planOpen(row, request, context, batch as BatchView);
     case "halfReached->sourcing":
-      return planApproveHalf(row, request, batch as BatchView, nowMillis);
+      return planApproveHalf(row, request, batch as BatchView, nowMillis, context.messages);
     case "sourcing->cooking":
       return planStartCooking(row, request, context, batch as BatchView);
     case "cooking->bottled":
@@ -742,6 +887,8 @@ function planCreate(
   request: TransitionRequest,
   uid: string,
   nowMillis: number,
+  productName: string | null | undefined,
+  mainIngredientName: string | null | undefined,
 ): Planned | Failure {
   const d = request.data;
   const productSlug = text(d.productSlug, "productSlug", 80);
@@ -764,10 +911,22 @@ function planCreate(
     ok: true,
     value: {
       row,
+      // The transaction mints the internal reference; this row has no printed
+      // number to give, and will not have one until it is bottled (D21c).
+      ref: null,
       batchNo: null,
       patch: {
+        // D21c: the printed number is absent until bottling, and it is written
+        // as an explicit null so that "no number yet" is a fact on the document
+        // rather than a missing field that could be read either way.
+        batchNo: null,
         productSlug,
+        // D24: the product's name and the main ingredient's label name are
+        // copied here once, so every later customer message can be drafted
+        // without reading the catalogue inside a transaction.
+        productName: productName ?? null,
         recipeId,
+        mainIngredientName: mainIngredientName ?? null,
         state: "draft",
         plannedJars,
         bookableJars: maths.bookableJars,
@@ -792,6 +951,7 @@ function planCreate(
         fullReachedAt: null,
         fullApprovedAt: null,
         pausedReason: null,
+        pausedFrom: null,
         costs: { jarsLids: 0, boxInserts: 0, labelling: 0, gasPower: 0 },
         pnl: {
           revenue: 0,
@@ -877,7 +1037,9 @@ function planOpen(
     ok: true,
     value: {
       row,
-      batchNo: batch.batchNo,
+      ref: batch.ref,
+      // D21c: opening a batch does not number it. Brief §8.2 said it did.
+      batchNo: null,
       patch: {
         state: "open",
         plannedJars,
@@ -886,14 +1048,17 @@ function planOpen(
         priceOpen,
         priceInStock,
         pausedReason: null,
+        pausedFrom: null,
       },
       stampFields: ["updatedAt"],
       approvals: [
         {
-          id: approvalId("open", batch.batchNo),
+          // Keyed on the reference, so the Owner answers the same document
+          // whether the batch is numbered by then or not.
+          id: approvalId("open", batch.ref),
           kind: "broadcast",
-          batchNo: batch.batchNo,
-          draft: APPROVAL_DRAFTS.open(batch.productSlug),
+          batchRef: batch.ref,
+          draft: APPROVAL_DRAFTS.open({ ...batch, priceOpen }, context.messages),
           status: "waiting",
           dueAtMillis: null,
           answer: false,
@@ -918,6 +1083,7 @@ function planApproveHalf(
   request: TransitionRequest,
   batch: BatchView,
   nowMillis: number,
+  messages: Partial<MessagesSettings> | null | undefined,
 ): Planned | Failure {
   let message: string | null = null;
   if (request.data.messageText !== undefined && request.data.messageText !== null) {
@@ -930,15 +1096,16 @@ function planApproveHalf(
     ok: true,
     value: {
       row,
-      batchNo: batch.batchNo,
+      ref: batch.ref,
+      batchNo: null,
       patch: { state: "sourcing" },
       stampFields: ["updatedAt", "halfApprovedAt"],
       approvals: [
         {
-          id: approvalId("half", batch.batchNo),
+          id: approvalId("half", batch.ref),
           kind: "halfReached",
-          batchNo: batch.batchNo,
-          draft: message ?? APPROVAL_DRAFTS.half(batch.productSlug),
+          batchRef: batch.ref,
+          draft: message ?? APPROVAL_DRAFTS.half(batch, messages),
           status: message === null ? "approved" : "edited",
           dueAtMillis: null,
           answer: true,
@@ -989,7 +1156,8 @@ function planStartCooking(
     ok: true,
     value: {
       row,
-      batchNo: batch.batchNo,
+      ref: batch.ref,
+      batchNo: null,
       // Booking closes at Rs 599 by the state alone (brief 7.5): `cooking` is
       // not in BATCH_STATES_OPEN_FOR_BOOKING, so the card and every hold
       // transaction stop offering the open price from this write on.
@@ -1019,6 +1187,19 @@ function planBottle(
   const packedOn = isoDate(d.packedOn, "packedOn");
   if (isFailure(packedOn)) return packedOn;
 
+  // D21c: **this is where the printed number is stamped.** The callable read
+  // `counters/batch` in this same transaction and handed the number down; if
+  // it did not, the row cannot proceed, because a bottled batch without a
+  // number would be jars with nothing printed on them.
+  const batchNo = context.allocatedBatchNo ?? null;
+  if (batchNo === null) {
+    return fail(
+      "failed-precondition",
+      "No batch number was allocated for this bottling. The number comes from counters/batch inside this transaction (D21c).",
+    );
+  }
+  const named = `Batch ${batchNo}`;
+
   const surplus = surplusJars(jars, batch.paidCount);
   const jarsShort = Math.max(0, batch.paidCount - jars);
 
@@ -1027,27 +1208,32 @@ function planBottle(
     // Brief 7.7: the shortfall falls on the most recently paid orders, with a
     // Concern per affected customer proposing a jar from the next batch at
     // Rs 599 or a refund.
+    //
+    // The ids are keyed on the internal reference, not on the number that was
+    // allocated a few lines above, so a concern id stays the same shape at
+    // every point in a batch's life (D21c). The summary the Owner reads names
+    // the printed number, because by now there is one.
     const shares = yieldShortfallAllocation(context.paidOrders, jarsShort);
     for (const share of shares) {
       concerns.push({
-        id: `yield-${batch.batchNo}-${share.orderId}`,
+        id: concernId("yield", batch.ref, share.orderId),
         type: "yieldShortfall",
-        batchNo: batch.batchNo,
+        batchRef: batch.ref,
         customerPhone: share.customerPhone,
         orderId: share.orderId,
-        summary: `Batch ${batch.batchNo} bottled ${jars} jars against ${batch.paidCount} paid. This order is ${share.jarsShort} jar${share.jarsShort === 1 ? "" : "s"} short.`,
+        summary: `${named} bottled ${jars} jars against ${batch.paidCount} paid. This order is ${share.jarsShort} jar${share.jarsShort === 1 ? "" : "s"} short.`,
         proposal: "A jar from the next batch of the same product at Rs 599, or a refund.",
         urgent: true,
       });
     }
     if (shares.length === 0) {
       concerns.push({
-        id: `yield-${batch.batchNo}`,
+        id: concernId("yield", batch.ref),
         type: "yieldShortfall",
-        batchNo: batch.batchNo,
+        batchRef: batch.ref,
         customerPhone: null,
         orderId: null,
-        summary: `Batch ${batch.batchNo} bottled ${jars} jars against ${batch.paidCount} paid: ${jarsShort} short.`,
+        summary: `${named} bottled ${jars} jars against ${batch.paidCount} paid: ${jarsShort} short.`,
         proposal: "A jar from the next batch of the same product at Rs 599, or a refund.",
         urgent: true,
       });
@@ -1058,9 +1244,12 @@ function planBottle(
     ok: true,
     value: {
       row,
-      batchNo: batch.batchNo,
+      ref: batch.ref,
+      batchNo,
       patch: {
         state: "bottled",
+        // The printed number, beside the label data it belongs with (D21c).
+        batchNo,
         weightCleaned,
         weightCooked,
         bottledJars: jars,
@@ -1073,6 +1262,7 @@ function planBottle(
       concerns,
       lines: [],
       computed: {
+        batchNo,
         bottledJars: jars,
         surplus,
         jarsShort,
@@ -1093,13 +1283,14 @@ function planPause(
   const reason = text(request.data.reason, "reason", MAX_REASON);
   if (isFailure(reason)) return reason;
 
+  const named = batchLabelCapitalised(batch.batchNo, batch.ref, batch.state);
   const concerns: PlannedConcern[] = context.paidOrders.map((order) => ({
-    id: `paused-${batch.batchNo}-${order.id}`,
+    id: concernId("paused", batch.ref, order.id),
     type: "batchPaused" as const,
-    batchNo: batch.batchNo,
+    batchRef: batch.ref,
     customerPhone: order.customerPhone,
     orderId: order.id,
-    summary: `Batch ${batch.batchNo} is paused: ${reason}`,
+    summary: `${named} is paused: ${reason}`,
     proposal: null,
     urgent: false,
   }));
@@ -1108,24 +1299,51 @@ function planPause(
     ok: true,
     value: {
       row,
-      batchNo: batch.batchNo,
-      patch: { state: "paused", pausedReason: reason },
+      ref: batch.ref,
+      batchNo: null,
+      // D23: the batch remembers where it was, so resume has somewhere to
+      // return to. `row.from` rather than `batch.state` because the row is
+      // what was matched and validated; they are the same value.
+      patch: { state: "paused", pausedReason: reason, pausedFrom: row.from },
       stampFields: ["updatedAt"],
       approvals: [],
       concerns,
       lines: [],
-      computed: { pausedFrom: batch.state ?? "", concerns: concerns.length },
+      computed: { pausedFrom: row.from, concerns: concerns.length },
     },
   };
 }
 
+/**
+ * D23: resuming returns the batch to the state it was paused from, and to no
+ * other. The batch remembers it in `pausedFrom`, so this is a check rather
+ * than a choice: a request to resume somewhere else is refused, even from the
+ * Owner, because "resume" is not a way to move a batch about.
+ *
+ * A paused batch with no `pausedFrom` is one paused before this field existed,
+ * or moved by hand. The Owner is told, rather than the batch being dropped
+ * into a state nobody chose.
+ */
 function planResume(row: TransitionRow, batch: BatchView): Planned | Failure {
+  if (batch.pausedFrom === null) {
+    return fail(
+      "failed-precondition",
+      `${batchLabelCapitalised(batch.batchNo, batch.ref, batch.state)} does not record which state it was paused from, so it cannot be resumed. Set it, or move the batch by hand.`,
+    );
+  }
+  if (batch.pausedFrom !== row.to) {
+    return fail(
+      "failed-precondition",
+      `${batchLabelCapitalised(batch.batchNo, batch.ref, batch.state)} was paused from ${stateWords(batch.pausedFrom)}, so it resumes to ${stateWords(batch.pausedFrom)}, not to ${stateWords(row.to)}.`,
+    );
+  }
   return {
     ok: true,
     value: {
       row,
-      batchNo: batch.batchNo,
-      patch: { state: row.to, pausedReason: null },
+      ref: batch.ref,
+      batchNo: null,
+      patch: { state: row.to, pausedReason: null, pausedFrom: null },
       stampFields: ["updatedAt"],
       approvals: [],
       concerns: [],
@@ -1163,12 +1381,13 @@ export const FULL_APPROVAL_ROW = {
 
 /** What the `approveBatchFull` callable is handed, before validation. */
 export interface FullApprovalRequest {
-  readonly batchNo: string;
+  /** The batch's internal reference. D21c: never the printed number. */
+  readonly ref: string;
   readonly data: Readonly<Record<string, unknown>>;
 }
 
 export interface FullApprovalPlan {
-  readonly batchNo: string;
+  readonly ref: string;
   readonly patch: Readonly<Record<string, unknown>>;
   readonly stampFields: readonly string[];
   readonly approvals: readonly PlannedApproval[];
@@ -1187,8 +1406,8 @@ export function parseFullApprovalRequest(
     return invalid("approveBatchFull needs an object with `batchNo`.");
   }
   const data = raw as Record<string, unknown>;
-  if (typeof data.batchNo !== "string" || !BATCH_NO.test(data.batchNo)) {
-    return invalid('batchNo must be the zero-padded batch number, for example "001".');
+  if (typeof data.ref !== "string" || !isBatchRef(data.ref)) {
+    return invalid('ref must be the batch reference, for example "b-7f3a2c".');
   }
 
   const inputs = data.data;
@@ -1213,7 +1432,7 @@ export function parseFullApprovalRequest(
     );
   }
 
-  return { ok: true, value: { batchNo: data.batchNo, data: given } };
+  return { ok: true, value: { ref: data.ref, data: given } };
 }
 
 /**
@@ -1248,12 +1467,12 @@ export function planFullApproval(
     );
   }
   if (batch === null) {
-    return fail("not-found", `There is no batch ${request.batchNo}.`);
+    return fail("not-found", `There is no batch ${request.ref}.`);
   }
   if (batch.fullReachedAt === null) {
     return fail(
       "failed-precondition",
-      `Batch ${batch.batchNo} is not full yet, so there is nothing to say yes to.`,
+      `${batchLabelCapitalised(batch.batchNo, batch.ref, batch.state)} is not full yet, so there is nothing to say yes to.`,
     );
   }
 
@@ -1261,7 +1480,7 @@ export function planFullApproval(
     return {
       ok: true,
       value: {
-        batchNo: batch.batchNo,
+        ref: batch.ref,
         patch: {},
         stampFields: [],
         approvals: [],
@@ -1281,14 +1500,14 @@ export function planFullApproval(
   return {
     ok: true,
     value: {
-      batchNo: batch.batchNo,
+      ref: batch.ref,
       patch: {},
       stampFields: ["updatedAt", "fullApprovedAt"],
       approvals: [
         {
-          id: approvalId("full", batch.batchNo),
+          id: approvalId("full", batch.ref),
           kind: "full",
-          batchNo: batch.batchNo,
+          batchRef: batch.ref,
           draft: message ?? APPROVAL_DRAFTS.full(),
           status: message === null ? "approved" : "edited",
           dueAtMillis: null,
@@ -1330,6 +1549,8 @@ export interface AutomaticContext {
   readonly heldJars: Readonly<Record<string, { qty: number; expiresAt: number }>>;
   /** Orders in this batch that are not finished. Only read when sold out. */
   readonly openOrders: number;
+  /** `settings/messages` as read, or null: the Owner's wording (D24). */
+  readonly messages?: Partial<MessagesSettings> | null;
   readonly nowMillis: number;
 }
 
@@ -1359,10 +1580,10 @@ export function nextAutomaticStep(context: AutomaticContext): AutomaticStep {
       stampFields: ["halfReachedAt", "updatedAt"],
       approvals: [
         {
-          id: approvalId("half", batch.batchNo),
+          id: approvalId("half", batch.ref),
           kind: "halfReached",
-          batchNo: batch.batchNo,
-          draft: APPROVAL_DRAFTS.half(batch.productSlug),
+          batchRef: batch.ref,
+          draft: APPROVAL_DRAFTS.half(batch, context.messages),
           status: "waiting",
           dueAtMillis: nowMillis + HALF_CLOCK_DAYS * DAY_MS,
           answer: false,
@@ -1387,9 +1608,9 @@ export function nextAutomaticStep(context: AutomaticContext): AutomaticStep {
       stampFields: ["fullReachedAt", "updatedAt"],
       approvals: [
         {
-          id: approvalId("full", batch.batchNo),
+          id: approvalId("full", batch.ref),
           kind: "full",
-          batchNo: batch.batchNo,
+          batchRef: batch.ref,
           draft: APPROVAL_DRAFTS.full(),
           status: "waiting",
           // The 3 day production clock, brief 8.2.
@@ -1400,8 +1621,8 @@ export function nextAutomaticStep(context: AutomaticContext): AutomaticStep {
       // ...which *replaces* the 5 day one, rather than running beside it.
       cancelClocks: [
         {
-          id: approvalId("half", batch.batchNo),
-          supersededBy: approvalId("full", batch.batchNo),
+          id: approvalId("half", batch.ref),
+          supersededBy: approvalId("full", batch.ref),
         },
       ],
       reason: `paid ${batch.paidCount} of ${bookable} bookable: the batch is full`,
@@ -1417,10 +1638,10 @@ export function nextAutomaticStep(context: AutomaticContext): AutomaticStep {
         stampFields: ["updatedAt"],
         approvals: [
           {
-            id: approvalId("inStock", batch.batchNo),
+            id: approvalId("inStock", batch.ref),
             kind: "broadcast",
-            batchNo: batch.batchNo,
-            draft: APPROVAL_DRAFTS.inStock(batch.productSlug),
+            batchRef: batch.ref,
+            draft: APPROVAL_DRAFTS.inStock(batch, context.messages),
             status: "waiting",
             dueAtMillis: null,
             answer: false,

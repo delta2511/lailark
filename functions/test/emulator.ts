@@ -162,11 +162,30 @@ export async function approvalDoc(id: string) {
   return snap.exists ? (snap.data() ?? null) : null;
 }
 
-export async function batchDoc(batchNo: string) {
-  const snap = await db().collection("batches").doc(batchNo).get();
+/**
+ * One batch, by its **internal reference**, which is its document id (D21c).
+ * The printed number is the `batchNo` field on what comes back, and is null
+ * until the batch is bottled.
+ */
+export async function batchDoc(batchRef: string) {
+  const snap = await db().collection("batches").doc(batchRef).get();
   const data = snap.data();
-  if (!data) throw new Error(`no batch ${batchNo}`);
+  if (!data) throw new Error(`no batch ${batchRef}`);
   return data;
+}
+
+/** The one batch carrying this printed number, or null. D21c: a query. */
+export async function batchByNo(batchNo: string) {
+  const found = await db().collection("batches").where("batchNo", "==", batchNo).get();
+  if (found.empty) return null;
+  return { ref: found.docs[0].id, ...found.docs[0].data() };
+}
+
+/** `counters/batch.next`, or 1 when the counter has never been touched. */
+export async function batchCounterNext(): Promise<number> {
+  const snap = await db().collection("counters").doc("batch").get();
+  const next = snap.get("next");
+  return typeof next === "number" ? next : 1;
 }
 
 /**
@@ -191,12 +210,12 @@ export async function waitFor<T>(
   }
 }
 
-/** Waits for a batch to be in one of `states`. */
-export async function waitForState(batchNo: string, ...states: string[]) {
+/** Waits for a batch to be in one of `states`. Addressed by reference (D21c). */
+export async function waitForState(batchRef: string, ...states: string[]) {
   return waitFor(
-    `batch ${batchNo} to be ${states.join(" or ")}`,
+    `batch ${batchRef} to be ${states.join(" or ")}`,
     async () => {
-      const snap = await db().collection("batches").doc(batchNo).get();
+      const snap = await db().collection("batches").doc(batchRef).get();
       return snap.data() ?? {};
     },
     (data) => states.includes(String(data.state)),
@@ -208,6 +227,6 @@ export async function waitForState(batchNo: string, ...states: string[]) {
  * cannot call that yet (it is M2.8 and M3), so they write `paidCount` with
  * admin rights, which is exactly what that transaction will do.
  */
-export async function setPaidCount(batchNo: string, paidCount: number): Promise<void> {
-  await db().collection("batches").doc(batchNo).update({ paidCount });
+export async function setPaidCount(batchRef: string, paidCount: number): Promise<void> {
+  await db().collection("batches").doc(batchRef).update({ paidCount });
 }

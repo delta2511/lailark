@@ -37,6 +37,7 @@ import {
   batchViewFrom,
   cancelApprovalClocks,
   heldJarsFrom,
+  messagesSettings,
   ordersInBatch,
   readExisting,
   SYSTEM_ACTOR,
@@ -54,11 +55,11 @@ function doesNothing(step: AutomaticStep): boolean {
  * applies at most one step. Safe to call at any time, from any trigger, as
  * often as you like: if no step is due it writes nothing.
  */
-export async function advanceBatch(batchNo: string): Promise<AutomaticStep | null> {
+export async function advanceBatch(batchRef: string): Promise<AutomaticStep | null> {
   const db = getFirestore(getAdminApp());
   return db.runTransaction(async (tx) => {
-    const ref = db.collection(BATCHES).doc(batchNo);
-    const snap = await tx.get(ref);
+    const doc = db.collection(BATCHES).doc(batchRef);
+    const snap = await tx.get(doc);
     if (!snap.exists) return null;
 
     const batch = batchViewFrom(snap);
@@ -68,9 +69,21 @@ export async function advanceBatch(batchNo: string): Promise<AutomaticStep | nul
     // the query. Everything else is told there is an open order, which is the
     // reading that cannot archive a batch by accident.
     const openOrders =
-      batch.state === "soldOut" ? (await ordersInBatch(tx, db, batchNo)).open : 1;
+      batch.state === "soldOut" ? (await ordersInBatch(tx, db, batchRef)).open : 1;
 
-    const step = nextAutomaticStep({ batch, heldJars, openOrders, nowMillis: Date.now() });
+    // D24: the two steps that draft a customer message need the Owner's
+    // wording. The others never read it, and a missing document falls back to
+    // the drafts in `@lailark/shared`.
+    const messages =
+      batch.state === "open" || batch.state === "bottled" ? await messagesSettings(tx, db) : null;
+
+    const step = nextAutomaticStep({
+      batch,
+      heldJars,
+      openOrders,
+      messages,
+      nowMillis: Date.now(),
+    });
     if (doesNothing(step)) return null;
 
     const existing = await readExisting(tx, db, {
@@ -84,7 +97,7 @@ export async function advanceBatch(batchNo: string): Promise<AutomaticStep | nul
       step.stampFields,
       SYSTEM_ACTOR,
     );
-    tx.set(ref, patch, { merge: true });
+    tx.set(doc, patch, { merge: true });
     writeApprovals(tx, db, step.approvals, existing, SYSTEM_ACTOR);
     // Brief 8.2: the 3 day clock *replaces* the 5 day one, so the approval it
     // replaced stops counting in the same transaction that starts the new one.
@@ -99,7 +112,8 @@ export async function advanceBatch(batchNo: string): Promise<AutomaticStep | nul
  */
 export const onBatchWritten = onDocumentWritten(
   {
-    document: `${BATCHES}/{batchNo}`,
+    // D21c: the wildcard is the batch's internal reference, its document id.
+    document: `${BATCHES}/{batchRef}`,
     region: REGION,
     maxInstances: DEFAULT_MAX_INSTANCES,
   },
@@ -146,11 +160,13 @@ export const onOrderWritten = onDocumentWritten(
     const before = event.data?.before;
     if (before?.exists && String(before.get("state") ?? "") === state) return;
 
-    const batchNos = after.get("batchNos");
-    if (!Array.isArray(batchNos)) return;
+    // D21c: an order carries batch references, never printed numbers, so the
+    // batch it points at is the same document before and after bottling.
+    const batchRefs = after.get("batchRefs");
+    if (!Array.isArray(batchRefs)) return;
 
-    for (const batchNo of batchNos as unknown[]) {
-      if (typeof batchNo === "string") await advanceBatch(batchNo);
+    for (const batchRef of batchRefs as unknown[]) {
+      if (typeof batchRef === "string") await advanceBatch(batchRef);
     }
   },
 );

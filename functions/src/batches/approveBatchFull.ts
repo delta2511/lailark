@@ -48,8 +48,10 @@ export const approveBatchFull = onCall(
     return db.runTransaction(async (tx) => {
       /* ---- read ------------------------------------------------------ */
 
-      const batchRef = db.collection(BATCHES).doc(input.batchNo);
-      const snap = await tx.get(batchRef);
+      // D21c: addressed by the internal reference, which the batch has had
+      // since it was a draft. It may or may not carry a printed number yet.
+      const batchDoc = db.collection(BATCHES).doc(input.ref);
+      const snap = await tx.get(batchDoc);
       const batch: BatchView | null = snap.exists ? batchViewFrom(snap) : null;
 
       /* ---- plan ------------------------------------------------------ */
@@ -71,7 +73,8 @@ export const approveBatchFull = onCall(
       // that stands and a double tap cannot move the stamp.
       if (plan.alreadyApproved) {
         return {
-          batchNo: plan.batchNo,
+          ref: plan.ref,
+          batchNo: batch?.batchNo ?? null,
           alreadyApproved: true,
           approvals: [],
           computed: plan.computed,
@@ -85,11 +88,12 @@ export const approveBatchFull = onCall(
       /* ---- write ----------------------------------------------------- */
 
       const actor = caller.uid ?? "unknown";
-      tx.set(batchRef, withStamps(plan.patch, plan.stampFields, actor), { merge: true });
+      tx.set(batchDoc, withStamps(plan.patch, plan.stampFields, actor), { merge: true });
       writeApprovals(tx, db, plan.approvals, existing, actor);
 
       return {
-        batchNo: plan.batchNo,
+        ref: plan.ref,
+        batchNo: batch?.batchNo ?? null,
         alreadyApproved: false,
         approvals: plan.approvals.map((a) => a.id),
         computed: plan.computed,

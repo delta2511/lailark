@@ -9,6 +9,8 @@
  * the same four-step shape: read, plan, read what the plan names, write.
  */
 
+import { randomBytes } from "node:crypto";
+
 import {
   type DocumentReference,
   type DocumentSnapshot,
@@ -17,7 +19,12 @@ import {
   Timestamp,
   type Transaction,
 } from "firebase-admin/firestore";
-import { formatBatchNo, ORDER_STATES_TERMINAL } from "@lailark/shared";
+import {
+  batchRefFromBytes,
+  formatBatchNo,
+  type MessagesSettings,
+  ORDER_STATES_TERMINAL,
+} from "@lailark/shared";
 
 import type {
   BatchView,
@@ -35,6 +42,12 @@ export const BATCHES = "batches";
 export const APPROVALS = "approvals";
 export const CONCERNS = "concerns";
 export const ORDERS = "orders";
+export const PRODUCTS = "products";
+export const RECIPES = "recipes";
+export const INGREDIENTS = "ingredients";
+export const SETTINGS = "settings";
+/** `settings/messages`: the Owner's wording for the three messages (D24). */
+export const MESSAGES_SETTINGS_ID = "messages";
 
 /** What a trigger and the callable both write as the actor. */
 export const SYSTEM_ACTOR = "system";
@@ -49,14 +62,24 @@ function numberOr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-/** The batch document as the pure module wants it: plain values only. */
+/**
+ * The batch document as the pure module wants it: plain values only.
+ *
+ * D21c: the document id is the batch's internal reference, and the printed
+ * number is the `batchNo` field, which is null until bottling. Nothing here
+ * reads one as the other.
+ */
 export function batchViewFrom(snap: DocumentSnapshot): BatchView {
   const d = (snap.data() ?? {}) as Record<string, unknown>;
   return {
-    batchNo: snap.id,
+    ref: snap.id,
+    batchNo: typeof d.batchNo === "string" && d.batchNo !== "" ? d.batchNo : null,
     state: typeof d.state === "string" ? d.state : undefined,
     productSlug: typeof d.productSlug === "string" ? d.productSlug : "",
+    productName: typeof d.productName === "string" ? d.productName : null,
     recipeId: typeof d.recipeId === "string" ? d.recipeId : "",
+    mainIngredientName:
+      typeof d.mainIngredientName === "string" ? d.mainIngredientName : null,
     plannedJars: numberOr(d.plannedJars, 0),
     bookableJars: numberOr(d.bookableJars, 0),
     perPersonLimit: numberOr(d.perPersonLimit, 0),
@@ -69,6 +92,7 @@ export function batchViewFrom(snap: DocumentSnapshot): BatchView {
     halfReachedAt: millisOf(d.halfReachedAt),
     fullReachedAt: millisOf(d.fullReachedAt),
     fullApprovedAt: millisOf(d.fullApprovedAt),
+    pausedFrom: typeof d.pausedFrom === "string" ? d.pausedFrom : null,
   };
 }
 
@@ -119,13 +143,47 @@ export function heldJarsFrom(snap: DocumentSnapshot): Record<string, { qty: numb
 }
 
 /**
- * The batch number, from a transaction on `counters/batch`.
+ * A fresh internal reference for a new batch. **Decision D21c.**
+ *
+ * `b-` plus six lowercase base32 characters, from `crypto.randomBytes`, which
+ * is the document id and is fixed for the batch's whole life. Nothing about it
+ * is sequential and nothing about it is guessable: it carries no information,
+ * which is the point, because the number that carries information is stamped
+ * later and is a field.
+ *
+ * A collision is about one in a billion, and the create is a `tx.create`, so a
+ * collision fails the transaction rather than overwriting a batch. `freshRefs`
+ * hands out a few candidates so the caller can pick one that is free.
+ */
+export function newBatchRef(): string {
+  return batchRefFromBytes(randomBytes(6));
+}
+
+/**
+ * Mints a reference and proves it is free, inside the transaction. Reads come
+ * before writes, so this is called during the read phase.
+ */
+export async function freeBatchRef(tx: Transaction, db: Firestore): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const ref = newBatchRef();
+    const taken = await tx.get(db.collection(BATCHES).doc(ref));
+    if (!taken.exists) return ref;
+  }
+  throw new Error("could not mint a free batch reference in five tries");
+}
+
+/**
+ * The printed batch number, from a transaction on `counters/batch`.
  *
  * Global across products, sequential, zero-padded by the shared
- * `formatBatchNo`, never reused. The counter document is in the read set of
- * the transaction that issues the number, so two callers opening a batch at
- * the same moment cannot both read the same `next`: whichever commits second
- * is retried by the SDK against the number the first one wrote.
+ * `formatBatchNo`, never reused. D21c: this is read at **bottling**, not at
+ * creation, so a batch that is abandoned before bottling never takes a number
+ * and the sequence has no hole in it.
+ *
+ * The counter document is in the read set of the transaction that issues the
+ * number, so two kitchens bottling at the same moment cannot both read the
+ * same `next`: whichever commits second is retried by the SDK against the
+ * number the first one wrote.
  */
 export async function nextBatchNo(
   tx: Transaction,
@@ -138,33 +196,57 @@ export async function nextBatchNo(
   return { batchNo: formatBatchNo(n), n, counterRef };
 }
 
+/**
+ * Whether a printed number is already on a batch. D21c: the number is a field,
+ * not the document id, so "is this number taken" is a query, not a `get`. It
+ * runs inside the bottling transaction, before anything is written, so a
+ * counter that has fallen behind is caught rather than printing a duplicate.
+ */
+export async function batchNoTaken(
+  tx: Transaction,
+  db: Firestore,
+  batchNo: string,
+): Promise<boolean> {
+  const found = await tx.get(db.collection(BATCHES).where("batchNo", "==", batchNo).limit(1));
+  return !found.empty;
+}
+
 /** Other batches of the same product. Decision D15 reads this. */
 export async function siblingBatches(
   tx: Transaction,
   db: Firestore,
   productSlug: string,
-  exceptBatchNo: string,
+  exceptRef: string,
 ): Promise<SiblingBatch[]> {
   if (productSlug === "") return [];
   const found = await tx.get(db.collection(BATCHES).where("productSlug", "==", productSlug));
   return found.docs
-    .filter((doc) => doc.id !== exceptBatchNo)
-    .map((doc) => ({ batchNo: doc.id, state: String(doc.get("state") ?? "") }));
+    .filter((doc) => doc.id !== exceptRef)
+    .map((doc) => ({
+      ref: doc.id,
+      batchNo: typeof doc.get("batchNo") === "string" ? (doc.get("batchNo") as string) : null,
+      state: String(doc.get("state") ?? ""),
+    }));
 }
 
 /**
- * Orders in this batch. `batchNos` is the flat array of batch numbers an
- * order touches, which is the only shape Firestore can query (the lines
- * themselves are an array of maps, and those cannot be filtered on). Orders
- * arrive in M2.8; until then this reads an empty collection and answers with
- * an empty list rather than failing.
+ * Orders in this batch. `batchRefs` is the flat array of batch **references**
+ * an order touches, which is the only shape Firestore can query (the lines
+ * themselves are an array of maps, and those cannot be filtered on).
+ *
+ * D21c: references, not printed numbers. An order placed while the batch was
+ * open was written before the batch had a number, and it still resolves to the
+ * same batch after bottling, because the reference it carries never changed.
+ *
+ * Orders arrive in M2.8; until then this reads an empty collection and answers
+ * with an empty list rather than failing.
  */
 export async function ordersInBatch(
   tx: Transaction,
   db: Firestore,
-  batchNo: string,
+  batchRef: string,
 ): Promise<{ readonly paid: PaidOrderView[]; readonly open: number }> {
-  const found = await tx.get(db.collection(ORDERS).where("batchNos", "array-contains", batchNo));
+  const found = await tx.get(db.collection(ORDERS).where("batchRefs", "array-contains", batchRef));
   const terminal = ORDER_STATES_TERMINAL as readonly string[];
   const paid: PaidOrderView[] = [];
   let open = 0;
@@ -175,7 +257,7 @@ export async function ordersInBatch(
       paid.push({
         id: doc.id,
         customerPhone: (doc.get("customerPhone") as string | undefined) ?? null,
-        jars: jarsInBatch(doc, batchNo),
+        jars: jarsInBatch(doc, batchRef),
         paidAtMillis: millisOf(doc.get("paidAt")) ?? 0,
       });
     }
@@ -183,12 +265,12 @@ export async function ordersInBatch(
   return { paid, open };
 }
 
-function jarsInBatch(doc: DocumentSnapshot, batchNo: string): number {
+function jarsInBatch(doc: DocumentSnapshot, batchRef: string): number {
   const lines = doc.get("lines");
   if (!Array.isArray(lines)) return 0;
   let total = 0;
   for (const line of lines as Array<Record<string, unknown>>) {
-    if (line?.batchNo === batchNo) total += numberOr(line?.qty, 0);
+    if (line?.batchRef === batchRef) total += numberOr(line?.qty, 0);
   }
   return total;
 }
@@ -200,11 +282,64 @@ export async function mainIngredientOf(
   recipeId: string,
 ): Promise<string | null> {
   if (recipeId === "") return null;
-  const snap = await tx.get(db.collection("recipes").doc(recipeId));
+  const snap = await tx.get(db.collection(RECIPES).doc(recipeId));
   const lines = snap.get("lines");
   if (!Array.isArray(lines)) return null;
   const main = (lines as Array<Record<string, unknown>>).find((line) => line?.isMain === true);
   return typeof main?.ingredientId === "string" ? main.ingredientId : null;
+}
+
+/**
+ * The two names a customer message needs, read once when the batch is created
+ * and then kept on the batch document (D24).
+ *
+ * Reading them here rather than at every message keeps the triggers to one
+ * batch read: a trigger that has to draft the half-reached message would
+ * otherwise read the recipe and the ingredient inside its transaction, every
+ * time, for a string that never changes.
+ *
+ * Either can come back null. A message with a placeholder still standing is a
+ * question the Owner can answer before he approves it, which is what D24 put
+ * him in front of the draft for.
+ */
+export async function catalogueNamesFor(
+  tx: Transaction,
+  db: Firestore,
+  productSlug: unknown,
+  recipeId: unknown,
+): Promise<{ readonly productName: string | null; readonly mainIngredientName: string | null }> {
+  let productName: string | null = null;
+  if (typeof productSlug === "string" && productSlug !== "") {
+    const snap = await tx.get(db.collection(PRODUCTS).doc(productSlug));
+    const name = snap.get("name");
+    if (typeof name === "string" && name !== "") productName = name;
+  }
+
+  let mainIngredientName: string | null = null;
+  if (typeof recipeId === "string" && recipeId !== "") {
+    const ingredientId = await mainIngredientOf(tx, db, recipeId);
+    if (ingredientId !== null) {
+      const snap = await tx.get(db.collection(INGREDIENTS).doc(ingredientId));
+      const labelName = snap.get("labelName");
+      if (typeof labelName === "string" && labelName !== "") mainIngredientName = labelName;
+    }
+  }
+
+  return { productName, mainIngredientName };
+}
+
+/**
+ * `settings/messages`, the Owner's wording for the three customer messages
+ * (D24). A missing document is not an error: `customerMessage` falls back to
+ * the drafts in `@lailark/shared`.
+ */
+export async function messagesSettings(
+  tx: Transaction,
+  db: Firestore,
+): Promise<Partial<MessagesSettings> | null> {
+  const snap = await tx.get(db.collection(SETTINGS).doc(MESSAGES_SETTINGS_ID));
+  if (!snap.exists) return null;
+  return (snap.data() ?? null) as Partial<MessagesSettings> | null;
 }
 
 /** Turns the plan's stamp field list into `serverTimestamp()` values. */
@@ -309,7 +444,8 @@ export function writeApprovals(
         ref,
         {
           kind: approval.kind,
-          batchNo: approval.batchNo,
+          // D21c: the reference, so nothing is re-pointed at bottling.
+          batchRef: approval.batchRef,
           draft: approval.draft,
           status: approval.status,
           answeredBy: actor,
@@ -334,7 +470,7 @@ export function writeApprovals(
     if (there) continue;
     tx.set(ref, {
       kind: approval.kind,
-      batchNo: approval.batchNo,
+      batchRef: approval.batchRef,
       draft: approval.draft,
       status: approval.status,
       answeredBy: null,
@@ -366,7 +502,7 @@ export function writeConcerns(
       type: concern.type,
       customerPhone: concern.customerPhone,
       orderId: concern.orderId,
-      batchNo: concern.batchNo,
+      batchRef: concern.batchRef,
       summary: concern.summary,
       proposal: concern.proposal,
       draftMessage: null,
