@@ -17,11 +17,6 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
   confirm with the food consultant. Meanwhile: the engine does the arithmetic and its
   tests name the two cells so the difference stays visible.
 
-- Q8 (M2.2, 18 Sep): Cloud Storage has never been started on either project, so there is
-  no bucket to put photos in. Firebase console, project `tree-quiz-74e04`, Storage, Get
-  started (choose `asia-south1`, and it must match the Firestore region), and the same on
-  `lailark` before launch. Meanwhile: photo upload is built and tested against the
-  Storage emulator, and the Storage rules cannot be deployed.
 - Q9 (M2.2, 18 Sep): seeding data straight into staging needs Google application default
   credentials on the Mac, which do not exist (`gcloud` is not installed). Two ways round
   it: run `brew install --cask google-cloud-sdk` then `gcloud auth application-default
@@ -29,35 +24,6 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
   tapping through the admin as Owner, which doubles as a test of the screens. Which do
   you want? Meanwhile: every seed runs against the emulator, and the staging half of a
   done-when is recorded as skipped.
-
-- Q10 (M2.2, 18 Sep): the brief gives only the HSN chapter (16 for prawns, squid, beef,
-  duck and rabbit; 20 for koorka and yam) and says to confirm the code with the CA. The
-  seed writes the two-digit chapter as a placeholder. What are the full HSN codes?
-  Meanwhile: `TODO(Q10)` in the seed, and the Owner can correct each one in place on the
-  Products screen. Nothing depends on it until GST is switched on.
-
-- Q11 (M2.3, 18 Sep): three customer messages have no drafted wording anywhere: the
-  "batch open" message to the opted-in list, the half-reached message for any product
-  other than prawns (the prawns one is drafted in brief §7.2), and the back-in-stock
-  message to the notify-me list. Please draft each, or say the Owner will write them by
-  hand each time in the approval. Meanwhile: every approval carries a `TODO(Q11)` draft
-  naming the product, so nothing can be sent without the Owner editing it first.
-- Q12 (M2.3, 18 Sep): when should a batch take its number? Brief §8.2 allocates it at
-  Draft to Open, but §18.1 makes the number the document id, so a Draft needs one the
-  moment it exists. The build currently allocates at Draft, which means an abandoned
-  draft keeps its number and the published batches can have a gap (draft 002 abandoned,
-  so the next printed jar reads 003 and `/batch/002` never resolves). The alternative is
-  to hold drafts under a temporary id and stamp the real number at Open, so published
-  numbers are always unbroken. Batch lifecycle is on the never-assume list, so this is
-  yours. Meanwhile: numbers are allocated at Draft, still global, sequential and never
-  reused.
-
-- Q13 (M2.3, 18 Sep): the brief contradicts itself on pausing. §8.2's table says "Any to
-  Paused", while §8.1's diagram says a batch may be paused only from Open, Half reached,
-  Sourcing or Cooking. The build follows §8.1, which means an **In stock** batch cannot be
-  paused, so there is no way to freeze sales on a jar that turns out to be bad. Should In
-  stock and Sold out be pausable too? Meanwhile: four states, with a `TODO(Q13)` comment
-  where the list is defined.
 
 ## Answered
 
@@ -67,3 +33,8 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
 - ~~Q6 (M1.8a, 17 Sep): No function can deploy to staging until the `setRole` bootstrap secret exists in Secret Manager: the CLI checks every declared secret even for `--only functions:api`. Claude Code's permission check blocked writing it. Either run `firebase functions:secrets:set SETROLE_BOOTSTRAP_SECRET --project staging` yourself and paste any long random value, or allow that command for Claude Code. Meanwhile: `/api/health` on staging is 404 and `setRole` is not deployed.~~ Answered 17 Sep: Shefin set the secret himself; `api` and `setRole` are deployed on staging. Recorded as D20.
 - ~~Q3 (M1.2, 16 Sep): `www.lailark.in` is printed on the label but has no certificate: DNS points at Firebase, plain HTTP redirects to `https://www.lailark.in/`, and HTTPS fails with a certificate name mismatch, so a browser shows a security warning. Fix is in the Firebase console only (Hosting, site `lailark`, Add custom domain, `www.lailark.in`, choose redirect to `lailark.in`), then the two DNS records it asks for at GoDaddy. Nothing in the repo can do this. Meanwhile: unchanged.~~ Answered 17 Sep: fixed by Shefin, `www.lailark.in` redirects to `lailark.in` with a valid certificate. Recorded as D21.
 - ~~Q4 (M1.8, 17 Sep): May Kitchen edit ingredients and recipes? The roles table in brief §17.12 has no row for it. Meanwhile both are Owner-only (`TODO(Q4)` in `firestore.rules` and the rules tests), because a recipe change moves batch costs and the label's ingredient line, which is printed on the jars.~~ Answered 17 Sep: Owner edits for now, Kitchen views everything, with an Owner switch to let the Kitchen edit later. Recorded as D22, built in M1.11.
+- ~~Q8 (M2.2, 18 Sep): Cloud Storage has never been started on either project, so there is no bucket to put photos in. Firebase console, project `tree-quiz-74e04`, Storage, Get started (choose `asia-south1`, and it must match the Firestore region), and the same on `lailark` before launch. Meanwhile: photo upload is built and tested against the Storage emulator, and the Storage rules cannot be deployed.~~ Answered 19 Sep: Shefin enabled Storage on both projects; the rules are deployed to each. Recorded as D25.
+- ~~Q10 (M2.2, 18 Sep): the brief gives only the HSN chapter (16 for prawns, squid, beef, duck and rabbit; 20 for koorka and yam) and says to confirm the code with the CA. The seed writes the two-digit chapter as a placeholder. What are the full HSN codes? Meanwhile: `TODO(Q10)` in the seed, and the Owner can correct each one in place on the Products screen. Nothing depends on it until GST is switched on.~~ Answered 19 Sep: Shefin asked for public classification codes, kept editable for the CA to correct. Recorded as D26.
+- ~~Q11 (M2.3, 18 Sep): three customer messages have no drafted wording anywhere: the "batch open" message to the opted-in list, the half-reached message for any product other than prawns (the prawns one is drafted in brief §7.2), and the back-in-stock message to the notify-me list. Please draft each, or say the Owner will write them by hand each time in the approval. Meanwhile: every approval carries a `TODO(Q11)` draft naming the product, so nothing can be sent without the Owner editing it first.~~ Answered 19 Sep: Claude drafts them, the Owner edits. Recorded as D24, built in M2.3a.
+- ~~Q12 (M2.3, 18 Sep): when should a batch take its number? Brief §8.2 allocates it at Draft to Open, but §18.1 makes the number the document id, so a Draft needs one the moment it exists. The build currently allocates at Draft, which means an abandoned draft keeps its number and the published batches can have a gap (draft 002 abandoned, so the next printed jar reads 003 and `/batch/002` never resolves). The alternative is to hold drafts under a temporary id and stamp the real number at Open, so published numbers are always unbroken. Batch lifecycle is on the never-assume list, so this is yours. Meanwhile: numbers are allocated at Draft, still global, sequential and never reused.~~ Answered 19 Sep: the number is stamped when the batch goes live, with a temporary internal reference before that. Recorded as D21b, built in M2.3a.
+- ~~Q13 (M2.3, 18 Sep): the brief contradicts itself on pausing. §8.2's table says "Any to Paused", while §8.1's diagram says a batch may be paused only from Open, Half reached, Sourcing or Cooking. The build follows §8.1, which means an **In stock** batch cannot be paused, so there is no way to freeze sales on a jar that turns out to be bad. Should In stock and Sold out be pausable too? Meanwhile: four states, with a `TODO(Q13)` comment where the list is defined.~~ Answered 19 Sep: pausing allowed from every selling or cooking state. Recorded as D23, built in M2.3a.
