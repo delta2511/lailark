@@ -172,7 +172,7 @@ bill PDF; day close works.
       with every real number from the v0 handoff §1 and §2 as an Archived batch with
       22 bottled jars, 0 paid online. Runs against the emulator and staging. Done when:
       the batch 001 screen shows the printed facts.
-- [ ] M2.8 [opus] Counter sale (POS). Callable `createCounterSale` implementing brief
+- [x] M2.8 [opus] Counter sale (POS). (99979e2) Callable `createCounterSale` implementing brief
       §7A.1 and §7A.6: customer by phone (creates `customers/{phone}` if new), product
       or open-batch line or custom line, quantity, price prefilled, discount within the
       role's rights (D17, cap in Settings), fulfilment, payment method cash / UPI to
