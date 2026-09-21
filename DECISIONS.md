@@ -452,3 +452,23 @@ break.
   fields that are not money (name, HSN, type, veg, season, shipping rule, active, a
   custom line's description) still write directly and are not audited. Only the writes
   that offer undo go through the wrapper today. Status: open.
+- A86 (M2.7, 21 Sep): batch 001's recipe is seeded from the label basis doc's own
+  placeholder weights, so its percentages (basis B: prawns 35%, dates 23%) do not and
+  cannot match the printed jar's (basis C: prawns 59%, dates 22%), which came from the
+  actual cook. Every seeded line carries `estimated: true`, a new optional field on a
+  recipe line, and the admin prints "estimated" beside such a quantity. The allergen
+  line, the claims and the storage text do match the jar character for character,
+  checked with the engine's own `verifyAgainstPrintedLabel`. The ingredient line will
+  match only once the real weights are recorded. D28 keeps this off the customer's
+  page: `/batch/001` shows no percentages at all. Status: open.
+- A87 (M2.7, 21 Sep): no ingredient carries nutrition figures. Handoff §2's panel
+  belongs to the finished jar, not to any one ingredient, and nothing in the repo gives
+  per-ingredient nutrition. An earlier draft of the seed put the jar's protein figure,
+  10.7 g, onto raw prawns, where the real value is nearer 20. Empty is read as "not
+  known" rather than as zero by `nutritionPer100g`. Filling these needs a cited source
+  per ingredient and is its own task. Status: open.
+- A88 (M2.7, 21 Sep): batch 001's document id is `b-001001` and its `batchNo` is
+  "001". The seed refuses to run, loudly, if something else is already at that id, and
+  never writes a second batch numbered 001. Its two shelf-life dates are computed by
+  the shared helpers and checked against what is printed on the 22 jars; if the rule
+  ever moves, the seed stops rather than contradicting the labels. Status: open.

@@ -86,6 +86,7 @@ export function CookingActuals({ batchRef, recipe, ingredients, canEdit, uid }: 
               ingredientId={line.ingredientId}
               label={ingredient?.labelName ?? line.ingredientId}
               recipeQty={line.qty}
+              recipeEstimated={line.estimated === true}
               recipeUnit={line.unit}
               recipeG={recipeG}
               densityGPerMl={ingredient?.densityGPerMl ?? null}
@@ -106,6 +107,7 @@ function ActualRow({
   ingredientId,
   label,
   recipeQty,
+  recipeEstimated,
   recipeUnit,
   recipeG,
   densityGPerMl,
@@ -118,6 +120,7 @@ function ActualRow({
   readonly ingredientId: string;
   readonly label: string;
   readonly recipeQty: number;
+  readonly recipeEstimated: boolean;
   readonly recipeUnit: string;
   readonly recipeG: number;
   readonly densityGPerMl: number | null;
@@ -213,6 +216,7 @@ function ActualRow({
       <span class="percent-name">{label}</span>
       <p class="field-help" data-testid={`recipe-qty-${lineId}`}>
         {BATCHES.recipeQty}: {Math.round(recipeG)} g
+        {recipeEstimated ? ` (${BATCHES.recipeQtyEstimated})` : ""}
       </p>
 
       {canEdit ? (

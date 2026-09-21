@@ -83,6 +83,16 @@ export interface RecipeLine {
   readonly residueG?: number;
   /** A compound ingredient declares its own parts, as asafoetida does. */
   readonly compoundOf?: readonly string[];
+  /**
+   * True while this quantity is a working figure rather than something that
+   * was weighed. The label basis doc's spice weights are placeholders, and
+   * batch 001's recipe was seeded from them; a percentage computed from an
+   * estimate is an estimate, and the screen that shows the quantity says so.
+   *
+   * Absent means measured, so nothing already recorded is retroactively
+   * called a guess.
+   */
+  readonly estimated?: boolean;
 }
 
 /** `recipes/{id}`. */

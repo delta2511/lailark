@@ -334,6 +334,9 @@ export const BATCHES = {
   actualsHeading: "Per-ingredient actuals",
   actualsHelp: "Prefilled from the recipe. Type what the pot actually used.",
   recipeQty: "Recipe",
+  // Shown beside a recipe quantity that was never weighed, so a working
+  // figure is never read as a measured one.
+  recipeQtyEstimated: "estimated",
   actualWeight: "Actual weight, g",
   actualCost: "Actual cost",
   driftWarning: (percent: number) =>
