@@ -472,3 +472,35 @@ break.
   never writes a second batch numbered 001. Its two shelf-life dates are computed by
   the shared helpers and checked against what is printed on the 22 jars; if the rule
   ever moves, the seed stops rather than contradicting the labels. Status: open.
+- A89 (M2.8, 21 Sep): "same day" for voiding a counter sale is the business day, 05:00
+  to 05:00 Asia/Kolkata, so a jar sold at 23:50 is still voidable at 00:10 while the
+  counter is being tidied. Read as the calendar date it would break in exactly the
+  twenty minutes it exists for. Status: open.
+- A90 (M2.8, 21 Sep): an order is named by a short unguessable reference (`o-7f3a2c`),
+  like a batch before bottling (D21c). The number that must be sequential and unbroken
+  is the bill number, a different series, issued in M2.9. Status: open.
+- A91 (M2.8, 21 Sep): a single custom line is capped at ₹1,00,000 as a typing guard,
+  not a business rule: a custom line has no list price to check an extra zero against.
+  Status: open.
+- A92 (M2.8, 21 Sep): a counter sale carries no policy version, because nobody at the
+  door was shown a web policy page. An unticked consent box on somebody who already
+  agreed changes nothing: silence at a busy counter is "we did not ask this time", not
+  "they withdrew". The marketing tick starts off; the bill and updates tick starts on.
+  Status: open.
+- A93 (M2.8, 21 Sep): one line per counter sale. Brief 7A.1 step 2 is singular
+  throughout, and a cart belongs to the web checkout in M3. Status: open.
+- A94 (M2.8, 21 Sep): every attempt at one sale carries a `clientRef` the screen mints
+  once, and the order's document id is derived from it, so the same sale arriving twice
+  writes one order and charges once. A disabled button only catches a human double tap;
+  a tap delivered twice, a reply lost on a slow connection after the write had already
+  landed, and M2.10 finalising an offline draft again all come back through this same
+  door. Status: open.
+- A95 (M2.8, 21 Sep): a jar is a jar wherever it is counted. A custom line tied to a
+  batch takes jars off the batch and puts them on the customer's history, and its void
+  gives back exactly what the sale took. Previously the sale counted nothing and the
+  void took the lot, which quietly lowered the "3 jars before" line the seller reads
+  before greeting somebody. Status: open.
+- A96 (M2.8, 21 Sep): a callable's refusal reaches the screen without the HTTP status
+  the Firebase client appends to it. These sentences are read at the counter with a
+  customer waiting, and "[409]" is for a log. Only a bracketed 100 to 599 is removed,
+  so "batch [001]" keeps its number. Status: open.

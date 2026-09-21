@@ -76,6 +76,10 @@ const EXPECTED_EXPORTS = [
   "toEpochMillis",
   "kolkataDate",
   "kolkataStartOfDay",
+  "BUSINESS_DAY_START_HOUR_IST",
+  "businessDay",
+  "businessDayKey",
+  "inSameBusinessDay",
   // batch
   "BOOKABLE_NUMERATOR",
   "BOOKABLE_DENOMINATOR",
@@ -97,6 +101,7 @@ const EXPECTED_EXPORTS = [
   "shelfLife",
   "isOnlineSaleAllowed",
   "daysToSaleStop",
+  "lineTakesJars",
   "liveHeldJars",
   "batchAvailability",
   "inStockAvailability",
@@ -198,6 +203,21 @@ const EXPECTED_EXPORTS = [
   // catalogue
   "isValidMonthDay",
   "isWithinSeasonWindow",
+  // phone (M2.8): the one normaliser, moved here from admin/src/phone.ts
+  "INDIA_DIALLING_CODE",
+  "parseIndianMobile",
+  "formatIndianMobile",
+  "isIndianMobileE164",
+  "nearMissNumbers",
+  // counter sale (M2.8): brief 7A.1 and 7A.6
+  "SALE_LINE_KINDS",
+  "MAX_CUSTOM_LINE_PAISE",
+  "MAX_SALE_QTY",
+  "saleLineTotal",
+  "saleTotals",
+  "discountRights",
+  "checkDiscount",
+  "isSellablePrice",
 ] as const;
 
 describe("the barrel", () => {

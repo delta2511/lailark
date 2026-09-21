@@ -36,6 +36,7 @@ import { httpsCallable } from "firebase/functions";
 import { useEffect, useState } from "preact/hooks";
 
 import { undoAuditEntry, writeWithAudit, type AuditedWriteResult, type UndoOutcome } from "../audit/write";
+import { callableMessage } from "../callableError";
 import { db, functions } from "../firebase";
 import type { Live } from "../products/data";
 
@@ -177,17 +178,10 @@ export async function callApproveBatchFull(
 
 /**
  * A refusal from a callable reads as a plain line, never a blank screen
- * ("What to build" step 3). `HttpsError.message` is already the plain
- * sentence `functions/src/batches/transitions.ts` writes for a person, so it
- * is shown as-is; anything shaped differently (offline, a thrown network
- * error) falls back to `fallback`.
+ * ("What to build" step 3) and never a status code (`callableError.ts`).
  */
 export function callableErrorMessage(error: unknown, fallback: string): string {
-  if (typeof error === "object" && error !== null) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === "string" && message.trim() !== "") return message;
-  }
-  return fallback;
+  return callableMessage(error, fallback);
 }
 
 /* -------------------------------------------------------------------------- */

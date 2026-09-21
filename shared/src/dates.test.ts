@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   addDays,
   addMonths,
+  businessDay,
+  businessDayKey,
   compareCalDate,
   daysInMonth,
   diffDays,
@@ -9,6 +11,7 @@ import {
   fromDayNumber,
   isAfter,
   isBefore,
+  inSameBusinessDay,
   isLeapYear,
   isSameDate,
   isValidCalDate,
@@ -188,5 +191,40 @@ describe("Asia/Kolkata", () => {
   it("refuses a nonsense instant", () => {
     expect(() => toEpochMillis(Number.NaN)).toThrow();
     expect(() => toEpochMillis(new Date("nope"))).toThrow(/invalid Date/);
+  });
+});
+
+describe("the business day, M2.8", () => {
+  /** Epoch millis for a wall-clock time in Asia/Kolkata. */
+  function ist(y: number, m: number, d: number, hh: number, mm = 0): number {
+    return Date.UTC(y, m - 1, d, hh, mm) - KOLKATA_UTC_OFFSET_MINUTES * 60_000;
+  }
+
+  it("keeps a sale at 23:50 and a void at 00:10 in the same day", () => {
+    const sale = ist(2026, 9, 21, 23, 50);
+    const voidAt = ist(2026, 9, 22, 0, 10);
+    // The calendar date has already turned over...
+    expect(formatCalDate(kolkataDate(sale))).toBe("2026-09-21");
+    expect(formatCalDate(kolkataDate(voidAt))).toBe("2026-09-22");
+    // ...and the business day has not, which is the whole point.
+    expect(inSameBusinessDay(sale, voidAt)).toBe(true);
+    expect(businessDayKey(voidAt)).toBe("2026-09-21");
+  });
+
+  it("turns over at 05:00, not at midnight", () => {
+    expect(businessDayKey(ist(2026, 9, 22, 4, 59))).toBe("2026-09-21");
+    expect(businessDayKey(ist(2026, 9, 22, 5, 0))).toBe("2026-09-22");
+  });
+
+  it("puts a morning sale and the evening after it in one day", () => {
+    expect(inSameBusinessDay(ist(2026, 9, 21, 9, 0), ist(2026, 9, 21, 21, 0))).toBe(true);
+  });
+
+  it("does not stretch to the next evening", () => {
+    expect(inSameBusinessDay(ist(2026, 9, 21, 23, 50), ist(2026, 9, 22, 18, 0))).toBe(false);
+  });
+
+  it("names a business day by the date it opened on", () => {
+    expect(businessDay(ist(2026, 9, 22, 2, 30))).toEqual({ y: 2026, m: 9, d: 21 });
   });
 });

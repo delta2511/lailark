@@ -43,9 +43,6 @@ export const COPY = {
   todayEmptyLine1: "Nothing waiting on you.",
   todayEmptyLine2: "Concerns and clocks appear here.",
 
-  sellBody:
-    "Sell a jar at the door or over the phone. The sale screen is coming in the next milestone.",
-
   batchesEmptyLine1: "No batches yet.",
   batchesEmptyLine2: "Batch 001 is on the jars; it arrives here in the next milestone.",
 
@@ -502,3 +499,160 @@ export const MORE_EMPTY_BODY: Record<Exclude<MoreRowKey, "settings" | "products"
 export function roleLabel(role: string): string {
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
+
+/**
+ * The Sell screen (brief sections 7A.1, 7A.6 and 17.3), M2.8.
+ *
+ * **Admin wording only.** Nothing on this screen is read by a customer, so
+ * CLAUDE.md section 5 lets the build write it. The two lines that *are*
+ * customer-facing, a custom line's description and a discount reason, are
+ * typed by the person at the counter and checked by `checkCustomerText` in
+ * the callable before they can ever reach a bill.
+ *
+ * Every refusal the server sends back is shown as the server wrote it: it
+ * already speaks in sentences a person can act on ("someone took the last
+ * jar"), and rewording it here would put two versions of one truth in the
+ * system. The strings below are the ones the screen says on its own.
+ */
+export const SELL = {
+  /* ---- 1. Customer, 7A.1 step 1 ---- */
+  customerHeading: "Customer",
+  phoneLabel: "WhatsApp number",
+  phonePlaceholder: "7736110087",
+  phoneInvalid: "That does not look like a 10 digit Indian mobile number.",
+  phoneNotIndian: "Lailark sells to Indian mobile numbers. Please use a +91 number.",
+  nameLabel: "Name",
+  lookingUp: "Looking them up...",
+  /** "3 jars before, last in November", the one line brief 7A.1 asks for. */
+  history: (jars: number, orders: number) =>
+    `${jars === 1 ? "1 jar" : `${jars} jars`} before, over ${orders === 1 ? "1 order" : `${orders} orders`}.`,
+  historyNone: "No jars yet, but we have their number.",
+  newNumber: "This number has never bought from us.",
+
+  /* ---- the near misses, so a wrong digit does not invent a stranger ---- */
+  nearMissHeading: "It is one digit from these:",
+  nearMissUse: (name: string, phone: string) => `Use ${name || phone}`,
+  nearMissJars: (jars: number) => (jars === 1 ? "1 jar" : `${jars} jars`),
+  confirmNewCustomer: "It really is a new number. Add them.",
+  newCustomerNeedsName: "Please give their name before adding them.",
+
+  /* ---- 2. What, 7A.1 step 2 ---- */
+  whatHeading: "What",
+  productLabel: "Product",
+  productPlaceholder: "Choose a product",
+  batchLabel: "Batch",
+  batchSuggested: "suggested",
+  batchOption: (label: string, left: number, price: string) =>
+    `${label}, ${left === 1 ? "1 jar" : `${left} jars`} left, ${price}`,
+  noBatch: "Nothing of this product is on sale right now.",
+  qtyLabel: "Jars",
+  qtyInvalid: "Please enter a whole number of jars, one or more.",
+  customLineToggle: "Something else",
+  customLineToggleOff: "A jar",
+  customLineDescription: "What was sold",
+  customLineAmount: "Amount",
+  customLinePick: "Pick one of the lines Shefin has set",
+  customLineNoneSet: "Shefin has not set any custom lines on this product, so the kitchen cannot sell one.",
+  customLineNeedsDescription: "Please say what was sold, so the bill reads properly.",
+  customLineNeedsAmount: "Please give the amount.",
+  customLineTiedToBatch: "Take jars off a batch",
+
+  /* ---- 3. Amount, 7A.1 step 3 ---- */
+  amountHeading: "Amount",
+  unitPriceLabel: "Price each",
+  unitPriceOwnerHelp: "Only you can change a jar's price, and never above ₹649.",
+  priceAboveMrp: "A jar is never sold above ₹649. Please enter ₹649 or less.",
+  priceInvalid: "Please enter a price in rupees.",
+  subtotal: "Subtotal",
+  discountLabel: "Discount",
+  discountReason: "Why",
+  discountNoRights: "Shefin has not set a discount cap for the kitchen, so no discount can be given here.",
+  discountCap: (cap: string) => `Up to ${cap}, with a reason.`,
+  discountAnyAmount: "Any amount, with a reason.",
+  discountOverCap: (cap: string) => `That is over the ${cap} cap. Anything more is Shefin's to give.`,
+  discountOverSubtotal: "A discount cannot be more than the sale is worth.",
+  discountNeedsReason: "Please say why this discount was given.",
+  total: "Total",
+
+  /* ---- 4. Fulfilment, 7A.1 step 4 ---- */
+  fulfilmentHeading: "Fulfilment",
+  handedOver: "Handed over now",
+  ship: "Ship to an address",
+  collect: "Collect later",
+  addressName: "Name on the address",
+  addressPhone: "Phone for the delivery",
+  addressLines: "Address",
+  addressLinesHelp: "One line each. Up to four.",
+  addressCity: "Town or city",
+  addressState: "State",
+  addressPincode: "Pincode",
+
+  /* ---- 5. Payment, 7A.1 step 5 ---- */
+  paymentHeading: "Payment",
+  cash: "Cash",
+  upiToAccount: "UPI to our account",
+  paymentLink: "Payment link",
+  razorpayQrLater: "The Razorpay QR at the counter arrives with M3. Take cash, UPI to the account, or send a link.",
+  upiRefLabel: "Last 4 of the UPI reference",
+  upiRefHelp: "Optional. It makes the day close easy to check against the bank app.",
+  paymentLinkNote: "The jar is held and the order waits as Awaiting payment. Sending the link itself arrives in M3.",
+
+  /* ---- 6. Consent, 7A.1 step 6 ---- */
+  consentHeading: "Consent",
+  consentUpdates: "Happy to get the bill and updates on WhatsApp.",
+  consentMarketing: "Wants to hear when a new batch opens.",
+
+  /* ---- 7. Save, 7A.1 step 7 ---- */
+  noteLabel: "Note, optional",
+  save: "Save the sale",
+  saving: "Saving...",
+  saveFailed: "That did not save. Please check the signal and try again.",
+
+  /* ---- what the screen says once it has ---- */
+  soldHeading: "Sold.",
+  soldLine: (description: string, total: string) => `${description}. ${total}.`,
+  soldAwaitingPayment: "Waiting for the payment link to be paid.",
+  soldCustomerCreated: (name: string) => `${name} is now on the customer list.`,
+  jarsLeft: (left: number) => (left === 1 ? "1 jar left on that batch." : `${left} jars left on that batch.`),
+  another: "New sale",
+
+  /* ---- today's sales and the void, 7A.6 and 17.3 ---- */
+  todayHeading: "Today's counter sales",
+  todayEmpty: "No sales at the counter today.",
+  todayLoading: "Loading...",
+  todayDenied: "Today's sales could not be read. Ask Shefin to check your role.",
+  saleVoided: "Voided",
+  voidLabel: "Void",
+  voidHeading: "Void this sale",
+  voidReason: "Why it is being voided",
+  voidReasonRequired: "Please say why this sale is being voided.",
+  voidConfirm: "Void the sale",
+  voidWorking: "Voiding...",
+  voidCancel: "Keep it",
+  voidFailed: "That did not go through. Please check the signal and try again.",
+  voidDone: (jars: number) =>
+    jars === 0 ? "Voided." : jars === 1 ? "Voided. 1 jar is back on the batch." : `Voided. ${jars} jars are back on the batch.`,
+  /** Brief 7A.6: same day, before the bill has gone. */
+  voidNotAvailable: "The bill has gone, so this is Shefin's to cancel with a credit note.",
+
+  /* ---- the per-person limit, 7A.6, Owner only ---- */
+  overrideLimit: "Sell it anyway, past the limit",
+  overrideLimitHelp: "Only you can go past a batch's per-person limit, and the order records that you did.",
+
+  /* ---- who may be here at all, brief 17.12 ---- */
+  viewerCannotSell: "A Viewer can look at everything and sell nothing.",
+} as const;
+
+/** Brief 7A.1 step 4. The screen's own wording for each mode. */
+export const FULFILMENT_LABEL: Record<string, string> = {
+  handedOver: SELL.handedOver,
+  ship: SELL.ship,
+  collect: SELL.collect,
+};
+
+/** Brief 7A.1 step 5, the three M2.8 builds. */
+export const PAYMENT_LABEL: Record<string, string> = {
+  cash: SELL.cash,
+  upiToAccount: SELL.upiToAccount,
+  paymentLink: SELL.paymentLink,
+};

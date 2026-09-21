@@ -413,3 +413,46 @@ export async function seedApproval(
     ...overrides,
   });
 }
+
+/* -------------------------------------------------------------------------- */
+/* Reading a collection back by one field (M2.8)                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Every document in `collectionId` whose `fieldPath` equals `value`, read
+ * with admin rights.
+ *
+ * M2.8 needs it for `audit`, which is keyed by the path of the thing it
+ * describes rather than by a document id a test could know in advance: a
+ * counter sale's order reference is minted inside the transaction, so the
+ * only way to assert the trail exists is to ask for it by `object`. Read
+ * with the admin bypass, so what is asserted is what really reached
+ * Firestore rather than what a signed-in role happens to be allowed to see.
+ */
+export async function queryByField(
+  collectionId: string,
+  fieldPath: string,
+  value: string,
+): Promise<Array<Record<string, unknown>>> {
+  const res = await fetch(`${DOCUMENTS}:runQuery`, {
+    method: "POST",
+    headers: ADMIN_HEADERS,
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath },
+            op: "EQUAL",
+            value: { stringValue: value },
+          },
+        },
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`querying ${collectionId} returned ${res.status}: ${await res.text()}`);
+  const body = (await res.json()) as Array<{ document?: { fields?: Record<string, unknown> } }>;
+  return body
+    .filter((row) => row.document !== undefined)
+    .map((row) => plainFields(row.document?.fields ?? {}));
+}

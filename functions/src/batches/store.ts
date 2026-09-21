@@ -305,6 +305,14 @@ export async function ordersInBatch(
   for (const doc of found.docs) {
     const state = String(doc.get("state") ?? "");
     if (!terminal.includes(state)) open += 1;
+    // M2.8: a voided sale did not happen (brief 7A.6). Its payment block is
+    // left as it was, because it is the record of what was taken at the
+    // counter, so "was this paid" cannot be answered from `payment` alone.
+    // Leaving it in `paid` would keep its jars counted against the customer's
+    // per-person allowance for the life of the batch, so a mistyped sale
+    // would cost them an allowance they never used. Every other terminal
+    // state is left in: a `closed` order really did take its jars.
+    if (state === "voided") continue;
     if (doc.get("payment.status") === "captured" || doc.get("paidAt") !== undefined) {
       paid.push({
         id: doc.id,

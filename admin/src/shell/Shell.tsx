@@ -34,7 +34,7 @@ function Screen({ path, session, onSignOut }: ShellProps & { path: RoutePath }):
     case "/":
       return <Today session={session} />;
     case "/sell":
-      return <Sell />;
+      return <Sell session={session} />;
     case "/batches":
       return <Batches session={session} />;
     case "/orders":

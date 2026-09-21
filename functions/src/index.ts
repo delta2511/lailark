@@ -8,6 +8,7 @@ import "./lib/options";
 export { api } from "./api";
 export { answerApproval } from "./approvals";
 export { setRole } from "./auth";
+export { createCounterSale, voidCounterSale } from "./orders";
 export {
   approveBatchFull,
   onBatchUpdateWritten,

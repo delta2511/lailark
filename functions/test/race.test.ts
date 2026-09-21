@@ -206,6 +206,10 @@ describe("the last jar", () => {
 
   it("refuses a hold for more jars than are free", async () => {
     await db().collection("batches").doc(ref).update({ heldJars: {} });
-    await expect(takeHold({ batchRef: ref, customerPhone: "+919000000005", orderId: "ord-greedy", qty: 2 })).rejects.toThrow(/jars free/);
+    // M2.8: the refusal counts the jars there are, in English, or says the
+    // last one has gone. Either way it is a sentence, never a code.
+    await expect(
+      takeHold({ batchRef: ref, customerPhone: "+919000000005", orderId: "ord-greedy", qty: 2 }),
+    ).rejects.toThrow(/jars? free|last one/);
   });
 });
