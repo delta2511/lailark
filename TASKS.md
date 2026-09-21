@@ -163,7 +163,7 @@ bill PDF; day close works.
       Clocks section (5-day and 3-day). Done when: a half-reached batch shows on Today
       and "yes" moves it to Sourcing with the message recorded as sent-pending (actual
       sending arrives in M5).
-- [ ] M2.6 [sonnet] Timeline and audit. `audit` collection written by a wrapper every
+- [x] M2.6 [sonnet] Timeline and audit. (304e66e) `audit` collection written by a wrapper every
       client write and every function write goes through. Timeline component on batch,
       order, customer. Undo reads the `before` from audit for 8 seconds. Done when:
       editing a batch field, undoing it, and seeing both in the timeline works.
