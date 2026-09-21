@@ -167,7 +167,7 @@ bill PDF; day close works.
       client write and every function write goes through. Timeline component on batch,
       order, customer. Undo reads the `before` from audit for 8 seconds. Done when:
       editing a batch field, undoing it, and seeing both in the timeline works.
-- [ ] M2.7 [haiku] Seed batch 001. Script that writes the prawns-dates product, its
+- [x] M2.7 [haiku] Seed batch 001. (a225139) Script that writes the prawns-dates product, its
       recipe from the label basis doc placeholders (marked estimated), and batch 001
       with every real number from the v0 handoff §1 and §2 as an Archived batch with
       22 bottled jars, 0 paid online. Runs against the emulator and staging. Done when:
