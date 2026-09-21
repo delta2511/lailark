@@ -18,11 +18,23 @@
  * Every field this callable writes on a batch is a protected field (A40), so
  * this is the only code path in the system that can write them. A request
  * that carries one of them is refused before anything is read.
+ *
+ * M2.6: the batch document write below (`tx.create`/`tx.set`) is followed by
+ * one `writeAudit` call in the same transaction, so the state move and its
+ * `audit/{id}` entry commit together or (on a contended `counters/batch`
+ * retry) neither does. `before` is read off `batchSnap`, the document as
+ * this transaction already read it, never a second `get`.
  */
 
-import { type DocumentReference, FieldValue, getFirestore } from "firebase-admin/firestore";
+import {
+  type DocumentReference,
+  type DocumentSnapshot,
+  FieldValue,
+  getFirestore,
+} from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
+import { writeAudit } from "../audit/write";
 import { getAdminApp } from "../lib/admin";
 import { DEFAULT_MAX_INSTANCES, REGION } from "../lib/options";
 import {
@@ -82,10 +94,16 @@ export const transitionBatch = onCall(
         let counterRef: DocumentReference | null = null;
         let counterNext = 0;
         let allocatedBatchNo: string | null = null;
+        // M2.6: kept for `writeAudit`'s `before`, alongside the curated
+        // `BatchView` the transition table itself works from.
+        let batchSnap: DocumentSnapshot | null = null;
 
         if (ref !== null) {
           const snap = await tx.get(db.collection(BATCHES).doc(ref));
-          if (snap.exists) batch = batchViewFrom(snap);
+          if (snap.exists) {
+            batch = batchViewFrom(snap);
+            batchSnap = snap;
+          }
         }
 
         // Only the rows that need them pay for these reads.
@@ -198,6 +216,13 @@ export const transitionBatch = onCall(
         } else {
           tx.set(batchDoc, withStamps(plan.patch, plan.stampFields, actor), { merge: true });
         }
+        writeAudit(tx, db, {
+          object: `${BATCHES}/${ref}`,
+          action: plan.row.from === "none" ? "create" : `transition:${plan.row.from}->${plan.row.to}`,
+          patch: plan.patch,
+          beforeSnap: batchSnap,
+          by: actor,
+        });
         // The counter moves in the same transaction that stamps the number, so
         // the number and the jars it names are committed together or not at
         // all (D21c). A bottling that fails leaves the counter where it was.

@@ -150,13 +150,45 @@ export interface SettingsByName {
 export type Settings<K extends keyof SettingsByName = keyof SettingsByName> =
   SettingsByName[K] & BaseDoc;
 
-/** `audit/{id}`. Undo reads from here. */
-export interface AuditEntry extends BaseDoc {
-  /** The document path that changed. */
+/**
+ * `audit/{id}`. Brief section 18.1: "object, action, before, after, by, at.
+ * Undo reads from here." M2.6.
+ *
+ * Not a {@link BaseDoc}: `by`/`at` already say who and when, so a second pair
+ * of stamps would either duplicate them or (worse) disagree with them. The
+ * document a write changed is a path (`"batches/b-7f3a2c"`), not a slug,
+ * because the timeline is wired onto a document by its path (batch, order or
+ * customer alike) and the same string is what a rules `get()` or a query on
+ * `object` addresses.
+ *
+ * `before` and `after` carry only the fields the write actually changed
+ * (`fields` lists which), never the whole document: a batch's `pnl` or an
+ * order's `payment` block would otherwise ride along on every unrelated edit.
+ * Both are written by the same client wrapper (`admin/src/audit/write.ts`)
+ * and the same server wrapper (`functions/src/audit/write.ts`), so there is
+ * one shape here rather than two that drift.
+ *
+ * `undoes` is null on an ordinary write and the id of the entry it reverses
+ * on an undo. An undo is a write like any other and gets its own entry
+ * instead of touching the one it undoes (audit entries are append-only,
+ * `firestore.rules`), so the trail never loses the fact that something was
+ * undone, and undoing an undo is just an ordinary undo of the latest entry.
+ */
+export interface AuditEntry {
+  /** The document path that changed, e.g. `"batches/b-7f3a2c"`. */
   readonly object: string;
+  /** `"create"`, `"update"`, `"undo"`, or a transition name. Free text. */
   readonly action: string;
-  readonly before: unknown;
-  readonly after: unknown;
+  /** The keys `before` and `after` carry. Never empty on a real write. */
+  readonly fields: readonly string[];
+  /** Each field in {@link fields}, as it read immediately before this write. */
+  readonly before: Readonly<Record<string, unknown>>;
+  /** Each field in {@link fields}, as this write set it. */
+  readonly after: Readonly<Record<string, unknown>>;
   readonly by: ActorId;
   readonly at: Timestamp;
+  /** The id of the entry this undoes, or null when this is not an undo. */
+  readonly undoes: string | null;
+  /** Which wrapper wrote it: a client SDK write, or a Cloud Function. */
+  readonly source: "client" | "function";
 }

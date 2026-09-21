@@ -338,9 +338,53 @@ service cloud.firestore {
 
     // Prices live on products, so products are the Owner's: 17.12 gives
     // "set prices" to Owner alone.
+    /* ── a product's prices, checked by value ───────────────────────────── */
+    //
+    // CLAUDE.md section 3: money is integers in paise, and never above the
+    // ₹649 MRP printed on the jar. A product's two prices are typed into a box
+    // on the Products screen and written straight here with no callable in the
+    // way, exactly like a batch's `costs`, so the same reasoning applies: the
+    // screen checks, and these rules are what make the check true.
+    //
+    // A custom line is what the kitchen may sell at the counter under this
+    // product's name. Its amount is a price too, so it takes the same ceiling.
+    // Rules cannot walk a list, so the count is capped and each entry checked
+    // by hand; a longer list than this would need the lines to become their
+    // own documents, which is a change to the data model, not to a rule.
+
+    function sellablePaise(value) {
+      return value is int && value >= 1 && value <= 64900;
+    }
+
+    function productPricesOk() {
+      return (!('priceInStock' in request.resource.data)
+              || sellablePaise(request.resource.data.priceInStock))
+             && (!('priceOpen' in request.resource.data)
+                 || sellablePaise(request.resource.data.priceOpen));
+    }
+
+    // A custom line may legitimately be free (something thrown in with an
+    // order), so the floor is 0 rather than 1 paise. The ceiling is the same.
+    function customLineAmountOk(value) {
+      return value is int && value >= 0 && value <= 64900;
+    }
+
+    function customLineOk(index) {
+      return !(request.resource.data.customLines.size() > index)
+             || customLineAmountOk(request.resource.data.customLines[index].amountPaise);
+    }
+
+    function customLinesOk() {
+      return !('customLines' in request.resource.data)
+             || (request.resource.data.customLines is list
+                 && request.resource.data.customLines.size() <= 8
+                 && customLineOk(0) && customLineOk(1) && customLineOk(2) && customLineOk(3)
+                 && customLineOk(4) && customLineOk(5) && customLineOk(6) && customLineOk(7));
+    }
+
     match /products/{slug} {
       allow read: if isAdmin();
-      allow write: if isOwner();
+      allow write: if isOwner() && productPricesOk() && customLinesOk();
     }
 
     // Ingredients and recipes, question Q4 (Shefin): "For now admin only, but
@@ -498,11 +542,46 @@ service cloud.firestore {
     // edit or remove an entry, or undo would be lying. `by` must be the
     // caller and `at` must be the server's clock, so an entry cannot be
     // backdated or pinned on somebody else.
+    // An entry must describe a change that is really happening, in this same
+    // commit. Without this an entry is just a document a signed-in staff
+    // account may write, so anyone could append a page of history that never
+    // occurred: a price that was never set, a weight nobody recorded, an undo
+    // of a write that never happened. A trail that can be written to freely
+    // answers "what did somebody type" rather than "what happened", and the
+    // second is the only question worth keeping it for.
+    //
+    // `getAfter` reads the target document as it will be **after this commit**.
+    // The wrapper (`admin/src/audit/write.ts`) always writes the change and
+    // its entry in one batch, and always stamps `updatedAt` with the server
+    // clock, so on a genuine write that stamp is this commit's own time. An
+    // entry arriving on its own finds the target's `updatedAt` unchanged from
+    // whenever it was really last touched, and is refused. The check is on the
+    // document as it will be, not as it is, so the first write to a document
+    // that does not exist yet (a new actuals line) carries its own entry the
+    // same way every later one does.
+    //
+    // This costs one document read per entry, which at a few dozen writes a
+    // day is nothing, and it is what makes the wrapper's promise a fact
+    // rather than a comment. Functions are not bound by these rules and write
+    // their own entries through the Admin SDK inside their transaction.
+    function auditTarget() {
+      return path('/databases/' + database + '/documents/' + request.resource.data.object);
+    }
+
+    function auditDescribesARealWrite() {
+      return request.resource.data.object is string
+             && request.resource.data.object.size() > 0
+             && request.resource.data.object.size() < 900
+             && existsAfter(auditTarget())
+             && getAfter(auditTarget()).data.updatedAt == request.time;
+    }
+
     match /audit/{entryId} {
       allow read: if isAdmin();
       allow create: if isStaff()
                     && request.resource.data.by == request.auth.uid
-                    && request.resource.data.at == request.time;
+                    && request.resource.data.at == request.time
+                    && auditDescribesARealWrite();
       allow update, delete: if false;
     }
 

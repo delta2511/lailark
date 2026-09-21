@@ -7,19 +7,26 @@
  * a count or any other protected field itself (`PROTECTED_BATCH_FIELDS`,
  * `shared/src/rules.ts`). The fields the rules do give a client
  * (`KITCHEN_BATCH_FIELDS`) are written directly, edited in place the same way
- * M2.2 writes a product. The per-ingredient actuals live one level down, in
- * `batches/{ref}/lines/{id}`, which both staff roles may write directly
- * (`firestore.rules`, `isStaff()`).
+ * M2.2 writes a product, and (M2.6) through the same audit wrapper. The
+ * per-ingredient actuals live one level down, in `batches/{ref}/lines/{id}`,
+ * which both staff roles may write directly (`firestore.rules`, `isStaff()`).
  */
-import type { Approval, Batch, BatchCosts, BatchLine, BatchState } from "@lailark/shared";
+import {
+  isKitchenBatchField,
+  isProtectedBatchField,
+  type Approval,
+  type Batch,
+  type BatchCosts,
+  type BatchLine,
+  type BatchState,
+  type Role,
+} from "@lailark/shared";
 import {
   collection,
-  doc,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
   where,
   type CollectionReference,
   type Query,
@@ -28,6 +35,7 @@ import {
 import { httpsCallable } from "firebase/functions";
 import { useEffect, useState } from "preact/hooks";
 
+import { undoAuditEntry, writeWithAudit, type AuditedWriteResult, type UndoOutcome } from "../audit/write";
 import { db, functions } from "../firebase";
 import type { Live } from "../products/data";
 
@@ -183,34 +191,63 @@ export function callableErrorMessage(error: unknown, fallback: string): string {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Direct writes: the fields `KITCHEN_BATCH_FIELDS` gives a client            */
+/* Direct writes: the fields `KITCHEN_BATCH_FIELDS` gives a client (M2.6:     */
+/* every one of them now goes through the audit wrapper, so there is one     */
+/* write path here rather than a plain `setDoc` some callers use and the     */
+/* wrapper others do.)                                                       */
 /* -------------------------------------------------------------------------- */
-
-function stamps(uid: string): Record<string, unknown> {
-  return { updatedAt: serverTimestamp(), updatedBy: uid };
-}
 
 /**
  * One or more of `KITCHEN_BATCH_FIELDS` (`cookedOn`, `landedOn`, `packedOn`,
  * `source`, `weightRaw`, `weightCleaned`, `weightCooked`, `costs`), edited in
  * place the way M2.2 edits a product field. The rules check the field names
  * that changed, not their values, so this never sends a protected field.
+ *
+ * `before` is the same keys as `patch`, read from the document as the screen
+ * already has it, so the `audit/{id}` entry this write creates (M2.6, brief
+ * 18.1) carries both without a second read. The returned `auditId` is what a
+ * caller offering undo hands to {@link undoBatchWrite}.
  */
 export async function updateBatchField(
   ref: string,
   patch: Readonly<Record<string, unknown>>,
+  before: Readonly<Record<string, unknown>>,
   uid: string,
-): Promise<void> {
-  await setDoc(doc(db, BATCHES_COLLECTION, ref), { ...patch, ...stamps(uid) }, { merge: true });
+): Promise<AuditedWriteResult> {
+  return writeWithAudit({ object: `${BATCHES_COLLECTION}/${ref}`, action: "update", patch, before, by: uid });
 }
 
 /**
  * `costs` is one field to the rules (`onlyChanged`/`touches` compare whole
  * top-level keys), so every save sends the whole map, not just the one line
- * that changed.
+ * that changed, and the whole previous map is what `before` carries too.
  */
-export async function updateBatchCosts(ref: string, costs: BatchCosts, uid: string): Promise<void> {
-  await updateBatchField(ref, { costs }, uid);
+export async function updateBatchCosts(
+  ref: string,
+  costs: BatchCosts,
+  beforeCosts: BatchCosts,
+  uid: string,
+): Promise<AuditedWriteResult> {
+  return updateBatchField(ref, { costs }, { costs: beforeCosts }, uid);
+}
+
+/**
+ * Whether `role` may write `field` on a batch: the same two lists the rules
+ * enforce (`shared/src/rules.ts`, `firestore.rules`). M2.6 uses this to gate
+ * the Undo button, so it never offers to restore a field the write would be
+ * refused for, whoever is asking, the Owner included. An undo is a write
+ * like any other, and it must not become a back door to a field the actor
+ * could never have written directly.
+ */
+export function canRoleWriteBatchField(role: Role, field: string): boolean {
+  if (role === "owner") return !isProtectedBatchField(field);
+  if (role === "kitchen") return isKitchenBatchField(field);
+  return false;
+}
+
+/** Undoes a batch field write within its toast's 8 second window. See `undoAuditEntry`. */
+export async function undoBatchWrite(auditId: string, uid: string, role: Role): Promise<UndoOutcome> {
+  return undoAuditEntry(auditId, uid, (field) => canRoleWriteBatchField(role, field));
 }
 
 /** The two fields an actuals row owns, one box each. */
@@ -231,6 +268,16 @@ export type BatchLineField = "qtyActual" | "costActual";
  * snapshot, and a cost typed a moment earlier that the listener had not yet
  * echoed back was rewritten as zero. Money was lost with no error shown. A
  * caller here cannot reach the other box's value, so it cannot overwrite it.
+ *
+ * M2.6: audited like every other batch write (`ingredientId` and the create
+ * stamps ride along as `extra`, not as an audited field: they identify the
+ * row, they are never a value a person edited). This screen has never
+ * offered undo on these boxes and still does not: the "one field per call"
+ * guarantee above is what stops the two boxes corrupting each other, and an
+ * undo control here would need its own race analysis against that same
+ * guarantee, which is more than this task's done-when (a batch field) asks
+ * for. Left as a plain audited write; a `BLOCKED:`/`ASSUMED:` line in the
+ * M2.6 report says so.
  */
 export async function saveBatchLine(
   ref: string,
@@ -238,20 +285,18 @@ export async function saveBatchLine(
   ingredientId: string,
   field: BatchLineField,
   value: number,
+  beforeValue: number | null,
   uid: string,
   isNew: boolean,
-): Promise<void> {
-  await setDoc(
-    doc(db, BATCHES_COLLECTION, ref, LINES_SUBCOLLECTION, lineId),
-    {
-      ingredientId,
-      [field]: value,
-      updatedAt: serverTimestamp(),
-      updatedBy: uid,
-      ...(isNew ? { createdAt: serverTimestamp(), createdBy: uid } : {}),
-    },
-    { merge: true },
-  );
+): Promise<AuditedWriteResult> {
+  return writeWithAudit({
+    object: `${BATCHES_COLLECTION}/${ref}/${LINES_SUBCOLLECTION}/${lineId}`,
+    action: isNew ? "create" : "update",
+    patch: { [field]: value },
+    before: { [field]: beforeValue },
+    by: uid,
+    extra: { ingredientId, ...(isNew ? { createdAt: serverTimestamp(), createdBy: uid } : {}) },
+  });
 }
 
 /** True when a Firestore error is the rules saying no. */

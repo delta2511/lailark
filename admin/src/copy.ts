@@ -56,6 +56,9 @@ export const COPY = {
   settingsName: "Name",
   settingsPhone: "Phone",
   settingsRole: "Role",
+
+  /** M2.6: the one Undo label, shared by every edit-in-place screen's toast. */
+  undo: "Undo",
 } as const;
 
 /** One row per item in the More list, brief section 17.1. */
@@ -251,6 +254,11 @@ export const PRODUCTS = {
 
   undo: "Undo",
   fieldChanged: (label: string, value: string) => `${label} changed to ${value}.`,
+  /** M2.6: the toast's own message when the write was itself an undo. */
+  undone: "Undone.",
+  undoRaced: "This changed again since then, so nothing was undone.",
+  undoForbidden: "Your role cannot undo this.",
+  undoGone: "That change can no longer be undone.",
 } as const;
 
 /**
@@ -389,6 +397,36 @@ export const BATCHES = {
 
   undo: "Undo",
   fieldChanged: (label: string, value: string) => `${label} changed to ${value}.`,
+  undone: "Undone.",
+  undoRaced: "This changed again since then, so nothing was undone.",
+  undoForbidden: "Your role cannot undo this.",
+  undoGone: "That change can no longer be undone.",
+} as const;
+
+/**
+ * The timeline (brief sections 11 and 17.1: "every object shows its
+ * timeline"; 18.1: `audit/{id}`), M2.6. One component, wired onto a document
+ * by its path: `batches/{ref}` today, `orders/{id}` and `customers/{phone}`
+ * once those screens exist (M2.8, M2.9 and after).
+ */
+export const TIMELINE = {
+  heading: "Timeline",
+  loading: "Loading...",
+  empty: "Nothing recorded yet.",
+  readDenied: "The timeline could not be read. Ask Shefin to check your role.",
+
+  /** `entry.action`, e.g. "update", read next to what changed. */
+  actionUpdate: "Changed",
+  actionCreate: "Created",
+  actionUndo: "Undone",
+
+  /** One line: what changed, from `entry.fields` and `entry.after`. */
+  changedFields: (fields: string) => `Changed ${fields}.`,
+  createdLine: "Created.",
+  undidLine: (fields: string) => `Undid the change to ${fields}.`,
+
+  by: (name: string) => `by ${name}`,
+  system: "the system",
 } as const;
 
 /**

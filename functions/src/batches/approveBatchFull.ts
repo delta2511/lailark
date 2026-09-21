@@ -12,11 +12,17 @@
  * answer: Owner only, an optional edit of the message, `fullApprovedAt`
  * stamped, the approval marked approved or edited, and `sentAt` left alone.
  * Sending is M5; D5 is that the Owner's yes comes first and is recorded.
+ *
+ * M2.6: the batch write below is followed by `writeAudit` in the same
+ * transaction, exactly like `transitionBatch`. A second yes writes nothing
+ * (`plan.alreadyApproved`), so it leaves no audit entry either: nothing
+ * changed, there is nothing to record.
  */
 
 import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
+import { writeAudit } from "../audit/write";
 import { getAdminApp } from "../lib/admin";
 import { DEFAULT_MAX_INSTANCES, REGION } from "../lib/options";
 import {
@@ -104,6 +110,13 @@ export const approveBatchFull = onCall(
 
       const actor = caller.uid ?? "unknown";
       tx.set(batchDoc, withStamps(plan.patch, plan.stampFields, actor), { merge: true });
+      writeAudit(tx, db, {
+        object: `${BATCHES}/${input.ref}`,
+        action: "approveFull",
+        patch: plan.patch,
+        beforeSnap: snap.exists ? snap : null,
+        by: actor,
+      });
       writeApprovals(tx, db, plan.approvals, existing, actor);
 
       return {

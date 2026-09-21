@@ -22,6 +22,7 @@ import {
   setDoc,
   Timestamp,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import type { RulesTestContext, RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
@@ -52,6 +53,27 @@ const write = (ctx: RulesTestContext, path: string, data: object) =>
 const patch = (ctx: RulesTestContext, path: string, data: object) =>
   updateDoc(doc(ctx.firestore(), path), data);
 const remove = (ctx: RulesTestContext, path: string) => deleteDoc(doc(ctx.firestore(), path));
+
+/**
+ * A change and its audit entry in one commit, which is the only way the admin
+ * ever writes one (`admin/src/audit/write.ts`). The rules read the target's
+ * `updatedAt` as it will be after this commit to check the entry describes a
+ * change that is really happening, so an entry written on its own is refused
+ * and an entry written beside its change is not.
+ */
+const writeAudited = (
+  ctx: RulesTestContext,
+  entryId: string,
+  target: string,
+  patchFields: object,
+  entry: object,
+) => {
+  const db = ctx.firestore();
+  const batch = writeBatch(db);
+  batch.set(doc(db, target), { ...patchFields, updatedAt: serverTimestamp() }, { merge: true });
+  batch.set(doc(db, "audit", entryId), entry);
+  return batch.commit();
+};
 
 beforeAll(async () => {
   env = await makeTestEnvironment();
@@ -510,6 +532,45 @@ describe("the catalogue", () => {
   it("keeps products, and so prices, away from the Kitchen", async () => {
     await assertFails(patch(who.kitchen, "products/prawns-and-dates", { priceInStock: 1 }));
   });
+
+  /**
+   * CLAUDE.md section 3: money is whole paise, and never above the ₹649 MRP
+   * printed on the jar. A product's prices are typed into a box and written
+   * straight to Firestore with no callable in the way, so this is the last
+   * thing between a slip of the thumb and a price a customer could be charged.
+   */
+  it("refuses a product price that is not money, even from the Owner", async () => {
+    for (const bad of [0, -1, 64_901, 649.5, "649", null]) {
+      await assertFails(patch(who.owner, "products/prawns-and-dates", { priceInStock: bad }));
+      await assertFails(patch(who.owner, "products/prawns-and-dates", { priceOpen: bad }));
+    }
+  });
+
+  it("takes a price at exactly the MRP, and at one paise", async () => {
+    await assertSucceeds(patch(who.owner, "products/prawns-and-dates", { priceOpen: 64_900 }));
+    await assertSucceeds(patch(who.owner, "products/prawns-and-dates", { priceOpen: 1 }));
+  });
+
+  it("holds a custom line's amount to the same ceiling, and lets it be free", async () => {
+    await assertSucceeds(
+      patch(who.owner, "products/prawns-and-dates", {
+        customLines: [{ description: "A small jar", amountPaise: 0 }],
+      }),
+    );
+    await assertFails(
+      patch(who.owner, "products/prawns-and-dates", {
+        customLines: [{ description: "A small jar", amountPaise: 64_901 }],
+      }),
+    );
+    await assertFails(
+      patch(who.owner, "products/prawns-and-dates", {
+        customLines: [
+          { description: "Fine", amountPaise: 100 },
+          { description: "Not fine", amountPaise: -1 },
+        ],
+      }),
+    );
+  });
 });
 
 /*
@@ -815,14 +876,20 @@ describe("the Viewer", () => {
 describe("the audit log", () => {
   it("takes an entry from either staff role, stamped by the caller and the server clock", async () => {
     await assertSucceeds(
-      write(who.kitchen, "audit/new-1", {
-        object: `batches/${BATCH_REF}`,
-        action: "update",
-        before: { weightRaw: null },
-        after: { weightRaw: 12.4 },
-        by: KITCHEN_UID,
-        at: serverTimestamp(),
-      }),
+      writeAudited(
+        who.kitchen,
+        "new-1",
+        `batches/${BATCH_REF}`,
+        { weightRaw: 12.4 },
+        {
+          object: `batches/${BATCH_REF}`,
+          action: "update",
+          before: { weightRaw: null },
+          after: { weightRaw: 12.4 },
+          by: KITCHEN_UID,
+          at: serverTimestamp(),
+        },
+      ),
     );
   });
 
@@ -846,6 +913,95 @@ describe("the audit log", () => {
   it("is append-only", async () => {
     await assertFails(patch(who.owner, "audit/aud-1", { action: "create" }));
     await assertFails(remove(who.owner, "audit/aud-1"));
+  });
+
+  /* ── M2.6: the full shape, and who the log is and is not for ──────────── */
+
+  it("takes the full M2.6 shape, from the Owner too: fields, undoes and source are unrestricted extras", async () => {
+    await assertSucceeds(
+      writeAudited(
+        who.owner,
+        "new-4",
+        `batches/${BATCH_REF}`,
+        { weightRaw: 9.1 },
+        {
+          object: `batches/${BATCH_REF}`,
+          action: "update",
+          fields: ["weightRaw"],
+          before: { weightRaw: 12.4 },
+          after: { weightRaw: 9.1 },
+          by: OWNER_UID,
+          at: serverTimestamp(),
+          undoes: "new-1",
+          source: "client",
+        },
+      ),
+    );
+  });
+
+  /**
+   * The trail answers "what happened", not "what did somebody type". An entry
+   * that arrives on its own describes a change nobody made, and a trail that
+   * accepts those is worth nothing when it matters.
+   */
+  it("refuses an entry for a change that is not happening", async () => {
+    for (const staff of [who.owner, who.kitchen] as const) {
+      const uid = staff === who.owner ? OWNER_UID : KITCHEN_UID;
+      // On its own, with no write beside it.
+      await assertFails(
+        write(staff, "audit/fake-1", {
+          object: `batches/${BATCH_REF}`,
+          action: "update",
+          fields: ["priceInStock"],
+          before: { priceInStock: 64_900 },
+          after: { priceInStock: 100 },
+          by: uid,
+          at: serverTimestamp(),
+        }),
+      );
+      // About a document that does not exist at all.
+      await assertFails(
+        write(staff, "audit/fake-2", {
+          object: "batches/b-nosuch",
+          action: "update",
+          by: uid,
+          at: serverTimestamp(),
+        }),
+      );
+      // Beside a real write, but pointing at a different document.
+      await assertFails(
+        writeAudited(staff, "fake-3", `batches/${BATCH_REF}`, { source: "Beypore" }, {
+          object: "products/prawns-and-dates",
+          action: "update",
+          by: uid,
+          at: serverTimestamp(),
+        }),
+      );
+    }
+  });
+
+  it("is readable by all three admin roles, so every timeline (batch, order, customer) reads the same way", async () => {
+    await assertSucceeds(read(who.owner, "audit/aud-1"));
+    await assertSucceeds(read(who.kitchen, "audit/aud-1"));
+    await assertSucceeds(read(who.viewer, "audit/aud-1"));
+  });
+
+  /**
+   * The trail is worthless if the person who made the mistake can erase it
+   * (M2.6 report): every role that can write an entry is checked above
+   * ("is append-only") to be unable to edit or remove one once it exists, the
+   * Owner included, and neither the Kitchen nor the Viewer gets a create at
+   * all beyond what "either staff role" already proves for the Kitchen.
+   */
+  it("refuses a create from the Viewer, who never writes anything", async () => {
+    await assertFails(
+      write(who.viewer, "audit/new-5", {
+        object: `batches/${BATCH_REF}`,
+        action: "update",
+        by: VIEWER_UID,
+        at: serverTimestamp(),
+      }),
+    );
   });
 });
 

@@ -14,6 +14,15 @@
  * place because nothing else is computed from it, except `packedOn`, which
  * feeds `bestBefore` and `saleStopOn` at the Bottled button and is shown read
  * only from Bottled on, for the same reason.
+ *
+ * M2.6: every field write here (and `costs` below) now goes through
+ * `updateBatchField`/`updateBatchCosts` (`./data.ts`, themselves a thin
+ * wrapper over `writeWithAudit`) and offers 8 seconds of undo through
+ * {@link UndoToast}, the same seam M2.2 built for products. `saveBatchLine`
+ * (the per-ingredient actuals, `CookingActuals.tsx`) is audited the same way
+ * but does not offer undo: those boxes have never had one, and this task's
+ * done-when is a batch *field*, not a per-ingredient actual. Noted plainly in
+ * the M2.6 report rather than silently left half-migrated.
  */
 import { batchLabelCapitalised, formatINR, liveHeldJars, type BatchCosts, type Role } from "@lailark/shared";
 import type { JSX } from "preact";
@@ -22,10 +31,13 @@ import { useState } from "preact/hooks";
 import { BATCHES } from "../copy";
 import { isCostPaise, parseRupeesToPaise } from "../products/productMoney";
 import type { IngredientDoc, ProductDoc, RecipeDoc } from "../products/data";
+import { Timeline } from "../timeline/Timeline";
+import { UndoToast, type UndoToastState } from "../ui/UndoToast";
 import { CookingActuals } from "./CookingActuals";
 import { formatClock } from "./clock";
 import {
   isPermissionDenied,
+  undoBatchWrite,
   updateBatchCosts,
   updateBatchField,
   useApprovalsForBatch,
@@ -65,8 +77,75 @@ export function BatchDetail({ batch, role, uid, product, recipe, ingredients, on
   const held = liveHeldJars(batch.heldJars, Date.now());
   const costs = batch.costs ?? ZERO_COSTS;
 
+  // M2.6: the toast's `before` is the `audit/{id}` entry this write just
+  // created (see `admin/src/audit/write.ts`), not the field's old value.
+  const [toast, setToast] = useState<UndoToastState<string> | null>(null);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+
+  /**
+   * Every direct field write on this screen goes through here: one write, one
+   * `audit/{id}` entry, in the same Firestore batch (`updateBatchField`), so
+   * the two can never separate. `before` is read off the `batch` prop this
+   * screen already has, not a second Firestore read.
+   */
+  async function commitWithUndo(
+    patch: Readonly<Record<string, unknown>>,
+    before: Readonly<Record<string, unknown>>,
+    message: string,
+  ): Promise<void> {
+    setFieldError(null);
+    try {
+      const { auditId } = await updateBatchField(batch.id, patch, before, uid);
+      setToast({ message, before: auditId });
+    } catch (caught) {
+      setFieldError(isPermissionDenied(caught) ? BATCHES.saveRefused : BATCHES.saveFailed);
+    }
+  }
+
+  async function commitCostsWithUndo(nextCosts: BatchCosts, message: string): Promise<void> {
+    setFieldError(null);
+    try {
+      const { auditId } = await updateBatchCosts(batch.id, nextCosts, costs, uid);
+      setToast({ message, before: auditId });
+    } catch (caught) {
+      setFieldError(isPermissionDenied(caught) ? BATCHES.saveRefused : BATCHES.saveFailed);
+    }
+  }
+
+  /**
+   * The undo race and the back-door guard both live in `undoBatchWrite`
+   * (`admin/src/batches/data.ts`): it refuses if the document changed again
+   * since this write (the other person's edit stands, nothing here silently
+   * overwrites it), and it refuses if `role` may not write one of the fields
+   * being restored (an undo cannot reach a field its actor could never have
+   * written directly). Either refusal is reported here, plainly, and nothing
+   * is written.
+   */
+  async function handleUndo(auditId: string): Promise<void> {
+    setToast(null);
+    const outcome = await undoBatchWrite(auditId, uid, role);
+    if (!outcome.ok) {
+      setFieldError(
+        outcome.reason === "raced"
+          ? BATCHES.undoRaced
+          : outcome.reason === "forbidden"
+            ? BATCHES.undoForbidden
+            : BATCHES.undoGone,
+      );
+      return;
+    }
+    setToast({ message: BATCHES.undone, before: outcome.auditId });
+  }
+
   return (
     <div class="detail" data-testid="batch-detail">
+      <UndoToast toast={toast} onUndo={(id) => void handleUndo(id)} onExpire={() => setToast(null)} />
+      {fieldError ? (
+        <p class="error" data-testid="batch-field-error">
+          {fieldError}
+        </p>
+      ) : null}
+
       <div class="batch-detail-header">
         <p class="state-chip" data-testid="detail-state-chip">
           {BATCHES.stateLabel[batch.state ?? ""] ?? batch.state}
@@ -136,21 +215,39 @@ export function BatchDetail({ batch, role, uid, product, recipe, ingredients, on
             value={batch.source ?? ""}
             canEdit={canEditKitchenFields}
             testId="source"
-            onCommit={(text) => void updateBatchField(batch.id, { source: text }, uid)}
+            onCommit={(text) =>
+              void commitWithUndo(
+                { source: text },
+                { source: batch.source ?? null },
+                BATCHES.fieldChanged(BATCHES.source, text),
+              )
+            }
           />
           <EditableDate
             label={BATCHES.landedOn}
             value={batch.landedOn ?? ""}
             canEdit={canEditKitchenFields}
             testId="landedOn"
-            onCommit={(text) => void updateBatchField(batch.id, { landedOn: text }, uid)}
+            onCommit={(text) =>
+              void commitWithUndo(
+                { landedOn: text },
+                { landedOn: batch.landedOn ?? null },
+                BATCHES.fieldChanged(BATCHES.landedOn, text),
+              )
+            }
           />
           <EditableNumber
             label={BATCHES.weightRaw}
             value={batch.weightRaw ?? null}
             canEdit={canEditKitchenFields}
             testId="weightRaw"
-            onCommit={(n) => void updateBatchField(batch.id, { weightRaw: n }, uid)}
+            onCommit={(n) =>
+              void commitWithUndo(
+                { weightRaw: n },
+                { weightRaw: batch.weightRaw ?? null },
+                BATCHES.fieldChanged(BATCHES.weightRaw, `${n} g`),
+              )
+            }
           />
         </>
       ) : null}
@@ -164,21 +261,39 @@ export function BatchDetail({ batch, role, uid, product, recipe, ingredients, on
             value={batch.cookedOn ?? ""}
             canEdit={canEditKitchenFields}
             testId="cookedOn"
-            onCommit={(text) => void updateBatchField(batch.id, { cookedOn: text }, uid)}
+            onCommit={(text) =>
+              void commitWithUndo(
+                { cookedOn: text },
+                { cookedOn: batch.cookedOn ?? null },
+                BATCHES.fieldChanged(BATCHES.cookedOn, text),
+              )
+            }
           />
           <EditableNumber
             label={BATCHES.weightCleaned}
             value={batch.weightCleaned ?? null}
             canEdit={canEditKitchenFields}
             testId="weightCleaned"
-            onCommit={(n) => void updateBatchField(batch.id, { weightCleaned: n }, uid)}
+            onCommit={(n) =>
+              void commitWithUndo(
+                { weightCleaned: n },
+                { weightCleaned: batch.weightCleaned ?? null },
+                BATCHES.fieldChanged(BATCHES.weightCleaned, `${n} g`),
+              )
+            }
           />
           <EditableNumber
             label={BATCHES.weightCooked}
             value={batch.weightCooked ?? null}
             canEdit={canEditKitchenFields}
             testId="weightCooked"
-            onCommit={(n) => void updateBatchField(batch.id, { weightCooked: n }, uid)}
+            onCommit={(n) =>
+              void commitWithUndo(
+                { weightCooked: n },
+                { weightCooked: batch.weightCooked ?? null },
+                BATCHES.fieldChanged(BATCHES.weightCooked, `${n} g`),
+              )
+            }
           />
 
           <CookingActuals
@@ -206,13 +321,16 @@ export function BatchDetail({ batch, role, uid, product, recipe, ingredients, on
             numeric
           />
 
-          <CostsSection batch={batch} costs={costs} canEdit={canEditKitchenFields} uid={uid} />
+          <CostsSection costs={costs} canEdit={canEditKitchenFields} onCommit={commitCostsWithUndo} />
         </>
       ) : null}
 
       {/* ---- P&L placeholder, brief 14.2. Real numbers arrive in M4.8. ---- */}
       <p class="section-heading">{BATCHES.pnlHeading}</p>
       <PnlSection batch={batch} />
+
+      {/* ---- Timeline, brief 17.4 and 11: "every object shows its timeline". M2.6. ---- */}
+      <Timeline objectPath={`batches/${batch.id}`} />
 
       <div class="hairline" />
       <button class="quiet" type="button" onClick={onClose}>
@@ -384,25 +502,23 @@ function EditableNumber({
 /* -------------------------------------------------------------------------- */
 
 function CostsSection({
-  batch,
   costs,
   canEdit,
-  uid,
+  onCommit,
 }: {
-  readonly batch: BatchDoc;
   readonly costs: BatchCosts;
   readonly canEdit: boolean;
-  readonly uid: string;
+  /** The parent's `commitCostsWithUndo`: one write, one audit entry, one toast. */
+  readonly onCommit: (nextCosts: BatchCosts, message: string) => Promise<void>;
 }): JSX.Element {
+  // Parse validation only (brief section 3: a whole number of paise, zero or
+  // more). A permission refusal or a network failure on the write itself
+  // surfaces through `onCommit`, which is the parent's `commitCostsWithUndo`
+  // and reports at the top of the screen next to the other field writes.
   const [error, setError] = useState<string | null>(null);
 
-  async function commit(patch: Partial<BatchCosts>): Promise<void> {
-    setError(null);
-    try {
-      await updateBatchCosts(batch.id, { ...costs, ...patch }, uid);
-    } catch (caught) {
-      setError(isPermissionDenied(caught) ? BATCHES.saveRefused : BATCHES.saveFailed);
-    }
+  function commit(key: keyof BatchCosts, label: string, paise: number): Promise<void> {
+    return onCommit({ ...costs, [key]: paise }, BATCHES.fieldChanged(label, formatINR(paise)));
   }
 
   function costField(key: keyof BatchCosts, label: string, testId: string, editable: boolean): JSX.Element {
@@ -440,7 +556,8 @@ function CostsSection({
               setError(BATCHES.costInvalid);
               return;
             }
-            void commit({ [key]: paise } as Partial<BatchCosts>);
+            setError(null);
+            void commit(key, label, paise as number);
           }}
         />
       </>

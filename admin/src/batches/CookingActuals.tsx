@@ -157,7 +157,8 @@ function ActualRow({
   async function commit(field: BatchLineField, value: number): Promise<void> {
     setError(null);
     try {
-      await saveBatchLine(batchRef, lineId, ingredientId, field, value, uid, existing === null);
+      const beforeValue = existing?.[field] ?? null;
+      await saveBatchLine(batchRef, lineId, ingredientId, field, value, beforeValue, uid, existing === null);
     } catch (caught) {
       setError(isPermissionDenied(caught) ? BATCHES.saveRefused : BATCHES.saveFailed);
     }

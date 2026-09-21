@@ -15,6 +15,16 @@
  * is the one exception, because there is no document yet to patch in
  * place: that path is a small form with its own Create button, and the
  * slug typed there becomes the document id and is fixed from then on.
+ *
+ * M2.6: the undo-eligible writes above go through `writeWithAudit`
+ * (`admin/src/audit/write.ts`) instead of a bare `setDoc`, and the toast's
+ * `before` is the new `audit/{id}` entry's id, not the field's old value
+ * kept in this screen's own state. Undo reads that entry back and checks it
+ * has not raced another edit before it restores anything (see the file
+ * header there). The fields not offered undo (name, HSN, type, veg, season,
+ * shipping rule, active) still go straight through `onUpdate`: M2.6 replaces
+ * the undo mechanism, not every product write, and those were never part of
+ * it.
  */
 import {
   formatINR,
@@ -28,6 +38,7 @@ import {
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";
 
+import { undoAuditEntry, writeWithAudit } from "../audit/write";
 import { PRODUCTS } from "../copy";
 import { UndoToast, type UndoToastState } from "../ui/UndoToast";
 import { isPermissionDenied, type ProductDoc, type ProductInput } from "./data";
@@ -37,6 +48,7 @@ import { ProductPhotos } from "./ProductPhotos";
 interface Props {
   readonly product: ProductDoc | null;
   readonly canEdit: boolean;
+  readonly uid: string;
   readonly onCreate: (slug: string, input: ProductInput) => Promise<void>;
   readonly onUpdate: (patch: Partial<ProductInput>) => Promise<void>;
   readonly onClose: () => void;
@@ -59,14 +71,14 @@ function shippingLabel(rule: ShippingRule): string {
   return PRODUCTS.shippingFreeOnTwo;
 }
 
-export function ProductDetail({ product, canEdit, onCreate, onUpdate, onClose, error }: Props): JSX.Element {
+export function ProductDetail({ product, canEdit, uid, onCreate, onUpdate, onClose, error }: Props): JSX.Element {
   if (!canEdit) {
     return <ReadOnlyProduct product={product} onClose={onClose} />;
   }
   if (product === null) {
     return <CreateProduct onCreate={onCreate} onClose={onClose} error={error} />;
   }
-  return <EditProduct product={product} onUpdate={onUpdate} onClose={onClose} error={error} />;
+  return <EditProduct product={product} uid={uid} onUpdate={onUpdate} onClose={onClose} error={error} />;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -403,23 +415,28 @@ function CreateProduct({
 
 function EditProduct({
   product,
+  uid,
   onUpdate,
   onClose,
   error,
 }: {
   readonly product: ProductDoc;
+  readonly uid: string;
   readonly onUpdate: (patch: Partial<ProductInput>) => Promise<void>;
   readonly onClose: () => void;
   readonly error: string | null;
 }): JSX.Element {
   const [current, setCurrent] = useState<ProductDoc>(product);
   const [fieldError, setFieldError] = useState<string | null>(null);
-  const [toast, setToast] = useState<UndoToastState<Partial<ProductInput>> | null>(null);
+  // M2.6: the toast's `before` is now the audit entry this write just
+  // created, not the field's old value (see the file header).
+  const [toast, setToast] = useState<UndoToastState<string> | null>(null);
   const [newLineDescription, setNewLineDescription] = useState("");
   const [newLineAmount, setNewLineAmount] = useState("");
 
   const customLines = current.customLines ?? EMPTY_CUSTOM_LINES;
 
+  /** The fields not offered undo: no audit trail, straight to Firestore. */
   async function applyPatch(patch: Partial<ProductInput>): Promise<boolean> {
     setFieldError(null);
     try {
@@ -432,18 +449,53 @@ function EditProduct({
     }
   }
 
+  /**
+   * The undo-eligible writes: price, jar size, a custom line's amount. Goes
+   * through `writeWithAudit` so the field write and its `audit/{id}` entry
+   * commit together (never one without the other), and the toast is handed
+   * the new entry's id rather than the value it is offering to restore.
+   */
   async function commitWithUndo(
     patch: Partial<ProductInput>,
     before: Partial<ProductInput>,
     message: string,
   ): Promise<void> {
-    const ok = await applyPatch(patch);
-    if (ok) setToast({ message, before });
+    setFieldError(null);
+    try {
+      const { auditId } = await writeWithAudit({
+        object: `products/${current.id}`,
+        action: "update",
+        patch: patch as Record<string, unknown>,
+        before: before as Record<string, unknown>,
+        by: uid,
+      });
+      setCurrent((existing) => ({ ...existing, ...patch }));
+      setToast({ message, before: auditId });
+    } catch (caught) {
+      setFieldError(isPermissionDenied(caught) ? PRODUCTS.saveRefused : PRODUCTS.saveFailed);
+    }
   }
 
-  function handleUndo(before: Partial<ProductInput>): void {
+  /**
+   * A product is the Owner's alone (brief 17.12), and this screen is only
+   * ever reached with `canEdit` true, so every field on it is Owner-writable:
+   * there is no per-field restriction to check the way a batch has one.
+   */
+  async function handleUndo(auditId: string): Promise<void> {
     setToast(null);
-    void applyPatch(before);
+    const outcome = await undoAuditEntry(auditId, uid, () => true);
+    if (!outcome.ok) {
+      setFieldError(
+        outcome.reason === "raced"
+          ? PRODUCTS.undoRaced
+          : outcome.reason === "forbidden"
+            ? PRODUCTS.undoForbidden
+            : PRODUCTS.undoGone,
+      );
+      return;
+    }
+    setCurrent((existing) => ({ ...existing, ...(outcome.restored as Partial<ProductInput>) }));
+    setToast({ message: PRODUCTS.undone, before: outcome.auditId });
   }
 
   function commitPriceInStock(text: string): void {

@@ -129,6 +129,7 @@ export function Products({ session }: Props): JSX.Element {
           key={view.id ?? "new"}
           product={product}
           canEdit={canEditProducts}
+          uid={session.uid}
           error={error}
           onClose={close}
           onCreate={(slug: string, input: ProductInput) =>

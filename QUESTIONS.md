@@ -9,7 +9,14 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
 
 ## Open
 
-None.
+- Q14 (M2.6, 21 Sep): a batch, an order and a customer now each have one history, the
+  `audit` collection, written by one wrapper that both the admin and the functions go
+  through. Brief §18.1 also names `orders/{id}/events/{id}` as "the timeline for the
+  order", which has rules and seed coverage from M1.8 but nothing writing to it. Two
+  timelines for an order would drift, and the one that drifts is the one nobody is
+  looking at. Should `audit` be the only history, and `orders/{id}/events` dropped
+  before order writes are built in M2.8? Meanwhile: `audit` is the only thing written,
+  `orders/{id}/events` is untouched and empty, and nothing reads it.
 
 ## Answered
 

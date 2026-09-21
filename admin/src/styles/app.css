@@ -866,3 +866,36 @@ textarea {
 .clock-row.overdue .clock-left {
   font-weight: 600;
 }
+
+/* ── Timeline (M2.6) ────────────────────────────────────────────────────── */
+/*
+ * The history of one document. Read-only, and deliberately quiet: it sits
+ * under the working parts of a screen and is there when somebody asks "who
+ * changed that", not before. No Rust anywhere here, because nothing on a
+ * timeline is a number you act on.
+ */
+.timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timeline-entry {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.timeline-entry:first-child {
+  border-top: none;
+}
+
+.timeline-line {
+  margin: 0;
+  color: var(--ink);
+}
+
+.timeline-meta {
+  margin: var(--space-1) 0 0;
+  color: var(--grey);
+  font-size: var(--font-size-small);
+}

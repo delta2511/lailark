@@ -4,17 +4,19 @@
  *
  * This component only ever shows a message and an Undo button for 8
  * seconds, then calls `onExpire`. It holds no Firestore reference and knows
- * nothing about what "before" means: the caller decides what to save, this
- * component only decides how long the offer to undo it stays open. That is
- * deliberate: M2.6 wires the same undo seam to the `audit/{id}` log (brief
- * section 18.1, "the undo log... reads from here") instead of a value kept
- * in a screen's own state, and it should be able to reuse this component
- * unchanged, passing it whatever `before` it reads back off that document.
+ * nothing about what "before" means: the caller decides what `T` is, this
+ * component only decides how long the offer to undo it stays open.
+ *
+ * M2.6: every caller now passes the id of the `audit/{id}` entry the write
+ * just created (`T` is `string`), not the field's old value. The 8 second
+ * window this component enforces is what makes "Undo reads the before from
+ * audit for 8 seconds" true: after the timer runs out the toast is gone and
+ * `onUndo` is never reachable, whatever the audit entry itself still says.
  */
 import type { JSX } from "preact";
 import { useEffect } from "preact/hooks";
 
-import { PRODUCTS } from "../copy";
+import { COPY } from "../copy";
 
 export const UNDO_SECONDS = 8;
 
@@ -26,7 +28,7 @@ export interface UndoToastState<T> {
 export interface UndoToastProps<T> {
   /** Null hides the toast. A new object (even for the same field) restarts the clock. */
   readonly toast: UndoToastState<T> | null;
-  /** Called with the value the field held before the change that raised this toast. */
+  /** Called with the toast's `before` (an audit entry id, from M2.6 on). */
   readonly onUndo: (before: T) => void;
   /** Called when the toast's own 8 second clock runs out, so the caller clears its state. */
   readonly onExpire: () => void;
@@ -53,7 +55,7 @@ export function UndoToast<T>({ toast, onUndo, onExpire }: UndoToastProps<T>): JS
         data-testid="undo-toast-undo"
         onClick={() => onUndo(toast.before)}
       >
-        {PRODUCTS.undo}
+        {COPY.undo}
       </button>
     </div>
   );

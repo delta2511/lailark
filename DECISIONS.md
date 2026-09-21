@@ -420,3 +420,35 @@ break.
   writing `sentAt`, `kind`, `batchRef`, `updateId` or `dueAt` on an approval: the
   callables never do, and from M5 `sentAt` is the record that a customer was really
   messaged. Status: open.
+- A77 (M2.6, 21 Sep): an audit entry carries `fields`, `undoes` and `source` beyond the
+  brief's six, so an undo of an undo can be read back and a client write told from a
+  function write. Status: open.
+- A78 (M2.6, 21 Sep): the 8 second undo window is the toast's own timer. Nothing on the
+  server re-checks how old an entry is, so somebody working outside the app could undo
+  an old entry of their own. It can only ever restore a value a role-permitted write
+  already set, and the race guard still applies, so "for 8 seconds" is a promise the
+  screen makes rather than one the system enforces. Status: open.
+- A79 (M2.6, 21 Sep): the per-ingredient actuals are audited but offer no undo. That
+  screen never had one, and adding it needs its own race analysis against the one field
+  per box guarantee. Status: open.
+- A80 (M2.6, 21 Sep): the timeline is read-only. Undo lives on the write's own toast,
+  not as a standing control on history. Status: open.
+- A81 (M2.6, 21 Sep): a timeline entry shows the actor's name from `users/{uid}`, and
+  the raw uid when there is no readable record. Status: open.
+- A82 (M2.6, 21 Sep): `firestore.indexes.json` gained `audit: object asc, at desc`. The
+  emulator does not enforce indexes, so no test would have caught its absence and the
+  timeline would have been empty only once deployed. Status: open.
+- A83 (M2.6, 21 Sep): an audit entry is refused unless the change it describes is
+  really happening in the same commit, checked by reading the target document's
+  `updatedAt` as it will be after the write. Without it a signed-in staff account could
+  append history that never happened, and a trail that can be written to freely answers
+  what somebody typed rather than what happened. Status: open.
+- A84 (M2.6, 21 Sep): a product's two prices and every custom line amount are now
+  checked by value in `firestore.rules`, whole paise and never above the ₹649 MRP, the
+  way a batch's costs already were. They are typed into a box and written straight to
+  Firestore with no callable in the way. The custom line list is capped at eight,
+  because rules cannot walk a longer one. Status: open.
+- A85 (M2.6, 21 Sep): ingredient and recipe writes, product creation, and the product
+  fields that are not money (name, HSN, type, veg, season, shipping rule, active, a
+  custom line's description) still write directly and are not audited. Only the writes
+  that offer undo go through the wrapper today. Status: open.
