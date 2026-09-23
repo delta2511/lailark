@@ -214,7 +214,7 @@ CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
       looking. Reproduce first, then fix. Done when: editing a cost on the batch detail
       screen shows the undo toast for its 8 seconds, tapping it restores the old value,
       and both the edit and the undo are in the timeline.
-- [ ] M2.15 [sonnet] (Shefin checks) A required field that blocks saving must be
+- [x] M2.15 [sonnet] (Shefin checks) A required field that blocks saving must be (5e881e4; Shefin checked on his phone 23 Sep)
       findable. Shefin could not complete a counter sale because the confirm-new-customer
       control had not been tapped, and nothing on the screen made that obvious. Brief
       §17.1. This is read at a busy counter with a customer waiting, so it is worth
