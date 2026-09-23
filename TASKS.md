@@ -1,7 +1,9 @@
 # Tasks
 
-Five milestones, each ending in a break where Shefin tests. The orchestrator works top to
-bottom, one task at a time, and does not stop between tasks. Model tag in brackets is
+Three milestones to launch (D29, 23 Sep 2026), each ending in a break where Shefin tests,
+then a Fast-follow list that is not started until Shefin says so after launch. The
+orchestrator works top to bottom, one task at a time. It stops between tasks only for a
+Shefin-checked task or a question (CLAUDE.md §4.4, D34). Model tag in brackets is
 the builder model; see `CLAUDE.md` §4. "Brief §n" is
 `docs/strategy/lailark-admin-flow-billing-brief.md`; "Flow §n" is
 `docs/strategy/lailark-in-site-and-sales-flow.md`.
@@ -124,7 +126,9 @@ to the admin on staging, `npm run deploy` works, the site still serves v0 exactl
 
 Branch `milestone-2-kitchen-and-counter`. Brief §23 steps 2 and 3. Shefin's break:
 batch 001 entered with its real numbers; a cash sale at the door produces a numbered
-bill PDF; day close works.
+bill PDF.
+
+M2.10 and M2.11 moved to Fast-follow (D29, 23 Sep 2026).
 
 - [x] M2.1 [opus] Ingredients and recipes. (732c4b5; Q7 answered 19 Sep, doc corrected) Admin screens under Products for
       `ingredients` and `recipes` (brief §18.1). Recipe engine in `shared/`: ingredient
@@ -188,27 +192,30 @@ bill PDF; day close works.
       open-batch payments, bill for in-stock and counter sales, refund and credit note
       shapes ready but unused. Series reset on 1 April tested with a fake clock. Done
       when: a counter sale produces a bill PDF viewable from the order screen.
-- [ ] M2.10 [sonnet] Offline counter drafts. Brief §7A.4: a sale started with no
-      network saves as a local draft (IndexedDB), finalises through
-      `createCounterSale` when back online, flags if stock ran out. Done when: Playwright
-      with network off saves a draft and it finalises when the network returns.
-- [ ] M2.11 [sonnet] Day close. Brief §7A.3: card on Today on any day with counter
-      sales, totals by method, jars by batch, cash counted, difference, the UPI-to-account
-      list. `dayCloses/{date}`. Done when: a day with two cash sales closes correctly.
 - [ ] M2.12 [sonnet] Milestone 2 test note, then stop.
 
 ---
 
-## Milestone 3: Online sales
+## Milestone 3: Launch
 
-Branch `milestone-3-online-sales`. Brief §23 steps 4 and 5. Shefin's break: buy a jar
-on the staging site with a Razorpay test card, see the bill on the order link; reserve a
-jar in an open batch; watch the half-fill approval land on Today.
+Branch `milestone-3-launch`. Replaces the old Milestones 3, 4 and 5 for launch (D29, 23
+Sep 2026). Brief §23 steps 4, 5, 6 and 12, cut to what going live needs. Batch 002 sells
+in stock after bottling; batch 003 is the first pre-order batch, so pre-order ships at
+launch (D30). Shefin's break: buy an in-stock jar on staging with a Razorpay test card
+and see the bill on the order link; book a jar in an open batch and watch the half-fill
+approval land on Today; pack and ship an order by India Post entry; record a refund;
+read the policy pages; walk a batch by hand from the script in the test note. Then
+production.
+
+Customer messages at launch are sent by hand (D32). Wherever a task below says a message
+is sent, it means: the drafted text is shown with a prefilled `wa.me` link per
+recipient, and the Owner or Kitchen ticks it sent. Nothing is sent by the system.
 
 **Needs from Shefin:** Razorpay test keys in Secret Manager on staging (the task prints
-the exact commands), Razorpay webhook URL registered in the test dashboard.
+the exact commands), Razorpay webhook URL registered in the test dashboard. Live keys
+and the live webhook before the production deploy.
 
-- [ ] M3.1 [sonnet] Site design system in Next.js. Tokens from Flow §10, the three
+- [ ] M3.1 [sonnet] (Shefin checks) Site design system in Next.js. Tokens from Flow §10, the three
       motions with `prefers-reduced-motion`, the jar-count marks component, layout,
       header with the lark mark, footer with the legal line and the Orders link. Done
       when: a Storybook-free demo route renders every primitive and Playwright checks no
@@ -219,14 +226,14 @@ the exact commands), Razorpay webhook URL registered in the test dashboard.
       a second opus subagent against the story doc §3 (held-back list) and §4 (voice).
       Done when: the review passes and Lighthouse mobile performance is above 85 on a
       throttled 4G profile.
-- [ ] M3.3 [sonnet] `/api/counts` function (brief §19.2): per product and per open
+- [ ] M3.3 [sonnet] (Shefin checks) `/api/counts` function (brief §19.2): per product and per open
       batch, cached 15 s at the CDN. Product pages `/pickles/<slug>` built from
       `products` at build time (exported JSON) with live counts fetched client-side,
       in-stock and open-batch cards per Flow §3, Legal Metrology fields (brief §20.3),
       shipping line per the switch, shelf-life stop hides Buy. Done when: the four hero
       pages render with counts from the emulator and degrade to "count unavailable"
       when the API is down.
-- [ ] M3.4 [sonnet] Batch pages. **D21c changes this task**: `/batch/<nnn>` exists only from bottling and is always a record, so there is no open-batch view here. An open batch is booked and watched on its product page (M3.3), which carries the live counts, the promise from brief §7.4 and the share link. `/batch/[nnn]` from `site/content/batches/<nnn>.json`
+- [ ] M3.4 [sonnet] (Shefin checks) Batch pages. **D21c changes this task**: `/batch/<nnn>` exists only from bottling and is always a record, so there is no open-batch view here. An open batch is booked and watched on its product page (M3.3), which carries the live counts, the promise from brief §7.4 and the share link. `/batch/[nnn]` from `site/content/batches/<nnn>.json`
       (the record) with the v0 batch 001 page as the template for the record view, and
       an open-batch view (bookable, paid, to half, ₹599, the promise from brief §7.4,
       no cancellation line). `001.json` seeded from the handoff. Done when: the built
@@ -242,18 +249,13 @@ the exact commands), Razorpay webhook URL registered in the test dashboard.
       address, pincode, email optional, consent ticks per brief §5), Razorpay Checkout
       script loaded only here. Done when: race test (two checkouts, one jar) and the
       hold expiry sweep pass; a test payment completes on staging.
-- [ ] M3.6 [opus] Razorpay webhook and reconciliation. HTTP function verifying the
-      signature, `webhookEvents` dedupe, `payment.captured` → hold becomes Paid, bill
-      or receipt issued (M2.9), order events written; `refund.processed` matched to an
-      order; scheduled 15-minute reconciliation for pending orders; daily settlement
-      pull to `settlements`. Brief §9.2, §21.1. Done when: replaying the same webhook
-      twice changes nothing the second time, and a payment with no webhook is recovered
-      by the reconciliation job.
-- [ ] M3.7 [sonnet] Razorpay QR at the counter and Payment Links. QR for the exact
-      amount shown in the Sell screen, closes the sale on webhook. Payment Link created
-      from the Sell screen for phone / WhatsApp / abroad orders, expiry from Settings
-      (24 h), jars held until expiry, order Awaiting payment. Done when: both routes
-      move a jar free → paid on staging and expiry releases it.
+- [ ] M3.6 [opus] Razorpay webhook and reconciliation, trimmed for launch (D29). HTTP
+      function verifying the signature, `webhookEvents` dedupe, `payment.captured` → hold
+      becomes Paid, bill or receipt issued (M2.9), order events written;
+      `refund.processed` matched to an order (M4.5 records it); scheduled 15-minute
+      reconciliation for pending orders. Brief §9.2, §21.1. The daily settlement pull is
+      fast-follow (M3.6b). Done when: replaying the same webhook twice changes nothing the
+      second time, and a payment with no webhook is recovered by the reconciliation job.
 - [ ] M3.8 [opus] Open batch mechanics end to end. Brief §7: 90% cap, per-person limit
       in the transaction, half-reached and full triggers to approvals (M2.5), 5-day and
       3-day clocks, booking closes at Cooking, surplus to in-stock at Bottled, share
@@ -261,79 +263,130 @@ the exact commands), Razorpay webhook URL registered in the test dashboard.
       the site listing the order and its documents. Done when: a seeded staging batch
       fills through the site and every customer-facing message is a pending approval,
       none sent.
-- [ ] M3.9 [sonnet] Orders screen in admin. Brief §17.5 groups, filters, search, order
+      Manual sending (D32): on "yes" in Today, the approval shows the drafted message
+      and one prefilled `wa.me` link per booked customer, each ticked when sent. The
+      approval closes when all are ticked or the Owner closes it.
+- [ ] M3.9 [sonnet] (Shefin checks) Orders screen in admin. Brief §17.5 groups, filters, search, order
       detail with lines, jar numbers, payment, documents, kitchen note, timeline.
       Actions that exist so far. Done when: every order created in M2 and M3 is
       findable and readable.
-- [ ] M3.10 [sonnet] Milestone 3 test note, then stop.
-
----
-
-## Milestone 4: Fulfilment and money
-
-Branch `milestone-4-fulfilment-and-money`. Brief §23 steps 6, 7, 8. Shefin's break:
-pack and ship a test order by India Post entry, raise and answer a Concern, record a
-refund three ways, see the Money screen and a monthly export.
-
-- [ ] M4.1 [sonnet] Packing and India Post. To pack list by batch, jar numbers assigned
+      Each order shows a prefilled `wa.me` link that sends the customer their private
+      order link with the bill (D32).
+- [ ] M4.1 [sonnet] (Shefin checks) Packing and India Post. To pack list by batch, jar numbers assigned
       in payment order, Packed with editable packing cost (default from Settings),
       India Post consignment number entry → Shipped, tracking link built from it,
       Delivered by hand. `shipments` collection. Brief §11.1, §11.3. Done when: an order
       walks To pack → Delivered as Kitchen.
+      Packing cost default is read from the settings document (the Settings screen is
+      fast-follow). On Shipped, the order shows the shipped message from brief §15.7
+      with a prefilled `wa.me` link for the Kitchen to send by hand (D32).
+- [ ] M4.5 [opus] Refund recording, trimmed for launch (D31). Brief §12.3, done from the
+      order screen (Concerns are fast-follow): record a refund made in the Razorpay
+      dashboard (matched from the `refund.processed` webhook in M3.6), by UPI with its
+      reference, or in cash with a note. Refund note or credit note document issued
+      (M2.9); jar returns to the count if not packed; the unreturned gateway fee is
+      recorded on the order for the batch P&L later. Hold-to-confirm on the record
+      button. No refund is started from the admin through the Razorpay API, and there is
+      no 6-month guard at launch (M4.5b). Done when: three refunds (dashboard, UPI, cash)
+      are recorded on staging and the documents exist.
+- [ ] M5.7 [opus] Policy pages: Orders (D2 wording), shipping, terms, privacy, contact
+      with grievance officer, each versioned in `policyVersions` and the version
+      recorded on every order. Copy reviewed against the story doc voice rules. Brief
+      §10.4, §20.4, §20.6. Done when: the pages are live on staging and linked from
+      the footer.
+- [ ] M5.9 [opus] Hardening, trimmed for launch (D29). App Check on callables and
+      Firestore, rate limits on checkout and counts, `maxInstances` audit, Firestore
+      scheduled backups and PITR enabled on production, uptime checks on `/`,
+      `/batch/001`, `/api/counts` alerting to Shefin's phone, budget alert doc. Brief
+      §22. The restore drill is fast-follow (M5.9b). Done when: the site and admin e2e
+      pass on staging with App Check enforced, backups and PITR show as on, and a test
+      uptime alert is configured to fire (Shefin confirms it arrived at the break).
+- [ ] M5.11 [sonnet] Launch checklist and Milestone 3 test note, then stop.
+      `docs/milestones/LAUNCH.md` from brief §23: what the build has ticked and what only
+      Shefin can tick (live Razorpay keys and webhook, production deploy, the first real
+      batch). `docs/milestones/MILESTONE-3-TEST.md` per CLAUDE.md §4.2, including a
+      step-by-step manual walkthrough on staging that stands in for the fast-follow
+      Playwright e2e (open a batch, sell at the counter, buy online, fill to half,
+      approve and send by hand, cook, bottle, pack, ship, deliver, refund one), and the
+      manual workarounds from D33. Print the production deploy commands; do not run
+      them. Then stop.
+
+---
+
+## Fast-follow: after launch
+
+Not in the launch scope (D29). **Do not start any task here until Shefin says so after
+launch.** They are grouped into milestones then. Each task keeps its original text;
+"Until then" is what Shefin and Sumayya do by hand (D33). The old M3.10 and M4.11 test
+notes are folded into M5.11.
+
+- [ ] M2.10 [sonnet] Offline counter drafts. Brief §7A.4: a sale started with no
+      network saves as a local draft (IndexedDB), finalises through
+      `createCounterSale` when back online, flags if stock ran out. Done when: Playwright
+      with network off saves a draft and it finalises when the network returns.
+      Until then: sell when there is signal, or note the sale on paper and enter it later.
+- [ ] M2.11 [sonnet] Day close. Brief §7A.3: card on Today on any day with counter
+      sales, totals by method, jars by batch, cash counted, difference, the UPI-to-account
+      list. `dayCloses/{date}`. Done when: a day with two cash sales closes correctly.
+      Until then: count the cash against the Orders screen at the end of the day.
+- [ ] M3.6b [sonnet] Daily settlement pull to `settlements` (brief §9.2, §21.1), split
+      out of M3.6. Until then: check settlements in the Razorpay dashboard.
+- [ ] M3.7 [sonnet] Razorpay QR at the counter and Payment Links. QR for the exact
+      amount shown in the Sell screen, closes the sale on webhook. Payment Link created
+      from the Sell screen for phone / WhatsApp / abroad orders, expiry from Settings
+      (24 h), jars held until expiry, order Awaiting payment. Done when: both routes
+      move a jar free → paid on staging and expiry releases it.
+      Until then: the counter takes cash or UPI to Lailark's account (M2.8); phone,
+      WhatsApp and abroad customers are sent to the site. The Razorpay QR half of D10 waits.
 - [ ] M4.2 [opus] Shiprocket. Booking from the order screen through the API, label to
       Storage, cost filled in, tracking webhook → shipment events → order state,
       weekly serviceable pincode refresh into `settings/pincodes`. Default courier
       setting. Keys in Secret Manager. Done when: a mocked Shiprocket walks an order
       Packed → Delivered; the real API is exercised once on staging when keys exist
       (else marked pending in the test note).
+      Until then: India Post only (M4.1).
 - [ ] M4.3 [sonnet] Packing list per batch as a shareable image and printable page.
       Done when: the image for batch 001 downloads from the batch screen.
+      Until then: read the packing list off the Orders screen.
 - [ ] M4.4 [opus] Concerns. `concerns` collection and screen per brief §12.1, §17.6:
       every type, clock, due end of day, 6 pm second nudge (push, since WhatsApp
       arrives in M5), outcomes with money. Raised by: yield shortfall (M2.3), technical
       payment cases (M3.6), delivery problems (M4.1, M4.2), the 30-day and 140-day
       checks (D4), RTO. Missed clocks counted. Done when: each raiser creates the right
       Concern on the emulator and Today shows them oldest first.
-- [ ] M4.5 [opus] Refund recording. Brief §12.3: Razorpay refund through the API with
-      the 6-month guard ("send by UPI instead"), UPI reference entry, cash note; refund
-      note or credit note document issued (M2.9); jar returns to the count if not
-      packed; P&L records the unreturned gateway fee. Hold-to-confirm on the Razorpay
-      button. Done when: three refunds are recorded on staging and the documents
-      exist.
+      Until then: problems are handled on WhatsApp by hand; reconciliation flags
+      payment problems on the order; the D4 30-day and 140-day checks are done by eye on
+      the batch list.
+- [ ] M4.5b [opus] Refund through the Razorpay API from the order screen, with the
+      6-month guard ("send by UPI instead") and hold-to-confirm, split out of M4.5.
+      Until then: refund in the Razorpay dashboard and record it (M4.5).
 - [ ] M4.6 [sonnet] RTO reship at customer's cost: Concern outcome "reship" creates a
       payment link for the shipping amount and a new shipment on payment; returned jar
       inspection result recorded, write-off if needed. Brief §11.4. Done when: the
       flow completes on the emulator.
+      Until then: each RTO is handled by hand.
 - [ ] M4.7 [sonnet] Scheduled checks: hold sweep, shelf-life stop warning at 14 days,
       in-stock order not packed by noon of dispatch day, production clock at one day
       left, 30-day and 140-day batch checks, day close reminder. Brief §16. Off switch
       for scheduled jobs in Settings. Done when: each job is unit tested with a fake
       clock.
+      Until then: a short daily look at Today and Orders. The hold sweep already ships
+      in M3.5.
 - [ ] M4.8 [sonnet] Batch P&L. Trigger keeping `batches/{nnn}.pnl` current from
       orders, refunds, shipments and batch costs (brief §14.1, §14.2); batch screen P&L
       section; the all-batches one-line-each view. Done when: the batch 001 P&L matches
       a hand calculation in the test.
+      Until then: a spreadsheet per batch.
 - [ ] M4.9 [opus] Money screen and monthly export. Brief §13.5, §17.10: bills, credit
       notes, receipts, refunds, day closes, advances per batch, settlements with
       reconciliation flags, state-wise register, financial-year turnover against ₹12
       lakh. Monthly export as an xlsx plus a zip of PDFs, produced by a function into
       Storage. Owner and Viewer only. Done when: a sample month exports and opens.
+      Until then: a manual ledger while GST is off and turnover is under ₹12 lakh.
 - [ ] M4.10 [sonnet] Customers screen. Brief §17.7 including consent history, share
       link performance, remove from marketing, export and delete data (bills retained).
       Done when: a customer is exported and deleted on the emulator with bills kept.
-- [ ] M4.11 [sonnet] Milestone 4 test note, then stop.
-
----
-
-## Milestone 5: Agent, publishing, launch
-
-Branch `milestone-5-agent-and-launch`. Brief §23 steps 9 to 12. Shefin's break: talk
-to the agent on the WhatsApp test number, approve a half-fill message and see it
-arrive, publish `/batch/002` from the admin, walk a whole batch on staging.
-
-**Needs from Shefin:** Meta app and test number credentials, OpenRouter key, GitHub
-token with contents scope for the publish workflow, Shiprocket account if ready.
-
+      Until then: data export or delete requests are handled in the Firebase console.
 - [ ] M5.1 [opus] WhatsApp Cloud API layer. Webhook function (verify token, signature,
       `webhookEvents` dedupe, store inbound in `conversations/{phone}/messages`, 200
       fast, enqueue a task). Send helpers for text, template with parameters, document
@@ -341,6 +394,7 @@ token with contents scope for the publish workflow, Shiprocket account if ready.
       their parameters, plus a script that prints them for submission to Meta. PII
       redaction in logs. Done when: a mocked inbound message round-trips and a template
       send is asserted.
+      Until then: Shefin and Sumayya answer customers on WhatsApp Business themselves.
 - [ ] M5.2 [opus] Agent worker. Task-queue function running the agent on each inbound
       message: model call through OpenRouter, tools (look up the customer's orders and
       batches, tell the batch stage in words using the timing text setting, change
@@ -350,17 +404,21 @@ token with contents scope for the publish workflow, Shiprocket account if ready.
       promises a date, never mentions refunds unprompted, never claims to be a person.
       Eval set of 30 conversations with expected behaviour, run in CI. Done when: the
       eval passes.
+      Until then: same as M5.1.
 - [ ] M5.3 [sonnet] Approval-gated sends. Approvals (half, full, batch open, back in
       stock, kitchen photo updates, delay/shortage) send their template on "yes";
       automatic templates (receipt, bill, packed, shipped, delivered, check-ins, ready
       for collection, address needed, refund recorded) fire from their events. Brief
       §15.4, §16. Done when: every row of the notifications matrix is covered by a
       test.
+      Until then: approve on Today, then send by hand (D32).
 - [ ] M5.4 [sonnet] Follow-ups and check-ins per brief §15.5, once each, gentle opt-in
       ask once. Done when: scheduled tests pass.
+      Until then: none.
 - [ ] M5.5 [sonnet] Push to admin phones through Cloud Messaging for every Owner and
       Kitchen row of the matrix. Done when: a push arrives on the installed PWA on
       staging.
+      Until then: check Today.
 - [ ] M5.6 [opus] Batch page publishing (ST6). Admin Publish button → function commits
       `site/content/batches/<nnn>.json` via the GitHub API → workflow `publish-batch.yml`
       builds `site/` and deploys `hosting:customer` to production → function polls the
@@ -368,11 +426,8 @@ token with contents scope for the publish workflow, Shiprocket account if ready.
       generated from the same record. Done when: `/batch/002` from a staging record
       matches its label data character for character, percentages included (D28: batch
       001's page has none, batch 002 onward has them).
-- [ ] M5.7 [opus] Policy pages: Orders (D2 wording), shipping, terms, privacy, contact
-      with grievance officer, each versioned in `policyVersions` and the version
-      recorded on every order. Copy reviewed against the story doc voice rules. Brief
-      §10.4, §20.4, §20.6. Done when: the pages are live on staging and linked from
-      the footer.
+      Until then: add the batch record JSON to `site/content/batches/` and deploy with
+      `npm run deploy` (Claude Code can do this as a small task on request).
 - [ ] M5.8 [sonnet] Settings screen complete per brief §17.11: GST switch with GSTIN
       and effective date (bills switch format from that date, tested), shipping switch
       with the card text changing, discount cap, default courier, packing cost, cut-off
@@ -381,15 +436,11 @@ token with contents scope for the publish workflow, Shiprocket account if ready.
       switch. The Owner's "Kitchen may edit ingredients and recipes" switch (D22).
       Every change audited. Done when: flipping GST on produces a correct tax
       invoice on the emulator and flipping it off produces a plain bill.
-- [ ] M5.9 [opus] Hardening. App Check on callables and Firestore, rate limits on
-      checkout and counts, `maxInstances` audit, Firestore scheduled backups and PITR
-      enabled with a documented restore drill run once on staging, uptime checks on
-      `/`, `/batch/001`, `/api/counts` alerting to Shefin's phone, budget alert doc.
-      Brief §22. Done when: the restore drill is documented with its output.
+      Until then: defaults in the settings document, GST off.
+- [ ] M5.9b [opus] Restore drill run once on staging and documented with its output
+      (brief §22), split out of M5.9. Until then: backups and PITR are on, untested.
 - [ ] M5.10 [sonnet] Full staging walkthrough as a Playwright e2e: open a batch, sell
       at the counter, buy online, fill to half, approve, cook, bottle, pack, ship,
       deliver, refund one, close the month. Brief §23 step 12. Done when: it passes on
       staging.
-- [ ] M5.11 [sonnet] Launch checklist (brief §23) as `docs/milestones/LAUNCH.md` with
-      what is ticked by the build and what only Shefin can tick, and the Milestone 5
-      test note. Then stop.
+      Until then: Shefin walks a batch by hand from the Milestone 3 test note.

@@ -92,16 +92,28 @@ updates the ledgers, and commits.
    The builder gets: the task text, the brief sections it cites, the relevant part of
    `DECISIONS.md`, and section 3 of this file. It reports back what it built, what it
    tested, and any `BLOCKED:` or `ASSUMED:` lines.
-3. **Agent test.** Spawn a **fresh** tester subagent (`[sonnet]`, or `[opus]` for money
-   and rules) that has not seen the builder's transcript. It gets the task's done-when
-   and tries to break it: runs the build, lint, unit tests, rules tests against the
-   emulator, opens pages in headless Chromium and checks console errors, and for
-   functions calls them against the emulator. It reports PASS or a list of failures.
+3. **Test.** Which kind depends on the task (D34):
+   - **`[opus]` tasks and any task touching money, rules, transactions, auth or
+     webhooks: agent test.** Spawn a **fresh** tester subagent (`[sonnet]`, or `[opus]`
+     for money and rules) that has not seen the builder's transcript. It gets the task's
+     done-when and tries to break it: runs the build, lint, unit tests, rules tests
+     against the emulator, opens pages in headless Chromium and checks console errors,
+     and for functions calls them against the emulator. It reports PASS or a list of
+     failures. No stop for Shefin; carry on to the next task.
+   - **Shefin-checked tasks: Shefin tests instead of a tester subagent.** These are the
+     `[sonnet]` tasks whose result is a screen or page he can look at. In the Launch
+     milestone: M3.1, M3.3, M3.4, M3.9, M4.1. The orchestrator itself runs `npm run
+     build`, lint and `npm test` (no subagent), then **stops** and prints a check note
+     of at most ten lines: how to open it (command, URL, which phone number to sign in
+     with), what to tap, and what to look for. Shefin replies "ok" or with fixes. Fixes
+     go to the builder (step 4). Commit only after his "ok".
 4. **Fix loop.** Failures go back to the builder, at most three rounds. If still
    failing, mark the task `⚠ stuck` in `TASKS.md` with the failure, and move on to the
    next task that does not depend on it.
 5. **Ledgers.** Every `ASSUMED:` line goes into `DECISIONS.md` under "Assumptions made
-   during the build", with the task id. Every `BLOCKED:` line goes into `QUESTIONS.md`.
+   during the build", with the task id. Every `BLOCKED:` line on a never-assume item
+   (section 5) is asked straight away (section 4.4), then logged in `QUESTIONS.md` with
+   its answer.
 6. **Commit** on the milestone branch. One commit per finished task. Message format in
    section 6.
 7. Tick the task in `TASKS.md` (`[x]`, with the commit hash). Commit that too.
@@ -123,8 +135,27 @@ When every task in a milestone is ticked or marked stuck:
    into `main` and tag it, and the summary line for the tag. Only after he confirms the
    merge, create the next milestone branch and carry on.
 
-Do not stop between tasks. Do not ask Shefin anything between milestones except through
-`QUESTIONS.md`. The whole point is five breaks, not fifty.
+Stop between tasks only for a Shefin-checked task (4.1 step 3) or a question (4.4).
+Otherwise keep going. Since D29 there are two milestone breaks left before launch: the
+end of Milestone 2 and the end of Milestone 3 (Launch). Never start a task from the
+Fast-follow section of `TASKS.md` unless Shefin says so.
+
+### 4.4 Shefin in the loop (D34)
+
+- **Questions are asked when they come up, not parked.** When a builder reports
+  `BLOCKED:` on a never-assume item, stop and ask Shefin in one message: the question,
+  why it matters, the options, and your recommended answer. Record his answer as a new
+  `D` entry in `DECISIONS.md` and as answered in `QUESTIONS.md`, then resume the task.
+  Only if he says "park it" (or does not reply in the session) fall back to a
+  `TODO(Qn)` placeholder as in section 5.
+- **Shefin may interrupt at any time** to look at something or give input. Treat what
+  he says as a decision (log it as a `D` entry if it changes behaviour), then carry on
+  with the current task.
+- **Fresh session per stop.** At every stop, end the message with: "Run /clear, then
+  say next." On "next" in a fresh session: read this file, find the first unticked task
+  in `TASKS.md`, read `DECISIONS.md`, check `git status` and the last commit, and pick
+  up where the work left off (a task built but not yet committed is committed after
+  Shefin's "ok").
 
 ### 4.3 Subagent hygiene
 
@@ -153,16 +184,15 @@ customer reads that is not already drafted in the docs, prices, limits, who may 
 message to a customer, the batch lifecycle transitions, URL paths on the customer site
 (they are permanent), legal or compliance wording, and anything that contradicts a doc.
 
-When a task is blocked on a question, build the rest of it with a clearly named
-placeholder (`TODO(Q7)` referencing the question number), keep going, and note it in the
-task's tick.
+When a task is blocked on a question, ask Shefin first (4.4). If he parks it, build the
+rest of it with a clearly named placeholder (`TODO(Q7)` referencing the question
+number), keep going, and note it in the task's tick.
 
 ## 6. Git
 
 - `main` is always deployable. Nothing is committed straight to `main`.
 - One branch per milestone: `milestone-1-foundations`, `milestone-2-kitchen-and-counter`,
-  `milestone-3-online-sales`, `milestone-4-fulfilment-and-money`,
-  `milestone-5-agent-and-launch`.
+  `milestone-3-launch` (D29). Fast-follow branches are named when Shefin starts them.
 - One commit per finished task, on the milestone branch. Format:
 
   ```
