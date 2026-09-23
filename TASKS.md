@@ -207,7 +207,7 @@ CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
       feed the batch P&L, so this is money. Done when: a recipe with two main lines
       takes two independent weights and two independent costs, a test covers exactly
       that shape, and any existing `"main"` line is accounted for rather than orphaned.
-- [ ] M2.14 [sonnet] The undo toast. Shefin edited a batch cost, saw the change reach
+- [x] M2.14 [sonnet] The undo toast. (4d5dad5; A79 superseded) Shefin edited a batch cost, saw the change reach
       the timeline, and never saw an undo button. M2.6's done-when says editing a field,
       undoing it and seeing both in the timeline works, and its tests pass, so either
       the toast is not firing on these fields or it is firing somewhere he was not
