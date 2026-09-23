@@ -247,6 +247,19 @@ CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
       documents M2.13 established. Done when: batch 001's sourcing step asks for prawns
       and for dates by name, both land on their own line documents, and a recipe with one
       main ingredient behaves exactly as it does today.
+- [ ] M2.20 [opus] Value checks on the per-ingredient actuals (D42). Added by the
+      orchestrator on 23 Sep from the M2.14 tester's finding. `batches/{ref}/lines/{lineId}`
+      allows create and update on `isStaff()` alone and never looks at the number, so
+      `qtyActual` and `costActual` are guarded by the screen only: a seeding script, a
+      function with a bug or a signed-in staff account writing straight to Firestore can
+      store a negative, a fractional paise or an absurd cost. A84 already checks the
+      batch's own costs and a product's two prices in rules this way; the line documents
+      were missed. Also: `rupeesToPaise` silently rounds, so `12.345` saves as `1235`
+      rather than being refused. These two numbers are the largest inputs to the batch
+      P&L, so this is money. Done when: rules tests prove a negative, a fractional and an
+      over-ceiling cost are all refused server side, `12.345` is refused rather than
+      rounded, every value the screen legitimately writes today still passes, and the
+      existing actuals tests still pass.
 
 ---
 
