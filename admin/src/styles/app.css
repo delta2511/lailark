@@ -1047,3 +1047,34 @@ textarea {
   flex-direction: column;
   gap: var(--space-2);
 }
+
+/*
+ * M2.15: what the save button is waiting on, named. Same border-left-on-
+ * hairline notice language as `.notice-line` (never rust, never a red
+ * alarm), so a busy counter reads it as information, not a warning.
+ */
+.outstanding {
+  border-left: 3px solid var(--ink);
+  background: var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.outstanding-list {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/*
+ * A tap target the size of any other button on the screen (D-house rule:
+ * every button is thumb sized), just quiet, so a long list of outstanding
+ * items reads as a list of things to do, not a wall of alarms.
+ */
+.outstanding-item {
+  text-align: left;
+  font-size: var(--font-size-small);
+}

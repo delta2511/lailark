@@ -51,6 +51,7 @@ import {
   type NearMiss,
   type SellableBatch,
 } from "./data";
+import { canSaveFrom, computeOutstanding } from "./saveGate";
 
 /* -------------------------------------------------------------------------- */
 /* Small pieces                                                               */
@@ -69,6 +70,7 @@ function ChipRow<T extends string>(props: {
         <button
           key={option.value}
           type="button"
+          id={`${props.testId}-${option.value}`}
           class={`chip${props.value === option.value ? " chip-on" : ""}`}
           aria-pressed={props.value === option.value}
           data-testid={`${props.testId}-${option.value}`}
@@ -292,10 +294,6 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
   const priceProblem =
     ownerPrice !== null && (ownerPrice < 1 || ownerPrice > MRP_PAISE) ? SELL.priceAboveMrp : null;
 
-  const lineReady = isCustom
-    ? customDescription.trim() !== "" && customAmount !== null && customAmount >= 1
-    : batch !== null;
-
   const addressReady =
     fulfilment !== "ship" ||
     (addressName.trim() !== "" &&
@@ -305,16 +303,86 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
       addressState.trim() !== "" &&
       /^[1-9]\d{5}$/.test(addressPincode.trim()));
 
-  const canSave =
-    !saving &&
-    phoneE164 !== null &&
-    qtyOk &&
-    lineReady &&
-    addressReady &&
-    discountProblem === null &&
-    priceProblem === null &&
-    total >= 0 &&
-    (!needsName || shownName.trim() !== "");
+  /**
+   * M2.15: `outstanding` is the one list of reasons this sale cannot be
+   * saved yet; `canSave` is derived from it (`canSaveFrom` below) rather
+   * than written next to it as a second, separately maintained boolean.
+   * Two independent expressions of the same nine preconditions had already
+   * drifted once: a Kitchen custom line with nothing set up in Products
+   * made `lineReady` false (so `canSave` was correctly disabled) without
+   * `outstanding` ever saying why. See `saveGate.ts` for the full account
+   * and the logic itself, which is exercised on its own in
+   * `saveGate.test.ts`.
+   */
+  const outstanding = useMemo(
+    () =>
+      computeOutstanding({
+        phoneText,
+        phoneProblem,
+        phoneE164,
+        needsName,
+        shownName,
+        askingNewCustomer,
+        isCustom,
+        mayChangePrice: rights.mayChangePrice,
+        customDescription,
+        customAmount,
+        offeredCustomLinesCount: offeredCustomLines.length,
+        hasBatch: batch !== null,
+        qtyOk,
+        priceProblem,
+        discountProblem,
+        total,
+        fulfilment,
+        addressReady,
+        addressName,
+        addressPhone,
+        addressLines,
+        addressCity,
+        addressState,
+      }),
+    [
+      phoneText,
+      phoneProblem,
+      phoneE164,
+      needsName,
+      shownName,
+      askingNewCustomer,
+      isCustom,
+      rights.mayChangePrice,
+      customDescription,
+      customAmount,
+      offeredCustomLines.length,
+      batch,
+      qtyOk,
+      priceProblem,
+      discountProblem,
+      total,
+      fulfilment,
+      addressReady,
+      addressName,
+      addressPhone,
+      addressLines,
+      addressCity,
+      addressState,
+    ],
+  );
+
+  const canSave = canSaveFrom(outstanding, saving);
+
+  /**
+   * Scrolls the outstanding field into the middle of the screen and focuses
+   * it, so a tap on the outstanding list is a tap that goes somewhere, not
+   * just a longer sentence. A phone-sized viewport is the case this is for:
+   * the field is very often off the bottom of the screen, or (the confirm
+   * button) off the top of it.
+   */
+  function jumpTo(targetId: string): void {
+    const el = document.getElementById(targetId);
+    if (el === null) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (el instanceof HTMLElement) el.focus({ preventScroll: true });
+  }
 
   function reset(): void {
     // The next customer is a different sale, so it gets a different key.
@@ -526,6 +594,11 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
                 setName((event.target as HTMLInputElement).value);
               }}
             />
+            {needsName && shownName.trim() === "" ? (
+              <p class="field-help" data-testid="name-needed">
+                {SELL.newCustomerNeedsName}
+              </p>
+            ) : null}
           </>
         ) : null}
 
@@ -563,6 +636,7 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
             )}
             <button
               type="button"
+              id="confirm-new-customer"
               data-testid="confirm-new-customer"
               disabled={saving || shownName.trim() === ""}
               onClick={() => void save(true)}
@@ -601,6 +675,11 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
             </option>
           ))}
         </select>
+        {productSlug === "" ? (
+          <p class="field-help" data-testid="product-needed">
+            {SELL.outstandingProduct}
+          </p>
+        ) : null}
 
         {productSlug !== "" ? (
           <ChipRow
@@ -653,7 +732,7 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
               ) : (
                 <>
                   <p class="field-help">{SELL.customLinePick}</p>
-                  <div class="tab-row" data-testid="custom-line-options">
+                  <div class="tab-row" id="custom-line-options" data-testid="custom-line-options">
                     {offeredCustomLines.map((line) => (
                       <button
                         key={line.description}
@@ -672,6 +751,11 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
                       </button>
                     ))}
                   </div>
+                  {customDescription.trim() === "" ? (
+                    <p class="field-help" data-testid="custom-line-needed">
+                      {SELL.customLineNeedsDescription}
+                    </p>
+                  ) : null}
                 </>
               )
             ) : (
@@ -685,6 +769,11 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
                   value={customDescription}
                   onInput={(event) => setCustomDescription((event.target as HTMLInputElement).value)}
                 />
+                {customDescription.trim() === "" ? (
+                  <p class="field-help" data-testid="custom-description-needed">
+                    {SELL.customLineNeedsDescription}
+                  </p>
+                ) : null}
                 <label for="custom-amount">{SELL.customLineAmount}</label>
                 <input
                   id="custom-amount"
@@ -695,6 +784,11 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
                   value={customAmountText}
                   onInput={(event) => setCustomAmountText((event.target as HTMLInputElement).value)}
                 />
+                {customDescription.trim() !== "" && (customAmount === null || customAmount < 1) ? (
+                  <p class="field-help" data-testid="custom-amount-needed">
+                    {SELL.customLineNeedsAmount}
+                  </p>
+                ) : null}
               </>
             )}
 
@@ -830,6 +924,11 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
               value={addressName}
               onInput={(event) => setAddressName((event.target as HTMLInputElement).value)}
             />
+            {addressName.trim() === "" ? (
+              <p class="field-help" data-testid="address-name-needed">
+                {SELL.outstandingAddressName}
+              </p>
+            ) : null}
             <label for="address-phone">{SELL.addressPhone}</label>
             <input
               id="address-phone"
@@ -840,6 +939,11 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
               value={addressPhone}
               onInput={(event) => setAddressPhone((event.target as HTMLInputElement).value)}
             />
+            {!parseIndianMobile(addressPhone).ok ? (
+              <p class="field-help" data-testid="address-phone-needed">
+                {SELL.outstandingAddressPhone}
+              </p>
+            ) : null}
             <label for="address-lines">{SELL.addressLines}</label>
             <textarea
               id="address-lines"
@@ -850,6 +954,11 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
               onInput={(event) => setAddressLines((event.target as HTMLTextAreaElement).value)}
             />
             <p class="field-help">{SELL.addressLinesHelp}</p>
+            {addressLines.trim() === "" ? (
+              <p class="field-help" data-testid="address-lines-needed">
+                {SELL.outstandingAddressLines}
+              </p>
+            ) : null}
             <label for="address-city">{SELL.addressCity}</label>
             <input
               id="address-city"
@@ -859,6 +968,11 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
               value={addressCity}
               onInput={(event) => setAddressCity((event.target as HTMLInputElement).value)}
             />
+            {addressCity.trim() === "" ? (
+              <p class="field-help" data-testid="address-city-needed">
+                {SELL.outstandingAddressCity}
+              </p>
+            ) : null}
             <label for="address-state">{SELL.addressState}</label>
             <input
               id="address-state"
@@ -868,6 +982,11 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
               value={addressState}
               onInput={(event) => setAddressState((event.target as HTMLInputElement).value)}
             />
+            {addressState.trim() === "" ? (
+              <p class="field-help" data-testid="address-state-needed">
+                {SELL.outstandingAddressState}
+              </p>
+            ) : null}
             <label for="address-pincode">{SELL.addressPincode}</label>
             <input
               id="address-pincode"
@@ -878,6 +997,11 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
               value={addressPincode}
               onInput={(event) => setAddressPincode((event.target as HTMLInputElement).value)}
             />
+            {!/^[1-9]\d{5}$/.test(addressPincode.trim()) ? (
+              <p class="field-help" data-testid="address-pincode-needed">
+                {SELL.outstandingAddressPincode}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </section>
@@ -978,6 +1102,32 @@ export function NewSale({ session, onSold }: Props): JSX.Element {
             >
               {SELL.overrideLimit}
             </button>
+          </div>
+        ) : null}
+
+        {/*
+         * M2.15: the save button stopping dead was the whole problem.
+         * Everything `canSave` is waiting on, named, each one a tap to
+         * where it lives on the screen. Brief §17.1, no red alarm: the same
+         * field-help voice and quiet button as the rest of the screen.
+         */}
+        {!saving && outstanding.length > 0 ? (
+          <div class="outstanding" data-testid="outstanding">
+            <p class="field-help">{SELL.outstandingHeading}</p>
+            <ul class="outstanding-list">
+              {outstanding.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    class="quiet outstanding-item"
+                    data-testid={`outstanding-${item.id}`}
+                    onClick={() => jumpTo(item.targetId)}
+                  >
+                    {item.message}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
 

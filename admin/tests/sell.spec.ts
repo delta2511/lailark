@@ -8,6 +8,7 @@ import {
   OWNER_PHONE,
   VIEWER_PHONE,
   acceptFixedOtp,
+  deleteAuditFor,
   deleteDocument,
   ensureAdminUser,
   queryByField,
@@ -156,13 +157,25 @@ test.afterEach(async () => {
   // Orders take no client write at all (`firestore.rules`), so nothing in the
   // app can clear them; the admin bypass can, and a test that left them would
   // be the next test's history.
+  //
+  // `audit` is append-only and deleting a parent does not cascade into it
+  // (M2.14), so every object this file writes an audit trail for is cleaned
+  // by object path too: otherwise a second run against the same emulator
+  // finds the last run's entries still sitting under the same batch or
+  // customer and a `toHaveLength(1)` assertion sees two.
   for (const phone of ALL_CUSTOMERS) {
     for (const order of await queryByField("orders", "customerPhone", phone)) {
-      await deleteDocument(`orders/${order.number as string}`);
+      const orderId = order.number as string;
+      await deleteDocument(`orders/${orderId}`);
+      await deleteAuditFor(`orders/${orderId}`);
     }
     await deleteDocument(`customers/${phone}`);
+    await deleteAuditFor(`customers/${phone}`);
   }
-  for (const ref of ALL_REFS) await deleteDocument(`batches/${ref}`);
+  for (const ref of ALL_REFS) {
+    await deleteDocument(`batches/${ref}`);
+    await deleteAuditFor(`batches/${ref}`);
+  }
   await deleteDocument(`products/${PRODUCT}`);
   await deleteDocument("settings/discountCap");
 });
@@ -585,4 +598,88 @@ test("Sell draws no console error, paints no rust on a button or heading, and fi
     const box = await buttons.nth(i).boundingBox();
     if (box) expect(box.height, `button ${i} height`).toBeGreaterThanOrEqual(48);
   }
+});
+
+/* -------------------------------------------------------------------------- */
+/* M2.15: a required field that blocks saving must be findable                */
+/* -------------------------------------------------------------------------- */
+
+test("on a phone, a sale blocked on the unconfirmed new number disables Save and jumps to the control that unblocks it", async ({
+  page,
+}) => {
+  await seedInStock(REF_NEAR, 3);
+
+  // The screen Shefin hit this on: a phone, not a laptop, with the form
+  // scrolled down to Save when the near-miss check lands the confirm step
+  // back up at the top, in the Customer section.
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signIn(page, KITCHEN_PHONE);
+  await openSell(page);
+
+  await fillJarSale(page, NEW_PERSON, REF_NEAR);
+  await page.getByTestId("sale-name").fill("New person");
+  await page.getByTestId("save-sale").click();
+
+  await expect(page.getByTestId("near-misses")).toBeVisible();
+
+  // This is the bug Shefin hit: before this fix, `canSave` did not know
+  // about `askingNewCustomer`, so Save stayed live and tapping it again
+  // just repeated the same silent refusal. Now it stops being a dead end.
+  await expect(page.getByTestId("save-sale")).toBeDisabled();
+
+  // The confirm control the sale is waiting on is genuinely off the top of
+  // this phone's screen, because Save scrolled the page to the bottom to
+  // be tapped and the confirm step appeared back at the top.
+  const confirmControl = page.getByTestId("confirm-new-customer");
+  await expect(confirmControl).not.toBeInViewport();
+
+  // What is blocking the sale is named next to the save button, not just a
+  // greyed-out control.
+  const outstandingConfirm = page.getByTestId("outstanding-confirm");
+  await expect(outstandingConfirm).toBeVisible();
+  await expect(outstandingConfirm).toHaveText(SELL.outstandingConfirm);
+
+  // Tapping it takes the person to the control and focuses it.
+  await outstandingConfirm.click();
+  await expect(confirmControl).toBeInViewport();
+  await expect(confirmControl).toBeFocused();
+
+  await confirmControl.click();
+  await expect(page.getByTestId("sale-done")).toBeVisible();
+});
+
+test("on a phone, an empty form names every outstanding field and jumps to each on tap", async ({ page }) => {
+  await seedInStock(REF_CAP, 3);
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signIn(page, KITCHEN_PHONE);
+  await openSell(page);
+
+  // Nothing is filled in yet: Save is dead on arrival and the panel above
+  // it should say so, one line per outstanding thing.
+  await expect(page.getByTestId("save-sale")).toBeDisabled();
+  await expect(page.getByTestId("outstanding-phone")).toHaveText(SELL.outstandingPhone);
+  await expect(page.getByTestId("outstanding-line")).toHaveText(SELL.outstandingProduct);
+  await expect(page.getByTestId("outstanding-qty")).toHaveCount(0); // qty starts at 1, already valid
+
+  const phoneInput = page.getByTestId("sale-phone");
+  await expect(phoneInput).not.toBeFocused();
+  await page.getByTestId("outstanding-phone").click();
+  await expect(phoneInput).toBeFocused();
+
+  // Filling the phone and picking a customer, product and batch clears
+  // those two lines and leaves the ship-address one once "Ship" is picked.
+  await fillJarSale(page, CAP_CUSTOMER, REF_CAP);
+  await expect(page.getByTestId("outstanding-line")).toHaveCount(0);
+
+  await page.getByTestId("sale-fulfilment-ship").click();
+  await expect(page.getByTestId("outstanding-address")).toHaveText(SELL.outstandingAddressName);
+
+  const addressNameInput = page.getByTestId("address-name");
+  await expect(addressNameInput).not.toBeFocused();
+  await page.getByTestId("outstanding-address").click();
+  await expect(addressNameInput).toBeFocused();
+
+  await page.getByTestId("address-name").fill("Reception");
+  await expect(page.getByTestId("outstanding-address")).toHaveText(SELL.outstandingAddressPhone);
 });

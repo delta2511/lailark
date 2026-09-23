@@ -671,6 +671,27 @@ export const SELL = {
 
   /* ---- who may be here at all, brief 17.12 ---- */
   viewerCannotSell: "A Viewer can look at everything and sell nothing.",
+
+  /**
+   * M2.15: the save button stops being a dead end. Every reason a sale
+   * cannot be saved yet, named plainly, each one a tap to the field it
+   * belongs to. Brief §17.1: no red alarm, the same field-help voice as the
+   * rest of the screen.
+   */
+  outstandingHeading: "Before this can be saved:",
+  outstandingPhone: "Add the WhatsApp number.",
+  outstandingName: "Add their name.",
+  outstandingConfirm: "Say whether this is really a new number.",
+  outstandingProduct: "Choose a product and a batch.",
+  outstandingCustomLineNone:
+    "Nothing is set up for a custom line here. Choose a jar instead, or ask Shefin to add one in Products.",
+  outstandingAddressName: "Add the name on the address.",
+  outstandingAddressPhone: "Add a phone for the delivery.",
+  outstandingAddressLines: "Add the address.",
+  outstandingAddressCity: "Add the town or city.",
+  outstandingAddressState: "Add the state.",
+  outstandingAddressPincode: "Add a six digit pincode.",
+  outstandingTotal: "The discount cannot bring the total below zero.",
 } as const;
 
 /** Brief 7A.1 step 4. The screen's own wording for each mode. */
