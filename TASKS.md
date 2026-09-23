@@ -192,7 +192,7 @@ M2.10 and M2.11 moved to Fast-follow (D29, 23 Sep 2026).
       open-batch payments, bill for in-stock and counter sales, refund and credit note
       shapes ready but unused. Series reset on 1 April tested with a fake clock. Done
       when: a counter sale produces a bill PDF viewable from the order screen.
-- [x] M2.12 [sonnet] Milestone 2 test note, then stop. (pending)
+- [x] M2.12 [sonnet] Milestone 2 test note, then stop. (db3b68c)
 
 ---
 
