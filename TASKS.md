@@ -194,6 +194,53 @@ M2.10 and M2.11 moved to Fast-follow (D29, 23 Sep 2026).
       when: a counter sale produces a bill PDF viewable from the order screen.
 - [x] M2.12 [sonnet] Milestone 2 test note, then stop. (db3b68c)
 
+**Fixes from Shefin's Milestone 2 test, 23 Sep 2026.** Appended to the milestone per
+CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
+
+- [ ] M2.13 [opus] The two-main-ingredient cost collision. `lineIdFor` in
+      `admin/src/batches/CookingActuals.tsx:47` returns the literal `"main"` for every
+      line flagged `isMain`, so a recipe with two main ingredients stores both under one
+      id: batch 001 flags prawns and dates (D28), and typing a cost on one overwrites
+      the other. Found by Shefin at the break. Give every line its own id, keep whatever
+      `isMain` is really for, and work out what happens to actuals already written under
+      `"main"` (a migration, or a read that falls back, decided and justified). Costs
+      feed the batch P&L, so this is money. Done when: a recipe with two main lines
+      takes two independent weights and two independent costs, a test covers exactly
+      that shape, and any existing `"main"` line is accounted for rather than orphaned.
+- [ ] M2.14 [sonnet] The undo toast. Shefin edited a batch cost, saw the change reach
+      the timeline, and never saw an undo button. M2.6's done-when says editing a field,
+      undoing it and seeing both in the timeline works, and its tests pass, so either
+      the toast is not firing on these fields or it is firing somewhere he was not
+      looking. Reproduce first, then fix. Done when: editing a cost on the batch detail
+      screen shows the undo toast for its 8 seconds, tapping it restores the old value,
+      and both the edit and the undo are in the timeline.
+- [ ] M2.15 [sonnet] (Shefin checks) A required field that blocks saving must be
+      findable. Shefin could not complete a counter sale because the confirm-new-customer
+      control had not been tapped, and nothing on the screen made that obvious. Brief
+      §17.1. This is read at a busy counter with a customer waiting, so it is worth
+      doing properly: the blocked control says what is missing, and the thing that is
+      missing is visibly marked. No red-on-white alarm; follow the design system. Done
+      when: saving a sale with anything outstanding points at the outstanding thing.
+- [ ] M2.16 [opus] (Shefin checks) Price in stock, price for an open batch and the limit
+      per person editable in place on every batch detail screen, in any state, with no
+      lock (D40). Two things this must hold to: an order already placed keeps the price
+      it was actually charged, so nothing is ever repriced retrospectively; and editing
+      a price on an Archived batch moves that batch's P&L, which is said plainly on the
+      screen rather than prevented. Prices still cannot exceed the ₹649 MRP. Undo toast
+      and timeline like every other in-place edit. Done when: all three are editable on
+      batch 001, a paid order's recorded price is provably unchanged by editing the
+      batch, and the MRP ceiling is tested.
+- [ ] M2.17 [sonnet] Drop `orders/{id}/events` (D39). `audit` becomes the only history.
+      Remove the subcollection's rules, its `OrderEvent` type, its rules tests and its
+      seed coverage, and check nothing reads it. Done when: the rules tests pass without
+      it and no reference to it survives outside `DECISIONS.md`.
+- [ ] M2.18 [haiku] `npm run check:batch-001` says which side is ahead. It currently
+      reports "body differs" with two byte counts, which reads like a regression when
+      the truth is usually that the repo is ahead of the live site and a deploy is
+      owed: that is exactly what it said at the M2 break, where the only difference was
+      D28's ingredient line. Print the differing lines and name which side carries each.
+      Done when: running it today says the repo is ahead and names D28's line.
+
 ---
 
 ## Milestone 3: Launch

@@ -9,17 +9,11 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
 
 ## Open
 
-- Q14 (M2.6, 21 Sep): a batch, an order and a customer now each have one history, the
-  `audit` collection, written by one wrapper that both the admin and the functions go
-  through. Brief §18.1 also names `orders/{id}/events/{id}` as "the timeline for the
-  order", which has rules and seed coverage from M1.8 but nothing writing to it. Two
-  timelines for an order would drift, and the one that drifts is the one nobody is
-  looking at. Should `audit` be the only history, and `orders/{id}/events` dropped
-  before order writes are built in M2.8? Meanwhile: `audit` is the only thing written,
-  `orders/{id}/events` is untouched and empty, and nothing reads it.
+None.
 
 ## Answered
 
+- ~~Q14 (M2.6, 21 Sep): should `audit` be the only order history, and `orders/{id}/events` dropped before order writes are built on top of it?~~ Answered 23 Sep at the M2 break: drop it. Recorded as D39, built in M2.17.
 - ~~Q15 (M2.9, 23 Sep): may Kitchen open the bill PDF for a sale? Brief §17.12 gives "See Money" to Owner and Viewer only, and both `firestore.rules` and `storage.rules` already deny Kitchen any read of `documents/**`. But Kitchen is who rings up a counter sale, so as the rules stand she sells the jar and then cannot see its bill.~~ Answered 23 Sep: yes, for any order, through a server callable only; the money collections stay shut to her. Recorded as D35, built in M2.9.
 - ~~Q7 (M2.1, 18 Sep): the label basis doc §4 column A printed gingelly oil as 15.3% and mustard as 0.3%, where 920/6033 is 15.2% and 15/6033 is 0.2%. Should the doc be corrected?~~ Answered 19 Sep: yes. Corrected in the doc (both were double rounding), and the test table in `shared/src/recipe.test.ts` follows. Recorded as D28.
 - ~~Q1 (M1, 16 Sep): Is the `lailark` Firebase project on the Blaze plan yet? Functions and Storage will not deploy without it. Meanwhile: everything runs on the emulator.~~ Answered 17 Sep: Blaze is on for `lailark`. Recorded as D18 in DECISIONS.md.
