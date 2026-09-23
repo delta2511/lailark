@@ -18,6 +18,13 @@
  * the cost box opens empty rather than guessed from the ingredient's price
  * list, because turning a per-unit cost into a per-gram default crosses into
  * price-list territory this task does not otherwise build.
+ *
+ * M2.14 (superseding A79): a commit here offers the same 8 second undo as
+ * every other in-place field (`UndoToast`, `saveBatchLine`'s doc comment in
+ * `data.ts` for the race analysis). One toast for the whole section, not one
+ * per row, the same shape `BatchDetail` uses for its own fields: the section
+ * is one screen's worth of typing, and only one box is ever being edited at
+ * a time.
  */
 import {
   formatINR,
@@ -25,6 +32,7 @@ import {
   ingredientActualDrift,
   toGrams,
   type IngredientIndex,
+  type Role,
 } from "@lailark/shared";
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";
@@ -32,10 +40,12 @@ import { useState } from "preact/hooks";
 import { BATCHES } from "../copy";
 import { isCostPaise, parseRupeesToPaise } from "../products/productMoney";
 import type { IngredientDoc, RecipeDoc } from "../products/data";
+import { UndoToast, type UndoToastState } from "../ui/UndoToast";
 import { resolveActuals, type OrphanLine } from "./lineIds";
 import {
   isPermissionDenied,
   saveBatchLine,
+  undoBatchLineWrite,
   useBatchLines,
   type BatchLineDoc,
   type BatchLineField,
@@ -47,10 +57,40 @@ interface Props {
   readonly ingredients: readonly IngredientDoc[];
   readonly canEdit: boolean;
   readonly uid: string;
+  readonly role: Role;
 }
 
-export function CookingActuals({ batchRef, recipe, ingredients, canEdit, uid }: Props): JSX.Element | null {
+export function CookingActuals({ batchRef, recipe, ingredients, canEdit, uid, role }: Props): JSX.Element | null {
   const lines = useBatchLines(batchRef);
+
+  // M2.14: the toast's `before` is the `audit/{id}` entry the write just
+  // created, the same shape `BatchDetail`'s own toast uses.
+  const [toast, setToast] = useState<UndoToastState<string> | null>(null);
+  const [undoError, setUndoError] = useState<string | null>(null);
+
+  /**
+   * The undo race and the back-door guard both live in `undoBatchLineWrite`
+   * (`./data.ts`): it refuses if the field changed again since this write
+   * (the other person's figure stands, nothing here silently overwrites
+   * it), and it refuses if `role` may not write the field (never reached in
+   * practice, since only a staff role can reach this screen's boxes at all,
+   * but checked anyway rather than assumed).
+   */
+  async function handleUndo(auditId: string): Promise<void> {
+    setToast(null);
+    const outcome = await undoBatchLineWrite(auditId, uid, role);
+    if (!outcome.ok) {
+      setUndoError(
+        outcome.reason === "raced"
+          ? BATCHES.undoRaced
+          : outcome.reason === "forbidden"
+            ? BATCHES.undoForbidden
+            : BATCHES.undoGone,
+      );
+      return;
+    }
+    setToast({ message: BATCHES.undone, before: outcome.auditId });
+  }
 
   if (recipe === null || recipe.lines.length === 0) return null;
 
@@ -94,6 +134,12 @@ export function CookingActuals({ batchRef, recipe, ingredients, canEdit, uid }: 
 
   return (
     <div class="drift-section">
+      <UndoToast toast={toast} onUndo={(id) => void handleUndo(id)} onExpire={() => setToast(null)} />
+      {undoError ? (
+        <p class="error" data-testid="actuals-undo-error">
+          {undoError}
+        </p>
+      ) : null}
       <p class="field-label">{BATCHES.actualsHeading}</p>
       <p class="field-help">{BATCHES.actualsHelp}</p>
       <ul class="line-list" data-testid="actuals-list">
@@ -131,6 +177,10 @@ export function CookingActuals({ batchRef, recipe, ingredients, canEdit, uid }: 
               existing={existing}
               canEdit={canEdit}
               uid={uid}
+              onSaved={(auditId, message) => {
+                setUndoError(null);
+                setToast({ message, before: auditId });
+              }}
             />
           );
         })}
@@ -170,8 +220,8 @@ function OrphanLines({
               ? BATCHES.orphanNoIngredient
               : (index[orphan.ingredientId]?.labelName ?? orphan.ingredientId);
           const figures = BATCHES.orphanFigures(
-            orphan.doc.qtyActual !== undefined ? `${orphan.doc.qtyActual} g` : "",
-            orphan.doc.costActual !== undefined ? formatINR(orphan.doc.costActual) : "",
+            orphan.doc.qtyActual != null ? `${orphan.doc.qtyActual} g` : "",
+            orphan.doc.costActual != null ? formatINR(orphan.doc.costActual) : "",
           );
           return (
             <li key={orphan.doc.id} class="line-row" data-testid={`orphan-line-${orphan.doc.id}`}>
@@ -199,6 +249,7 @@ function ActualRow({
   existing,
   canEdit,
   uid,
+  onSaved,
 }: {
   readonly batchRef: string;
   readonly lineId: string;
@@ -213,10 +264,19 @@ function ActualRow({
   readonly existing: BatchLineDoc | null;
   readonly canEdit: boolean;
   readonly uid: string;
+  /** M2.14: called with the write's `audit/{id}` and the toast's message. */
+  readonly onSaved: (auditId: string, message: string) => void;
 }): JSX.Element {
+  // M2.14: `!= null` catches both, not just `undefined`. Undoing this row's
+  // very first edit (a `create`, since the line document did not exist
+  // before it) restores a field to `null`, not to an absent key: the write
+  // is a `merge`, which sets what `before` says rather than deleting the
+  // key, so the field genuinely holds `null` afterwards, same as before the
+  // edit. A box that only checked `!== undefined` read that back as "0" or
+  // "0 g", a real, wrong number where the undo meant "nothing typed yet".
   const openingQty =
-    existing?.qtyActual !== undefined ? String(existing.qtyActual) : recipeG > 0 ? String(Math.round(recipeG)) : "";
-  const openingCost = existing?.costActual !== undefined ? String(existing.costActual / 100) : "";
+    existing?.qtyActual != null ? String(existing.qtyActual) : recipeG > 0 ? String(Math.round(recipeG)) : "";
+  const openingCost = existing?.costActual != null ? String(existing.costActual / 100) : "";
 
   const [qtyText, setQtyText] = useState(openingQty);
   const [costText, setCostText] = useState(openingCost);
@@ -247,7 +307,19 @@ function ActualRow({
     setError(null);
     try {
       const beforeValue = existing?.[field] ?? null;
-      await saveBatchLine(batchRef, lineId, ingredientId, field, value, beforeValue, uid, existing === null);
+      const { auditId } = await saveBatchLine(
+        batchRef,
+        lineId,
+        ingredientId,
+        field,
+        value,
+        beforeValue,
+        uid,
+        existing === null,
+      );
+      const fieldLabel = field === "qtyActual" ? BATCHES.actualWeight : BATCHES.actualCost;
+      const display = field === "qtyActual" ? `${value} g` : formatINR(value);
+      onSaved(auditId, BATCHES.actualFieldChanged(label, fieldLabel, display));
     } catch (caught) {
       setError(isPermissionDenied(caught) ? BATCHES.saveRefused : BATCHES.saveFailed);
     }
@@ -332,10 +404,10 @@ function ActualRow({
       ) : (
         <>
           <span class="field-value number" data-testid={`view-actual-weight-${rowKey}`}>
-            {existing?.qtyActual !== undefined ? `${existing.qtyActual} g` : ""}
+            {existing?.qtyActual != null ? `${existing.qtyActual} g` : ""}
           </span>
           <span class="field-value number" data-testid={`view-actual-cost-${rowKey}`}>
-            {existing?.costActual !== undefined ? formatINR(existing.costActual) : ""}
+            {existing?.costActual != null ? formatINR(existing.costActual) : ""}
           </span>
         </>
       )}

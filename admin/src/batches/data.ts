@@ -244,6 +244,31 @@ export async function undoBatchWrite(auditId: string, uid: string, role: Role): 
   return undoAuditEntry(auditId, uid, (field) => canRoleWriteBatchField(role, field));
 }
 
+/**
+ * Whether `role` may write a per-ingredient actual (`qtyActual` or
+ * `costActual`): `firestore.rules`' `isStaff()` on `lines/{lineId}` gives
+ * both staff roles either field, unlike the batch document itself where
+ * Kitchen and Owner see different lists. M2.14 uses this to gate the Undo
+ * button on the Cooking actuals the same way `canRoleWriteBatchField` gates
+ * it on the batch fields above: an undo must not reach a write its actor
+ * could never have made directly, whoever is asking.
+ */
+export function canRoleWriteBatchLine(role: Role): boolean {
+  return role === "owner" || role === "kitchen";
+}
+
+/**
+ * Undoes a per-ingredient actual write within its toast's 8 second window
+ * (M2.14). See `undoAuditEntry` for the race guard: it reads `lines/{id}`
+ * back and refuses if the field the undo would restore no longer holds the
+ * value this write left there, e.g. Sumayya has since typed a different
+ * weight into the same box from her phone. Nothing here is silently
+ * overwritten; the caller sees `"raced"` and the newer figure stands.
+ */
+export async function undoBatchLineWrite(auditId: string, uid: string, role: Role): Promise<UndoOutcome> {
+  return undoAuditEntry(auditId, uid, () => canRoleWriteBatchLine(role));
+}
+
 /** The two fields an actuals row owns, one box each. */
 export type BatchLineField = "qtyActual" | "costActual";
 
@@ -268,13 +293,16 @@ export type BatchLineField = "qtyActual" | "costActual";
  *
  * M2.6: audited like every other batch write (`ingredientId` and the create
  * stamps ride along as `extra`, not as an audited field: they identify the
- * row, they are never a value a person edited). This screen has never
- * offered undo on these boxes and still does not: the "one field per call"
- * guarantee above is what stops the two boxes corrupting each other, and an
- * undo control here would need its own race analysis against that same
- * guarantee, which is more than this task's done-when (a batch field) asks
- * for. Left as a plain audited write; a `BLOCKED:`/`ASSUMED:` line in the
- * M2.6 report says so.
+ * row, they are never a value a person edited).
+ *
+ * M2.14 (superseding A79): this screen now offers the same 8 second undo as
+ * every other in-place field, through `undoBatchLineWrite` above. The "one
+ * field per call" guarantee is what makes that safe: `undoAuditEntry`'s race
+ * guard already refuses an undo the moment the field it would restore no
+ * longer matches what this write left behind, and because a commit here
+ * only ever touches the one field the person typed into, an undo of it can
+ * only ever collide with a later write to that same field, on that same
+ * document, never with the row's other box. See `CookingActuals.tsx`.
  */
 export async function saveBatchLine(
   ref: string,

@@ -456,3 +456,43 @@ export async function queryByField(
     .filter((row) => row.document !== undefined)
     .map((row) => plainFields(row.document?.fields ?? {}));
 }
+
+/**
+ * Deletes every `audit/{id}` entry recorded against `objectPath` (both the
+ * original write and any undo of it, since an undo is audited under the
+ * same `object`, `write.ts`'s `undoAuditEntry`).
+ *
+ * `audit` is append-only and never cleaned up by the app itself (M1.8,
+ * M2.6): a spec that writes to a fixed batch ref more than once, across
+ * separate runs against the same long-lived emulator (`npm run emulators`,
+ * CLAUDE.md section 7, not just the throwaway one `npm test` stands up),
+ * leaves entries a later run's own assertions then count. `deleteDocument`
+ * alone cannot reach these: they live by their own auto id, not by
+ * `objectPath`, so this re-runs the same query `Timeline.tsx`'s own
+ * `object == objectPath` uses and deletes what it finds.
+ */
+export async function deleteAuditFor(objectPath: string): Promise<void> {
+  const res = await fetch(`${DOCUMENTS}:runQuery`, {
+    method: "POST",
+    headers: ADMIN_HEADERS,
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId: "audit" }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "object" },
+            op: "EQUAL",
+            value: { stringValue: objectPath },
+          },
+        },
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`querying audit for ${objectPath} returned ${res.status}: ${await res.text()}`);
+  const body = (await res.json()) as Array<{ document?: { name?: string } }>;
+  const names = body.map((row) => row.document?.name).filter((name): name is string => name !== undefined);
+  for (const name of names) {
+    const id = name.slice(name.lastIndexOf("/") + 1);
+    await deleteDocument(`audit/${id}`);
+  }
+}

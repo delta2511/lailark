@@ -340,6 +340,11 @@ export const BATCHES = {
   recipeQtyEstimated: "estimated",
   actualWeight: "Actual weight, g",
   actualCost: "Actual cost",
+  // M2.14: the undo toast's own message for a per-ingredient actual, which
+  // names the ingredient as well as the field, since several rows share the
+  // one toast.
+  actualFieldChanged: (ingredient: string, field: string, value: string) =>
+    `${ingredient}, ${field} changed to ${value}.`,
   // Until the lines have loaded there is nothing to type into: a box opened
   // before them would not know which document it belongs to (M2.13).
   actualsLoading: "Loading the actuals...",

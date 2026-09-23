@@ -448,7 +448,13 @@ break.
   screen makes rather than one the system enforces. Status: open.
 - A79 (M2.6, 21 Sep): the per-ingredient actuals are audited but offer no undo. That
   screen never had one, and adding it needs its own race analysis against the one field
-  per box guarantee. Status: open.
+  per box guarantee. Status: superseded by M2.14 (23 Sep). Shefin hit exactly this at the
+  M2 break: he edited a cost, saw it reach the timeline, and looked for an undo that had
+  never been built. Those boxes now offer the same 8 second undo as every other in-place
+  field, reusing `undoAuditEntry`'s existing race guard rather than a second one, and the
+  race analysis this line asked for is in `saveBatchLine`'s comment: a commit touches
+  only the one field typed into, so an undo can collide only with a later write to that
+  same field on that same line, never with the row's other box. See A112 to A116.
 - A80 (M2.6, 21 Sep): the timeline is read-only. Undo lives on the write's own toast,
   not as a standing control on history. Status: open.
 - A81 (M2.6, 21 Sep): a timeline entry shows the actor's name from `users/{uid}`, and
@@ -590,3 +596,25 @@ break.
   printed twice. The test is on the flattened name, not the typed one: Kunnamangalam is
   in Kerala, so a Malayalam name at the counter is ordinary, and it used to leave
   "Billed to" blank. Status: open.
+- A112 (M2.14, 23 Sep): the Cooking actuals section carries one undo toast for the whole
+  section, not one per row, matching what `BatchDetail` already does for the batch's own
+  fields. Only one box is ever being typed into at a time. The consequence, confirmed
+  under test rather than assumed: a second edit inside the 8 seconds replaces the first
+  toast, so the first write stops being undoable and only the second one can be taken
+  back. Status: open.
+- A113 (M2.14, 23 Sep): that toast's message names the ingredient as well as the field
+  ("M214 Prawns, Actual cost changed to ..."), since several rows share the one toast and
+  the field name alone would not say which row moved. Status: open.
+- A114 (M2.14, 23 Sep): the batch timeline's second query matches everything under the
+  batch path at any depth, not only `lines/{id}`, so a future audited write under
+  `updates/{id}` or `writeOffs/{id}` appears on the batch's timeline without another
+  change here. Brief §11 says every object shows its timeline; a write to a row the batch
+  owns is a thing that happened to the batch. Status: open.
+- A115 (M2.14, 23 Sep): neither timeline query carries a `limit`. One batch's whole
+  history is a few dozen entries at this size. If one ever grows long, the fix is
+  `limit(n)` on both and a "load more"; the client-side merge does not change. Status: open.
+- A116 (M2.14, 23 Sep): an entry whose `at` has not yet resolved (the window between a
+  write landing locally and the server echoing its `serverTimestamp()` back, which the
+  SDK delivers as `null`) sorts newest, reproducing what Firestore's own
+  `orderBy("at", "desc")` does server side. Sorting it last put the edit someone had just
+  made at the bottom of the list for the round trip, then made it jump. Status: open.

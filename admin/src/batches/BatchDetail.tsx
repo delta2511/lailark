@@ -19,10 +19,9 @@
  * `updateBatchField`/`updateBatchCosts` (`./data.ts`, themselves a thin
  * wrapper over `writeWithAudit`) and offers 8 seconds of undo through
  * {@link UndoToast}, the same seam M2.2 built for products. `saveBatchLine`
- * (the per-ingredient actuals, `CookingActuals.tsx`) is audited the same way
- * but does not offer undo: those boxes have never had one, and this task's
- * done-when is a batch *field*, not a per-ingredient actual. Noted plainly in
- * the M2.6 report rather than silently left half-migrated.
+ * (the per-ingredient actuals, `CookingActuals.tsx`) is audited the same
+ * way and, from M2.14, offers its own 8 second undo on its own toast (A79
+ * superseded): see that file for the race analysis.
  */
 import { batchLabelCapitalised, formatINR, liveHeldJars, type BatchCosts, type Role } from "@lailark/shared";
 import type { JSX } from "preact";
@@ -302,6 +301,7 @@ export function BatchDetail({ batch, role, uid, product, recipe, ingredients, on
             ingredients={ingredients}
             canEdit={canEditKitchenFields}
             uid={uid}
+            role={role}
           />
         </>
       ) : null}

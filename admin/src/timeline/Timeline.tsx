@@ -27,6 +27,21 @@
  * (`at`), which Cloud Firestore (unlike the emulator, which lets it through)
  * refuses without a composite index: `firestore.indexes.json` carries one,
  * `object` ascending then `at` descending.
+ *
+ * M2.14: a second query alongside it picks up every entry `objectPath` owns
+ * at any depth (`batches/{ref}/lines/{id}` today, the per-ingredient
+ * actuals): without it, editing a cost on the Cooking screen wrote a real
+ * `audit/{id}` entry (`saveBatchLine`, `admin/src/batches/data.ts`) that the
+ * batch's own Timeline never showed, because its `object` is the line's
+ * path, not the batch's. That entry's own undo landed correctly either way,
+ * since undo reads the entry back by id rather than through this component
+ * (see "read only" above), but the person watching the batch's timeline
+ * never saw either the edit or the undo, which is most of what M2.14 was
+ * reported against. A prefix range on `object` needs no new composite index
+ * (a single-field range is covered by Firestore's automatic indexing), so
+ * nothing in `firestore.indexes.json` changes for it. See `useTimeline`
+ * below for the sentinel that bounds the range and why it must be written
+ * as a visible escape, not the raw character.
  */
 import { collection, doc, getDoc, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import type { JSX } from "preact";
@@ -54,13 +69,47 @@ interface TimelineState {
   readonly denied: boolean;
 }
 
+function toEntry(d: { readonly id: string; data: () => unknown }): TimelineEntry {
+  return { id: d.id, ...(d.data() as object) } as TimelineEntry;
+}
+
+/**
+ * Newest first, by `at`, with entries sharing a timestamp broken by
+ * nanoseconds. `at` is `null` for the short window between a write landing
+ * locally and the server echoing back what its `serverTimestamp()` actually
+ * resolved to (`onSnapshot` delivers the pending write with the field
+ * unset). That window is always the newest thing the client knows about, in
+ * both queries `useTimeline` merges here: sorting it first reproduces what
+ * `ownQuery`'s own `orderBy("at", "desc")` already does for a pending write
+ * server side. Sorting it last (`?? 0`, read as the Unix epoch) put the
+ * entry for an edit someone had just made at the bottom of the list for the
+ * round trip's ~50-150ms on loopback, several hundred on a phone, and made
+ * it visibly jump to the top the moment the timestamp resolved.
+ *
+ * Exported for `Timeline.test.ts`, which sorts a small mixed list directly
+ * rather than standing up the emulator to prove this one ordering rule.
+ */
+export function byAtDesc(a: TimelineEntry, b: TimelineEntry): number {
+  if (a.at === null || b.at === null) {
+    if (a.at === null && b.at === null) return 0; // neither resolved yet: no real order between them
+    return a.at === null ? -1 : 1; // the unresolved one sorts first
+  }
+  if (a.at.seconds !== b.at.seconds) return b.at.seconds - a.at.seconds;
+  return b.at.nanoseconds - a.at.nanoseconds;
+}
+
 /**
  * `null` hides the section entirely (a screen with no document open yet):
  * the batch detail always has one, but this keeps the hook safe for a screen
  * that opens on nothing selected.
  */
 export function useTimeline(objectPath: string | null): TimelineState {
-  const [state, setState] = useState<TimelineState>({
+  const [own, setOwn] = useState<TimelineState>({
+    items: [],
+    loading: objectPath !== null,
+    denied: false,
+  });
+  const [children, setChildren] = useState<TimelineState>({
     items: [],
     loading: objectPath !== null,
     denied: false,
@@ -68,26 +117,74 @@ export function useTimeline(objectPath: string | null): TimelineState {
 
   useEffect(() => {
     if (objectPath === null) {
-      setState({ items: [], loading: false, denied: false });
+      setOwn({ items: [], loading: false, denied: false });
+      setChildren({ items: [], loading: false, denied: false });
       return undefined;
     }
-    setState({ items: [], loading: true, denied: false });
-    const q = query(
+    setOwn({ items: [], loading: true, denied: false });
+    setChildren({ items: [], loading: true, denied: false });
+
+    const ownQuery = query(collection(db, "audit"), where("object", "==", objectPath), orderBy("at", "desc"));
+    const unsubOwn = onSnapshot(
+      ownQuery,
+      (snap) => setOwn({ items: snap.docs.map(toEntry), loading: false, denied: false }),
+      () => setOwn({ items: [], loading: false, denied: true }),
+    );
+
+    // Unbounded, like `ownQuery` above: neither carries a `limit`. A home
+    // kitchen's whole history on one batch, across every field it and its
+    // lines ever had edited, is at most a few dozen entries (M2.13's own
+    // round trips on batch 001 did not get near that), so paging would be
+    // solving a problem this app does not have yet; adding one, if a batch
+    // or an order ever does grow a long history, is `limit(n)` on both
+    // queries and a "load more" the merge below does not need to change to
+    // support (it just sorts whatever each side handed it).
+    //
+    // Everything this object owns, at any depth under it: a batch's
+    // `lines/{id}` (the per-ingredient actuals, M2.14) today, and a future
+    // audited write under `updates/{id}` or `writeOffs/{id}` tomorrow, all
+    // belong on the batch's own timeline the same way brief section 11 means
+    // "every object shows its timeline, including what the agent did" for
+    // the object as a whole, not only writes to its own document. Not
+    // ordered by `at` in the query itself (a range filter on `object` would
+    // need `object` as the first `orderBy` too), so the two result sets are
+    // merged and sorted client side below.
+    //
+    // `PREFIX_SENTINEL` is the Firestore idiom for "starts with `prefix`":
+    // U+F8FF is the last codepoint in the Basic Multilingual Plane's
+    // Private Use Area, higher than any character that appears in a
+    // Firestore document path segment this app writes (`object` is always a
+    // slash-joined run of collection ids and either a hand-written ref, a
+    // hyphenated slug or a Firestore auto id, all plain ASCII), so every
+    // `object` that starts with `prefix` sorts below `prefix + PREFIX_SENTINEL`
+    // and nothing else can. Written as the explicit escape, not the raw
+    // character, so the sentinel is visible in this file and in a diff
+    // rather than an invisible byte nobody reviewing the change can see (a
+    // literal U+F8FF here once read as an empty, always-false range on a
+    // quick look, which is exactly the failure mode this comment exists to
+    // rule out).
+    const PREFIX_SENTINEL = "\uf8ff";
+    const prefix = `${objectPath}/`;
+    const childQuery = query(
       collection(db, "audit"),
-      where("object", "==", objectPath),
-      orderBy("at", "desc"),
+      where("object", ">=", prefix),
+      where("object", "<", `${prefix}${PREFIX_SENTINEL}`),
     );
-    return onSnapshot(
-      q,
-      (snap) => {
-        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as unknown as TimelineEntry);
-        setState({ items, loading: false, denied: false });
-      },
-      () => setState({ items: [], loading: false, denied: true }),
+    const unsubChildren = onSnapshot(
+      childQuery,
+      (snap) => setChildren({ items: snap.docs.map(toEntry), loading: false, denied: false }),
+      () => setChildren({ items: [], loading: false, denied: true }),
     );
+
+    return () => {
+      unsubOwn();
+      unsubChildren();
+    };
   }, [objectPath]);
 
-  return state;
+  if (own.denied || children.denied) return { items: [], loading: false, denied: true };
+  if (own.loading || children.loading) return { items: [], loading: true, denied: false };
+  return { items: [...own.items, ...children.items].sort(byAtDesc), loading: false, denied: false };
 }
 
 /** `users/{uid}` names, resolved once per uid seen and kept for the session. */
