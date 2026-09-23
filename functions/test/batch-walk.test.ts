@@ -205,6 +205,12 @@ describe("a batch walks Draft to Archived", () => {
     expect(batch.weightRaw).toBe(12_000);
 
     // Brief 14.1: the main ingredient's raw weight and price, against the batch.
+    // M2.13: the line is keyed by the recipe's main ingredient now, not by
+    // the literal id "main" that two main lines used to share. This walk
+    // seeds no recipe document, so there is no main ingredient to key it by
+    // and the id falls back to "main", which is the one case that keeps it.
+    // The ingredient-keyed id is walked end to end in
+    // `admin/tests/batches.spec.ts`, which has a real recipe behind it.
     const line = await db().collection("batches").doc(ref).collection("lines").doc("main").get();
     expect(line.data()).toMatchObject({ qtyActual: 12_000, costActual: 480_000 });
 

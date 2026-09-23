@@ -155,6 +155,10 @@ export const PRODUCTS = {
   addLine: "Add line",
   removeLine: "Remove",
   lineIngredient: "Ingredient",
+  // M2.13: two lines of one ingredient used to share one actuals document,
+  // and their typed weights and costs swapped places when the lines were
+  // reordered. One line per ingredient, refused at save.
+  lineIngredientRepeated: (name: string) => `${name} is on two lines. Put each ingredient on one line.`,
   lineQty: "Quantity",
   lineUnit: "Unit",
   lineIsMain: "Declare a percentage",
@@ -336,6 +340,19 @@ export const BATCHES = {
   recipeQtyEstimated: "estimated",
   actualWeight: "Actual weight, g",
   actualCost: "Actual cost",
+  // Until the lines have loaded there is nothing to type into: a box opened
+  // before them would not know which document it belongs to (M2.13).
+  actualsLoading: "Loading the actuals...",
+  actualsDenied: "The actuals could not be read. Ask Shefin to check your role.",
+  // A line document recorded against an ingredient this recipe no longer
+  // lists (the ingredient was swapped, or the recipe changed). The figures
+  // stay on the screen rather than sitting unseen in the batch's costs.
+  orphansHeading: "Recorded against something this recipe does not list",
+  orphanLine: (name: string, figures: string) => `${name}: ${figures}`,
+  orphanNoIngredient: "No ingredient named",
+  orphanFigures: (weight: string, cost: string) => [weight, cost].filter((part) => part !== "").join(", "),
+  orphanHelp:
+    "Nothing is lost and nothing is counted twice. Put the ingredient back on the recipe to edit these figures, or leave them as they are and tell Shefin.",
   driftWarning: (percent: number) =>
     `This is ${Math.round(percent)}% off the recipe. Check it before the label is printed.`,
 

@@ -9,7 +9,15 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
 
 ## Open
 
-None.
+- Q16 (M2.13, 23 Sep): should Sourcing to Cooking be refused when the recipe names no
+  main ingredient at all? Today the transition writes the raw weight and cost to a
+  placeholder line with no ingredient behind it, because there is nowhere else for
+  `costRaw` to go (it is not a field on the batch document). Since M2.13 that money is
+  at least visible, listed as "Recorded against something this recipe does not list",
+  but it cannot be edited until an ingredient is put on the recipe. Refusing the
+  transition instead would be a batch lifecycle change, which is on the never-assume
+  list. Related to D41 and M2.19 but not the same question. Meanwhile: the transition is
+  allowed and the money is shown as an orphan.
 
 ## Answered
 

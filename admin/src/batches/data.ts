@@ -249,11 +249,14 @@ export type BatchLineField = "qtyActual" | "costActual";
 
 /**
  * One field of one ingredient's actuals, prefilled from the recipe (brief
- * 17.4's "Cooking" row). The main ingredient's line keeps the id `"main"`,
- * the id `sourcing -> cooking` wrote it under (`functions/src/batches/
- * transitions.ts`, `planStartCooking`); every other ingredient's line is
- * keyed by its own ingredient id, so there is exactly one line per ingredient
- * and this screen and the server never disagree about where one lives.
+ * 17.4's "Cooking" row). Every line is keyed by its own ingredient
+ * (`lineIds.ts`), the main one included: that is the id
+ * `sourcing -> cooking` writes it under too (`functions/src/batches/
+ * transitions.ts`, `planStartCooking`), so there is exactly one line per
+ * ingredient and this screen and the server never disagree about where one
+ * lives. M2.13: until then a line flagged `isMain` was keyed under the
+ * literal id `"main"`, which made the two main lines of a batch 001 shaped
+ * recipe one document and lost a cost typed against the first of them.
  *
  * **One field per call, deliberately.** The write is a `merge`, so each box
  * sends only the field it owns and nothing else on the document is touched.

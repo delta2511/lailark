@@ -3,11 +3,15 @@
  * ingredient's actual weight and cost (prefilled from the recipe), drift
  * warning for label review."
  *
- * One row per recipe line, in `batches/{ref}/lines/{id}`. The main
- * ingredient's line keeps the id the Sourcing -> Cooking transition already
- * gave it (`"main"`, `functions/src/batches/transitions.ts`); every other
- * line is keyed by its own ingredient id, so a row here and the one the
- * server already wrote for the main ingredient are the same document.
+ * One row per recipe line, in `batches/{ref}/lines/{id}`, keyed by its own
+ * ingredient (`lineIds.ts`), which is also the id the Sourcing -> Cooking
+ * transition writes the main ingredient's raw weight and cost under
+ * (`functions/src/batches/transitions.ts`), so a row here and the one the
+ * server already wrote are the same document. Before M2.13 every line
+ * flagged `isMain` was keyed under the literal id `"main"`, which made the
+ * two main lines of a batch 001 shaped recipe one document; `lineIds.ts`
+ * says what replaced it and what happens to the documents that id left
+ * behind.
  *
  * "Prefilled from the recipe": the weight box opens on the recipe's own
  * quantity in grams, so an untouched box shows no drift. ASSUMED (M2.4):
@@ -28,6 +32,7 @@ import { useState } from "preact/hooks";
 import { BATCHES } from "../copy";
 import { isCostPaise, parseRupeesToPaise } from "../products/productMoney";
 import type { IngredientDoc, RecipeDoc } from "../products/data";
+import { resolveActuals, type OrphanLine } from "./lineIds";
 import {
   isPermissionDenied,
   saveBatchLine,
@@ -44,26 +49,58 @@ interface Props {
   readonly uid: string;
 }
 
-function lineIdFor(ingredientId: string, isMain: boolean): string {
-  return isMain ? "main" : ingredientId;
-}
-
 export function CookingActuals({ batchRef, recipe, ingredients, canEdit, uid }: Props): JSX.Element | null {
   const lines = useBatchLines(batchRef);
 
   if (recipe === null || recipe.lines.length === 0) return null;
 
   const index: IngredientIndex = indexIngredients(ingredients.map((i) => ({ ...i, id: i.id })));
+
+  /**
+   * **Nothing is resolved, shown or typed until the lines have loaded.**
+   * `useBatchLines` opens on `{items: [], loading: true}`, and a row
+   * resolved against that empty list binds to its own ingredient id rather
+   * than to the `lines/main` document it should have adopted. A commit
+   * inside that window would write a second document for the same
+   * ingredient and strand the legacy one: invisible on the screen,
+   * uneditable, and counted a second time by anything that sums the
+   * subcollection. The window is short and real (M2.13 round 1 measured it),
+   * so the boxes simply do not exist until the answer is known.
+   */
+  if (lines.loading) {
+    return (
+      <div class="drift-section">
+        <p class="field-label">{BATCHES.actualsHeading}</p>
+        <p class="field-help" data-testid="actuals-loading">
+          {BATCHES.actualsLoading}
+        </p>
+      </div>
+    );
+  }
+
+  if (lines.denied) {
+    return (
+      <div class="drift-section">
+        <p class="field-label">{BATCHES.actualsHeading}</p>
+        <p class="notice-line" data-testid="actuals-denied">
+          {BATCHES.actualsDenied}
+        </p>
+      </div>
+    );
+  }
+
   const byId = new Map(lines.items.map((l) => [l.id, l]));
+  const { rows: resolved, orphans } = resolveActuals(recipe.lines, lines.items);
 
   return (
     <div class="drift-section">
       <p class="field-label">{BATCHES.actualsHeading}</p>
       <p class="field-help">{BATCHES.actualsHelp}</p>
       <ul class="line-list" data-testid="actuals-list">
-        {recipe.lines.map((line) => {
-          const isMain = line.isMain === true;
-          const id = lineIdFor(line.ingredientId, isMain);
+        {recipe.lines.map((line, position) => {
+          const row = resolved[position];
+          const id = row?.docId ?? line.ingredientId;
+          const rowKey = row?.rowKey ?? line.ingredientId;
           const ingredient = index[line.ingredientId];
           let recipeG = 0;
           try {
@@ -80,9 +117,10 @@ export function CookingActuals({ batchRef, recipe, ingredients, canEdit, uid }: 
               // inputs): `useState`'s initial value only runs once, so
               // without this the box would keep showing the recipe's own
               // fallback forever after the real actual loads in.
-              key={`${line.ingredientId}-${existing?.qtyActual ?? "u"}-${existing?.costActual ?? "u"}`}
+              key={`${id}-${existing?.qtyActual ?? "u"}-${existing?.costActual ?? "u"}`}
               batchRef={batchRef}
               lineId={id}
+              rowKey={rowKey}
               ingredientId={line.ingredientId}
               label={ingredient?.labelName ?? line.ingredientId}
               recipeQty={line.qty}
@@ -97,6 +135,52 @@ export function CookingActuals({ batchRef, recipe, ingredients, canEdit, uid }: 
           );
         })}
       </ul>
+      <OrphanLines orphans={orphans} index={index} />
+    </div>
+  );
+}
+
+/**
+ * Money recorded against a line no row in this recipe claims: the ingredient
+ * was swapped on the recipe, or the recipe changed under a batch that had
+ * already been cooked, or `planStartCooking` wrote its placeholder line for
+ * a recipe with no main ingredient at all.
+ *
+ * It is shown, named and left exactly where it is. Reassigning it to another
+ * ingredient would be a guess about money, and hiding it would leave a
+ * figure in the batch's costs that nobody on this screen can see. The way
+ * out is on the recipe: put the ingredient back on it and the row picks the
+ * same document up again, with its figures intact.
+ */
+function OrphanLines({
+  orphans,
+  index,
+}: {
+  readonly orphans: readonly OrphanLine<BatchLineDoc>[];
+  readonly index: IngredientIndex;
+}): JSX.Element | null {
+  if (orphans.length === 0) return null;
+  return (
+    <div class="drift-section" data-testid="orphan-lines">
+      <p class="field-label">{BATCHES.orphansHeading}</p>
+      <ul class="line-list">
+        {orphans.map((orphan) => {
+          const name =
+            orphan.ingredientId === null
+              ? BATCHES.orphanNoIngredient
+              : (index[orphan.ingredientId]?.labelName ?? orphan.ingredientId);
+          const figures = BATCHES.orphanFigures(
+            orphan.doc.qtyActual !== undefined ? `${orphan.doc.qtyActual} g` : "",
+            orphan.doc.costActual !== undefined ? formatINR(orphan.doc.costActual) : "",
+          );
+          return (
+            <li key={orphan.doc.id} class="line-row" data-testid={`orphan-line-${orphan.doc.id}`}>
+              <span class="field-value number">{BATCHES.orphanLine(name, figures)}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <p class="field-help">{BATCHES.orphanHelp}</p>
     </div>
   );
 }
@@ -104,6 +188,7 @@ export function CookingActuals({ batchRef, recipe, ingredients, canEdit, uid }: 
 function ActualRow({
   batchRef,
   lineId,
+  rowKey,
   ingredientId,
   label,
   recipeQty,
@@ -117,6 +202,7 @@ function ActualRow({
 }: {
   readonly batchRef: string;
   readonly lineId: string;
+  readonly rowKey: string;
   readonly ingredientId: string;
   readonly label: string;
   readonly recipeQty: number;
@@ -212,56 +298,56 @@ function ActualRow({
   }
 
   return (
-    <li class="line-row" data-testid={`actual-row-${lineId}`}>
+    <li class="line-row" data-testid={`actual-row-${rowKey}`}>
       <span class="percent-name">{label}</span>
-      <p class="field-help" data-testid={`recipe-qty-${lineId}`}>
+      <p class="field-help" data-testid={`recipe-qty-${rowKey}`}>
         {BATCHES.recipeQty}: {Math.round(recipeG)} g
         {recipeEstimated ? ` (${BATCHES.recipeQtyEstimated})` : ""}
       </p>
 
       {canEdit ? (
         <>
-          <label for={`actual-weight-${lineId}`}>{BATCHES.actualWeight}</label>
+          <label for={`actual-weight-${rowKey}`}>{BATCHES.actualWeight}</label>
           <input
-            id={`actual-weight-${lineId}`}
+            id={`actual-weight-${rowKey}`}
             type="text"
             inputMode="decimal"
             value={qtyText}
-            data-testid={`actual-weight-${lineId}`}
+            data-testid={`actual-weight-${rowKey}`}
             onInput={(event) => setQtyText((event.target as HTMLInputElement).value)}
             onChange={(event) => commitQty((event.target as HTMLInputElement).value)}
           />
 
-          <label for={`actual-cost-${lineId}`}>{BATCHES.actualCost}</label>
+          <label for={`actual-cost-${rowKey}`}>{BATCHES.actualCost}</label>
           <input
-            id={`actual-cost-${lineId}`}
+            id={`actual-cost-${rowKey}`}
             type="text"
             inputMode="decimal"
             value={costText}
-            data-testid={`actual-cost-${lineId}`}
+            data-testid={`actual-cost-${rowKey}`}
             onInput={(event) => setCostText((event.target as HTMLInputElement).value)}
             onChange={(event) => commitCost((event.target as HTMLInputElement).value)}
           />
         </>
       ) : (
         <>
-          <span class="field-value number" data-testid={`view-actual-weight-${lineId}`}>
+          <span class="field-value number" data-testid={`view-actual-weight-${rowKey}`}>
             {existing?.qtyActual !== undefined ? `${existing.qtyActual} g` : ""}
           </span>
-          <span class="field-value number" data-testid={`view-actual-cost-${lineId}`}>
+          <span class="field-value number" data-testid={`view-actual-cost-${rowKey}`}>
             {existing?.costActual !== undefined ? formatINR(existing.costActual) : ""}
           </span>
         </>
       )}
 
       {error ? (
-        <p class="error" data-testid={`actual-error-${lineId}`}>
+        <p class="error" data-testid={`actual-error-${rowKey}`}>
           {error}
         </p>
       ) : null}
 
       {drift?.isDrifting ? (
-        <p class="notice-line" data-testid={`drift-warning-${lineId}`}>
+        <p class="notice-line" data-testid={`drift-warning-${rowKey}`}>
           {BATCHES.driftWarning(drift.percent)}
         </p>
       ) : null}

@@ -1266,10 +1266,27 @@ function planStartCooking(
 
   // Brief 14.1: the main ingredient's raw weight and price are recorded
   // against the batch between Sourcing and Cooking.
+  //
+  // M2.13: keyed by the ingredient, not by the literal id "main". The
+  // actuals screen keys every line by its ingredient (`admin/src/batches/
+  // lineIds.ts`), because a recipe may flag two lines `isMain` (batch 001
+  // does: prawns and dates are both named in the product name) and one id
+  // for both made them one document. This line is the same document that
+  // screen's main row edits, so it moves with it.
+  //
+  // A recipe with no main ingredient at all keeps the old id, and its
+  // `ingredientId` is then the same placeholder string rather than a real
+  // ingredient: nobody's `isMain` line can claim it, so the actuals screen
+  // shows it as a figure recorded against no ingredient in the recipe
+  // (`OrphanLines`) instead of hiding it. `costRaw` has no other home on the
+  // batch, so not writing it would lose it outright. Whether this transition
+  // should be refused for a recipe that names no main ingredient is a
+  // lifecycle question for Shefin, not something this task decides.
+  const mainId = context.mainIngredientId ?? "main";
   const lines: PlannedLine[] = [
     {
-      id: "main",
-      ingredientId: context.mainIngredientId ?? "main",
+      id: mainId,
+      ingredientId: mainId,
       qtyActual: weightRaw,
       costActual: costRaw,
     },

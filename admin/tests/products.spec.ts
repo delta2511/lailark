@@ -187,6 +187,36 @@ test("Owner creates a recipe with lines and watches the label block build", asyn
   await deleteDocument(`recipes/${(id ?? "").replace("recipe-row-", "")}`);
 });
 
+/**
+ * M2.13. Two lines of one ingredient cannot have separate actuals on a
+ * batch: those live in `batches/{ref}/lines` keyed by ingredient, and any
+ * positional tiebreak swaps the two lines' typed weights and costs the
+ * moment the lines are reordered. So the recipe does not allow the shape at
+ * all: an ingredient already on a line is not offered on another one.
+ */
+test("an ingredient already on a line is not offered on a second line", async ({ page }) => {
+  await setKitchenCanEditRecipes(false);
+  await signIn(page, OWNER_PHONE);
+  await openProducts(page);
+
+  await page.getByTestId("products-tab-recipes").click();
+  await page.getByTestId("new-recipe").click();
+  await expect(page.getByTestId("recipe-form")).toBeVisible();
+
+  await page.getByTestId("add-line").click();
+  await page.locator("#line-0-ingredient").selectOption(PRAWNS);
+  await page.getByTestId("add-line").click();
+
+  // Prawns is gone from the second line's options; vinegar is still there.
+  const second = page.locator("#line-1-ingredient");
+  await expect(second.locator(`option[value="${PRAWNS}"]`)).toHaveCount(0);
+  await expect(second.locator(`option[value="${VINEGAR}"]`)).toHaveCount(1);
+
+  // And the first line still shows its own choice.
+  await expect(page.locator("#line-0-ingredient")).toHaveValue(PRAWNS);
+  await expect(page.locator(`#line-0-ingredient option[value="${PRAWNS}"]`)).toHaveCount(1);
+});
+
 test("Owner flips the basis switch and the percentages move", async ({ page }) => {
   await setKitchenCanEditRecipes(false);
   await signIn(page, OWNER_PHONE);

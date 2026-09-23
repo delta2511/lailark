@@ -738,8 +738,11 @@ describe("sourcing -> cooking: the kitchen starts the pot", () => {
 
   it("records the main ingredient's weight and cost against the batch (14.1)", () => {
     const value = ok(plan({ ref: REF, to: "cooking", data: cookingInputs() }, sourcing)).value;
+    // M2.13: keyed by the ingredient, the same id the actuals screen gives
+    // that line, so a recipe with two main lines cannot collapse into one
+    // document.
     expect(value.lines).toEqual([
-      { id: "main", ingredientId: "prawns", qtyActual: 12000, costActual: 480000 },
+      { id: "prawns", ingredientId: "prawns", qtyActual: 12000, costActual: 480000 },
     ]);
   });
 
@@ -747,7 +750,7 @@ describe("sourcing -> cooking: the kitchen starts the pot", () => {
     const value = ok(
       plan({ ref: REF, to: "cooking", data: cookingInputs() }, { ...sourcing, mainIngredientId: null }),
     ).value;
-    expect(value.lines[0].ingredientId).toBe("main");
+    expect(value.lines[0]).toMatchObject({ id: "main", ingredientId: "main" });
   });
 
   it("asks for the landed date, the source, the raw weight and the cost", () => {

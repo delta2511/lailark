@@ -33,7 +33,13 @@ import {
 
 const PRAWNS = "m24-prawns";
 const VINEGAR = "m24-vinegar";
+const DATES = "m24-dates";
 const RECIPE = "m24-recipe";
+// M2.13: a recipe whose prawns and dates are both `isMain`, which is batch
+// 001's own shape (both are named in the product name, so 5(2)(g) asks for a
+// percentage against each). The bug this recipe exists to catch stored both
+// under one line id.
+const RECIPE_TWO_MAIN = "m24-recipe-2main";
 const PRODUCT = "m24-prawns-pickle";
 
 const REF_OWNER = "b-m24avn";
@@ -46,6 +52,10 @@ const REF_FILL = "b-m24fbr";
 const REF_MONEY = "b-m24mny";
 const REF_BLANK = "b-m24bnk";
 const REF_COSTS = "b-m24cst";
+const REF_TWO_MAIN = "b-m242mn";
+const REF_LEGACY = "b-m24lgc";
+const REF_WINDOW = "b-m24wnd";
+const REF_ORPHAN = "b-m24orp";
 
 const ALL_REFS = [
   REF_OWNER,
@@ -58,6 +68,10 @@ const ALL_REFS = [
   REF_MONEY,
   REF_BLANK,
   REF_COSTS,
+  REF_TWO_MAIN,
+  REF_LEGACY,
+  REF_WINDOW,
+  REF_ORPHAN,
 ];
 
 async function seedCatalogue(): Promise<void> {
@@ -91,6 +105,27 @@ async function seedCatalogue(): Promise<void> {
       { ingredientId: VINEGAR, qty: 2, unit: "l", isMain: false, evaporates: true, residueG: 400 },
     ],
   });
+  await seedDocument(`ingredients/${DATES}`, {
+    labelName: "M24 Dates",
+    allergenTags: [],
+    nutritionPer100g: { energyKcal: 282, proteinG: 2 },
+    unitCost: 30000,
+    unit: "g",
+    source: null,
+  });
+  await seedDocument(`recipes/${RECIPE_TWO_MAIN}`, {
+    productSlug: PRODUCT,
+    version: 1,
+    percentageBasis: "B",
+    expectedYieldJars: 20,
+    finishedWeightG: 4000,
+    storageText: "Cool, dry place.",
+    claimsText: "No added preservatives.",
+    lines: [
+      { ingredientId: PRAWNS, qty: 1550, unit: "g", isMain: true, evaporates: false },
+      { ingredientId: DATES, qty: 1000, unit: "g", isMain: true, evaporates: false },
+    ],
+  });
   await seedDocument(`products/${PRODUCT}`, {
     name: "M24 Prawns Pickle",
     type: "hero",
@@ -115,13 +150,17 @@ test.beforeEach(async ({ page }) => {
 test.afterEach(async () => {
   for (const ref of ALL_REFS) {
     await deleteDocument(`batches/${ref}/lines/main`);
+    await deleteDocument(`batches/${ref}/lines/${PRAWNS}`);
+    await deleteDocument(`batches/${ref}/lines/${DATES}`);
     await deleteDocument(`batches/${ref}/lines/${VINEGAR}`);
     await deleteDocument(`batches/${ref}`);
     await deleteDocument(`approvals/half-${ref}`);
     await deleteDocument(`approvals/open-${ref}`);
   }
   await deleteDocument(`recipes/${RECIPE}`);
+  await deleteDocument(`recipes/${RECIPE_TWO_MAIN}`);
   await deleteDocument(`ingredients/${PRAWNS}`);
+  await deleteDocument(`ingredients/${DATES}`);
   await deleteDocument(`ingredients/${VINEGAR}`);
   await deleteDocument(`products/${PRODUCT}`);
 });
@@ -292,7 +331,7 @@ test("Kitchen walks a batch through Sourcing, Cooking and Bottled", async ({ pag
   // The recipe calls for 1,550 g of prawns; 2,000 g raw is deliberately well
   // off it, so the main ingredient's actual carries a drift warning from the
   // moment Cooking opens (14.1: the main ingredient's raw weight and price
-  // are recorded here, and become the "main" line's actual).
+  // are recorded here, and become the prawns line's actual).
   await page.getByTestId("state-field-landedOn").fill("2026-09-01");
   await page.getByTestId("state-field-source").fill("Beypore harbour");
   await page.getByTestId("state-field-weightRaw").fill("2000");
@@ -310,8 +349,15 @@ test("Kitchen walks a batch through Sourcing, Cooking and Bottled", async ({ pag
 
   // Per-ingredient actuals, prefilled from the recipe. Prawns (the main
   // line) already carries the raw weight just submitted, and it drifts.
-  await expect(page.getByTestId("actual-weight-main")).toHaveValue("2000");
-  await expect(page.getByTestId("drift-warning-main")).toBeVisible();
+  // M2.13: that line is the prawns document, not a document called "main".
+  await expect(page.getByTestId(`actual-weight-${PRAWNS}`)).toHaveValue("2000");
+  await expect(page.getByTestId(`drift-warning-${PRAWNS}`)).toBeVisible();
+  expect(await readDocument(`batches/${REF_KITCHEN}/lines/${PRAWNS}`)).toMatchObject({
+    ingredientId: PRAWNS,
+    qtyActual: 2000,
+    costActual: 80_000,
+  });
+  expect(await readDocument(`batches/${REF_KITCHEN}/lines/main`)).toBeNull();
 
   // Vinegar opens on the recipe's own quantity (2 L at density 1.0 = 2,000
   // g), so it starts with no drift.
@@ -353,6 +399,252 @@ test("Kitchen walks a batch through Sourcing, Cooking and Bottled", async ({ pag
 
   // P&L has no real figures yet: the placeholder names M4.8, not a blank section.
   await expect(page.getByTestId("pnl-not-yet")).toHaveText(BATCHES.pnlNotYet);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Two main ingredients: two rows, two documents, neither writing the other's */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * M2.13. Batch 001's recipe flags prawns and dates both `isMain`, and the
+ * actuals screen used to key every main line under the literal id "main", so
+ * the two rows were one document: typing a cost against prawns moved the one
+ * against dates, and the second row's boxes looked as though they never
+ * saved. This test is that exact shape, asserted on the stored documents
+ * rather than on the screen, because it is the documents the P&L will read.
+ */
+test("two main ingredients take two independent weights and costs", async ({ page }) => {
+  await seedBatch(REF_TWO_MAIN, {
+    productSlug: PRODUCT,
+    productName: "M24 Prawns Pickle",
+    recipeId: RECIPE_TWO_MAIN,
+    mainIngredientName: "M24 Prawns",
+    state: "cooking",
+    plannedJars: 22,
+    bookableJars: 19,
+    perPersonLimit: 4,
+    paidCount: 10,
+    landedOn: "2026-09-01",
+    source: "Beypore harbour",
+    weightRaw: 2000,
+  });
+
+  await signIn(page, KITCHEN_PHONE);
+  await openBatch(page, REF_TWO_MAIN);
+
+  // Two rows, one per recipe line, each with its own pair of boxes.
+  await expect(page.getByTestId("actuals-list").locator("li")).toHaveCount(2);
+
+  await page.getByTestId(`actual-weight-${PRAWNS}`).fill("1600");
+  await page.getByTestId(`actual-weight-${PRAWNS}`).blur();
+  await page.getByTestId(`actual-cost-${PRAWNS}`).fill("900");
+  await page.getByTestId(`actual-cost-${PRAWNS}`).blur();
+
+  await page.getByTestId(`actual-weight-${DATES}`).fill("1100");
+  await page.getByTestId(`actual-weight-${DATES}`).blur();
+  await page.getByTestId(`actual-cost-${DATES}`).fill("400");
+  await page.getByTestId(`actual-cost-${DATES}`).blur();
+
+  // Neither box moved when the other was typed.
+  await expect(page.getByTestId(`actual-weight-${PRAWNS}`)).toHaveValue("1600");
+  await expect(page.getByTestId(`actual-cost-${PRAWNS}`)).toHaveValue("900");
+  await expect(page.getByTestId(`actual-weight-${DATES}`)).toHaveValue("1100");
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("400");
+
+  // A reload is what proves the figures are in Firestore and not in
+  // component state: the boxes come back filled from the documents alone.
+  // The open batch is not in the URL, so a reload lands on Today and the
+  // batch is opened again: the boxes are filled from the documents alone.
+  await page.reload();
+  await openBatch(page, REF_TWO_MAIN);
+  await expect(page.getByTestId(`actual-weight-${PRAWNS}`)).toHaveValue("1600");
+  await expect(page.getByTestId(`actual-cost-${PRAWNS}`)).toHaveValue("900");
+  await expect(page.getByTestId(`actual-weight-${DATES}`)).toHaveValue("1100");
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("400");
+
+  // Two documents, each carrying its own ingredient's numbers, in paise.
+  await expect
+    .poll(async () => await readDocument(`batches/${REF_TWO_MAIN}/lines/${PRAWNS}`))
+    .toMatchObject({ ingredientId: PRAWNS, qtyActual: 1600, costActual: 90_000 });
+  await expect
+    .poll(async () => await readDocument(`batches/${REF_TWO_MAIN}/lines/${DATES}`))
+    .toMatchObject({ ingredientId: DATES, qtyActual: 1100, costActual: 40_000 });
+});
+
+/**
+ * M2.13. A batch cooked before the fix has one `lines/main` document, and it
+ * may carry a cost somebody typed. That money is not moved between
+ * documents and not dropped: the row the document names goes on reading and
+ * writing it, and every other row, the second main line included, gets its
+ * own.
+ */
+test("a line document left under the old \"main\" id keeps its money and its row", async ({ page }) => {
+  await seedBatch(REF_LEGACY, {
+    productSlug: PRODUCT,
+    productName: "M24 Prawns Pickle",
+    recipeId: RECIPE_TWO_MAIN,
+    mainIngredientName: "M24 Prawns",
+    state: "cooking",
+    plannedJars: 22,
+    bookableJars: 19,
+    perPersonLimit: 4,
+    paidCount: 10,
+    weightRaw: 2000,
+  });
+  // What the old code left behind: prawns' weight and a cost typed by hand.
+  await seedDocument(`batches/${REF_LEGACY}/lines/main`, {
+    ingredientId: PRAWNS,
+    qtyActual: 2000,
+    costActual: 80_000,
+    createdBy: "seed",
+    createdAt: timestampValue(),
+    updatedBy: "seed",
+    updatedAt: timestampValue(),
+  });
+
+  await signIn(page, KITCHEN_PHONE);
+  await openBatch(page, REF_LEGACY);
+
+  // The prawns row opens on the money that is already there, not on a blank
+  // box and not on the recipe's own quantity.
+  await expect(page.getByTestId(`actual-weight-${PRAWNS}`)).toHaveValue("2000");
+  await expect(page.getByTestId(`actual-cost-${PRAWNS}`)).toHaveValue("800");
+  // Dates, the other main line, is a row of its own with nothing typed in it.
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("");
+
+  // Typing on dates writes dates' own document and leaves the old one alone.
+  await page.getByTestId(`actual-cost-${DATES}`).fill("400");
+  await page.getByTestId(`actual-cost-${DATES}`).blur();
+  await expect
+    .poll(async () => (await readDocument(`batches/${REF_LEGACY}/lines/${DATES}`))?.costActual)
+    .toBe(40_000);
+  expect(await readDocument(`batches/${REF_LEGACY}/lines/main`)).toMatchObject({
+    ingredientId: PRAWNS,
+    costActual: 80_000,
+  });
+
+  // Typing on prawns updates that same old document: the ₹800 is replaced by
+  // the new figure, not duplicated into a second document that a P&L would
+  // then count twice.
+  await page.getByTestId(`actual-cost-${PRAWNS}`).fill("850");
+  await page.getByTestId(`actual-cost-${PRAWNS}`).blur();
+  await expect
+    .poll(async () => (await readDocument(`batches/${REF_LEGACY}/lines/main`))?.costActual)
+    .toBe(85_000);
+  expect(await readDocument(`batches/${REF_LEGACY}/lines/${PRAWNS}`)).toBeNull();
+
+  // And it survives a reload: still one document for prawns, still the old
+  // one, with the new figure in it.
+  await page.reload();
+  await openBatch(page, REF_LEGACY);
+  await expect(page.getByTestId(`actual-cost-${PRAWNS}`)).toHaveValue("850");
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("400");
+  expect(await readDocument(`batches/${REF_LEGACY}/lines/${PRAWNS}`)).toBeNull();
+  await expect(page.getByTestId("orphan-lines")).toHaveCount(0);
+});
+
+/**
+ * M2.13 round 1. The listener behind the actuals opens empty, and a row
+ * resolved against that empty list binds to its own ingredient id instead of
+ * the legacy `lines/main` it should adopt. A commit inside that window used
+ * to create a second document for one ingredient: the legacy money then sat
+ * in the subcollection unseen, uneditable, and counted twice by anything
+ * summing it. There is nothing to type into until the lines have loaded.
+ */
+test("nothing can be typed into the actuals before the lines have loaded", async ({ page }) => {
+  await seedBatch(REF_WINDOW, {
+    productSlug: PRODUCT,
+    productName: "M24 Prawns Pickle",
+    recipeId: RECIPE_TWO_MAIN,
+    mainIngredientName: "M24 Prawns",
+    state: "cooking",
+    plannedJars: 22,
+    bookableJars: 19,
+    perPersonLimit: 4,
+    paidCount: 10,
+    weightRaw: 2000,
+  });
+  await seedDocument(`batches/${REF_WINDOW}/lines/main`, {
+    ingredientId: PRAWNS,
+    qtyActual: 2000,
+    costActual: 80_000,
+    createdBy: "seed",
+    createdAt: timestampValue(),
+    updatedBy: "seed",
+    updatedAt: timestampValue(),
+  });
+
+  await signIn(page, KITCHEN_PHONE);
+  await openBatch(page, REF_WINDOW);
+
+  // The instant the detail is on screen, either the boxes are not there yet
+  // or they already carry the legacy figures. What must never happen is a
+  // box that exists and is empty, because that is the box that writes a
+  // second document.
+  const costNow = await page.getByTestId(`actual-cost-${PRAWNS}`).inputValue().catch(() => null);
+  expect(costNow === null || costNow === "800").toBe(true);
+
+  await expect(page.getByTestId(`actual-cost-${PRAWNS}`)).toHaveValue("800");
+  await page.getByTestId(`actual-cost-${PRAWNS}`).fill("810");
+  await page.getByTestId(`actual-cost-${PRAWNS}`).blur();
+
+  await expect
+    .poll(async () => (await readDocument(`batches/${REF_WINDOW}/lines/main`))?.costActual)
+    .toBe(81_000);
+  // One document for prawns, not two.
+  expect(await readDocument(`batches/${REF_WINDOW}/lines/${PRAWNS}`)).toBeNull();
+});
+
+/**
+ * M2.13 round 1. Swapping a mis-picked ingredient on the recipe is an
+ * ordinary thing to do, and it used to strand whatever had been typed
+ * against the old one: no row read it, nobody could correct it, and a sum
+ * over the subcollection still counted it. It is named on the screen
+ * instead, and never reassigned to another ingredient.
+ */
+test("a cost recorded against an ingredient the recipe dropped is named, not hidden", async ({
+  page,
+}) => {
+  await seedBatch(REF_ORPHAN, {
+    productSlug: PRODUCT,
+    productName: "M24 Prawns Pickle",
+    // This recipe lists dates and vinegar. Nothing on it is prawns.
+    recipeId: RECIPE,
+    mainIngredientName: "M24 Prawns",
+    state: "cooking",
+    plannedJars: 22,
+    bookableJars: 19,
+    perPersonLimit: 4,
+    paidCount: 10,
+    weightRaw: 2000,
+  });
+  await seedDocument(`batches/${REF_ORPHAN}/lines/${DATES}`, {
+    ingredientId: DATES,
+    qtyActual: 900,
+    costActual: 30_000,
+    createdBy: "seed",
+    createdAt: timestampValue(),
+    updatedBy: "seed",
+    updatedAt: timestampValue(),
+  });
+
+  await signIn(page, KITCHEN_PHONE);
+  await openBatch(page, REF_ORPHAN);
+
+  // The recipe's own two lines are there, with nothing typed in them.
+  await expect(page.getByTestId(`actual-cost-${PRAWNS}`)).toHaveValue("");
+  // And the dates figures, which no row on this recipe claims, are on the
+  // screen with the ingredient named and the amount in rupees.
+  await expect(page.getByTestId("orphan-lines")).toBeVisible();
+  await expect(page.getByTestId(`orphan-line-${DATES}`)).toContainText("M24 Dates");
+  await expect(page.getByTestId(`orphan-line-${DATES}`)).toContainText("900 g");
+  await expect(page.getByTestId(`orphan-line-${DATES}`)).toContainText("300");
+
+  // Nothing was moved to say so.
+  expect(await readDocument(`batches/${REF_ORPHAN}/lines/${DATES}`)).toMatchObject({
+    ingredientId: DATES,
+    costActual: 30_000,
+  });
 });
 
 /* -------------------------------------------------------------------------- */
@@ -504,27 +796,30 @@ test("a cost and a weight typed in the same tick both reach Firestore", async ({
 
   await signIn(page, KITCHEN_PHONE);
   await openBatch(page, REF_MONEY);
-  await expect(page.getByTestId("actual-cost-main")).toBeVisible();
+  await expect(page.getByTestId(`actual-cost-${PRAWNS}`)).toBeVisible();
 
-  await page.evaluate(() => {
-    const fire = (testId: string, value: string): void => {
-      const box = document.querySelector<HTMLInputElement>(`[data-testid="${testId}"]`);
-      if (!box) throw new Error(`no box ${testId}`);
-      box.value = value;
-      box.dispatchEvent(new Event("input", { bubbles: true }));
-      box.dispatchEvent(new Event("change", { bubbles: true }));
-    };
-    fire("actual-cost-main", "500");
-    fire("actual-weight-main", "1700");
-  });
+  await page.evaluate(
+    (ingredientId: string) => {
+      const fire = (testId: string, value: string): void => {
+        const box = document.querySelector<HTMLInputElement>(`[data-testid="${testId}"]`);
+        if (!box) throw new Error(`no box ${testId}`);
+        box.value = value;
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+        box.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      fire(`actual-cost-${ingredientId}`, "500");
+      fire(`actual-weight-${ingredientId}`, "1700");
+    },
+    PRAWNS,
+  );
 
   await expect
-    .poll(async () => (await readDocument(`batches/${REF_MONEY}/lines/main`))?.qtyActual, {
+    .poll(async () => (await readDocument(`batches/${REF_MONEY}/lines/${PRAWNS}`))?.qtyActual, {
       timeout: 10_000,
     })
     .toBe(1700);
 
-  const line = await readDocument(`batches/${REF_MONEY}/lines/main`);
+  const line = await readDocument(`batches/${REF_MONEY}/lines/${PRAWNS}`);
   expect(line?.costActual, "the ₹500 must not have been wiped by the weight commit").toBe(50_000);
 });
 

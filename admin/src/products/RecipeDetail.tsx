@@ -76,6 +76,17 @@ function toLine(draft: LineDraft): RecipeLine {
   };
 }
 
+/** The first ingredient this recipe puts on two lines, or null (M2.13). */
+function firstRepeatedIngredient(lines: readonly LineDraft[]): string | null {
+  const seen = new Set<string>();
+  for (const line of lines) {
+    if (line.ingredientId === "") continue;
+    if (seen.has(line.ingredientId)) return line.ingredientId;
+    seen.add(line.ingredientId);
+  }
+  return null;
+}
+
 function numberOr(text: string, fallback: number): number {
   const value = Number(text.trim());
   return Number.isFinite(value) && text.trim() !== "" ? value : fallback;
@@ -100,6 +111,15 @@ export function RecipeDetail({
     isPercentageBasis(recipe?.percentageBasis) ? recipe.percentageBasis : DEFAULT_PERCENTAGE_BASIS,
   );
   const [busy, setBusy] = useState(false);
+  /**
+   * M2.13. Two lines of one ingredient cannot have separate actuals: their
+   * weights and costs live in `batches/{ref}/lines`, keyed by ingredient,
+   * and a positional tiebreak swaps them the moment the lines are reordered.
+   * Rather than key a batch's money on a line's position, the recipe simply
+   * does not allow the shape: the dropdown leaves out ingredients already on
+   * another line, and a save is refused if one slips through.
+   */
+  const [lineError, setLineError] = useState<string | null>(null);
 
   const index = useMemo(() => indexIngredients(ingredients.map((i) => ({ ...i, id: i.id }))), [ingredients]);
   const names = useMemo(() => {
@@ -132,6 +152,12 @@ export function RecipeDetail({
 
   async function submit(event: Event): Promise<void> {
     event.preventDefault();
+    const repeated = firstRepeatedIngredient(lines);
+    if (repeated !== null) {
+      setLineError(PRODUCTS.lineIngredientRepeated(names[repeated] ?? repeated));
+      return;
+    }
+    setLineError(null);
     setBusy(true);
     try {
       await onSave({
@@ -272,11 +298,21 @@ export function RecipeDetail({
               }
             >
               <option value="">{PRODUCTS.lineIngredient}</option>
-              {ingredients.map((ingredient) => (
-                <option key={ingredient.id} value={ingredient.id}>
-                  {ingredient.labelName}
-                </option>
-              ))}
+              {ingredients
+                // Already on another line: choosing it here would give two
+                // lines one ingredient, which the batch's actuals cannot
+                // tell apart (M2.13). The line's own current value stays,
+                // so an existing recipe still shows what it says.
+                .filter(
+                  (ingredient) =>
+                    ingredient.id === line.ingredientId ||
+                    !lines.some((l, i) => i !== position && l.ingredientId === ingredient.id),
+                )
+                .map((ingredient) => (
+                  <option key={ingredient.id} value={ingredient.id}>
+                    {ingredient.labelName}
+                  </option>
+                ))}
             </select>
 
             <label for={`line-${position}-qty`}>{PRODUCTS.lineQty}</label>
@@ -406,7 +442,11 @@ export function RecipeDetail({
           setLines([
             ...lines,
             {
-              ingredientId: ingredients[0]?.id ?? "",
+              // The first ingredient this recipe is not already using: a new
+              // line that defaulted to one already on another line would be
+              // the duplicate the dropdown refuses to let anyone pick (M2.13).
+              ingredientId:
+                ingredients.find((i) => !lines.some((l) => l.ingredientId === i.id))?.id ?? "",
               qty: "",
               unit: "g",
               isMain: false,
@@ -419,6 +459,12 @@ export function RecipeDetail({
       >
         {PRODUCTS.addLine}
       </button>
+
+      {lineError ? (
+        <p class="error" data-testid="line-error">
+          {lineError}
+        </p>
+      ) : null}
 
       {error ? (
         <p class="error" data-testid="save-error">
