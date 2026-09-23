@@ -185,7 +185,7 @@ M2.10 and M2.11 moved to Fast-follow (D29, 23 Sep 2026).
       "someone just bought the last one" failure. Void same day before bill sent. Sell
       screen in admin, one tap from the bottom bar. Done when: Playwright sells a jar
       for cash as Kitchen and the order, customer, batch count and audit all update.
-- [ ] M2.9 [opus] Documents and numbering. `counters/{series}` transaction issuing
+- [x] M2.9 [opus] Documents and numbering. (55edcc6; D35, D36, D37, D38 asked and answered during the task) `counters/{series}` transaction issuing
       `LK/26-27/0001` style numbers (brief §13.3), `documents/{number}` with the
       GST-ready fields at zero, PDF generation in a function (brief §13.2 content, the
       design tokens, A5), stored in Storage, short-lived signed URL. Receipt for
