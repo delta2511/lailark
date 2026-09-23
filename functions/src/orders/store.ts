@@ -186,6 +186,7 @@ export function saleProductViewFrom(snap: DocumentSnapshot): SaleProductView {
   return {
     slug: snap.id,
     name: typeof d.name === "string" && d.name !== "" ? d.name : snap.id,
+    hsn: typeof d.hsn === "string" && d.hsn !== "" ? d.hsn : null,
     priceInStock: numberOr(d.priceInStock, 0),
     priceOpen: numberOr(d.priceOpen, 0),
     customLines,
@@ -201,6 +202,7 @@ export function saleCustomerViewFrom(snap: DocumentSnapshot): SaleCustomerView {
   return {
     phone: snap.id,
     name: typeof d.name === "string" ? d.name : "",
+    email: typeof d.email === "string" && d.email !== "" ? d.email : null,
     orders: numberOr(stats.orders, 0),
     jars: numberOr(stats.jars, 0),
     consentUpdates: updates.given === true,

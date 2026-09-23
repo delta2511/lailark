@@ -287,6 +287,8 @@ export interface CounterSaleResult {
   readonly customerCreated: boolean;
   readonly paid: boolean;
   readonly holdExpiresAtMillis: number | null;
+  /** The bill's number, `"LK/26-27/0001"`, or null when none was issued. */
+  readonly billNumber?: string | null;
   /** True when this exact sale had already been saved, so nothing happened twice. */
   readonly alreadySold?: boolean;
 }
@@ -309,6 +311,42 @@ export interface VoidResult {
   readonly batchRef: string | null;
   readonly jarsReturned: number;
   readonly reason: string;
+  /** The number the bill keeps, marked void (brief 13.3). */
+  readonly billNumber?: string | null;
+  /**
+   * False when the bill named by the order could not be marked. The sale is
+   * still voided and the jar still goes back; a `concerns` document has been
+   * raised for the Owner, and `concernId` names it.
+   */
+  readonly billMarkedVoid?: boolean;
+  readonly concernId?: string | null;
+}
+
+/**
+ * **Decision D35.** The one way the Kitchen sees a bill.
+ *
+ * `documents` and `documents/**` in Storage keep `seesMoney()`, so a Kitchen
+ * phone cannot read a bill out of Firestore or fetch one out of the bucket.
+ * It names one order it is working on, and the server hands back a
+ * short-lived link to that one PDF. Owner and Viewer go through the same
+ * door, so there is one code path and one place a bill can leak from.
+ */
+export interface BillLink {
+  readonly orderId: string;
+  readonly documentNumber: string;
+  readonly documentId: string;
+  readonly kind: string;
+  readonly url: string;
+  readonly expiresAtMillis: number;
+  /** False only against the emulator, which cannot sign a URL. */
+  readonly signed: boolean;
+  readonly voided: boolean;
+}
+
+export async function callBillForOrder(orderId: string): Promise<BillLink> {
+  const call = httpsCallable<{ orderId: string }, BillLink>(functions, "billForOrder");
+  const result = await call({ orderId });
+  return result.data;
 }
 
 /** Brief 7A.6: void a sale entered by mistake, same day, before the bill. */

@@ -68,6 +68,10 @@ confirm or replace at the next milestone break.
 | D32 | **Customer messages at launch are sent by hand** | The WhatsApp layer and agent (M5.1 to M5.3) are fast-follow. Where the admin would send, it shows the drafted text from the brief or Settings with a prefilled `wa.me` link per recipient, and the sender ticks it sent (mechanism proposed by Claude, 23 Sep, open to Shefin's overrule at the M3 break). The hard rule that nothing is automatic still holds. Shefin and Sumayya answer customer WhatsApp themselves |
 | D33 | **Manual workarounds until Fast-follow lands** | Listed per task in the Fast-follow section of `TASKS.md`. Notable: counter UPI goes to Lailark's account only, the Razorpay QR half of D10 waits (M3.7); batch record pages are published by adding the JSON and running `npm run deploy`, the ST6 Publish button waits (M5.6); India Post only; books kept by hand while GST is off |
 | D34 | **Shefin in the loop between tasks** | Sonnet tasks that produce a screen or page (M3.1, M3.3, M3.4, M3.9, M4.1) are checked by Shefin instead of a tester subagent; the orchestrator runs build, lint and tests itself, then stops with a short check note. Opus tasks and anything touching money, rules, transactions, auth or webhooks keep the fresh automated tester and do not stop. Never-assume questions are asked the moment they come up, not parked in `QUESTIONS.md`. Every stop ends with /clear and a fresh session. Reason: fewer tokens per task and less rework. CLAUDE.md §4.1 and §4.4 |
+| D35 | **Kitchen may open the bill for any order, through a server callable only** | Asked and answered 23 Sep 2026 during M2.9. The money collections stay shut to Kitchen: `documents`, `counters`, `refunds`, `settlements` and `documents/**` in Storage keep `seesMoney()` in the rules, so Kitchen cannot browse the books or read a bill straight from Firestore or the bucket. A callable takes one order id, checks the caller is Owner, Kitchen or Viewer, and returns a short-lived link to that order's bill. Reason: Sumayya rings up the counter sale, so she is the one handing the bill over, and a bill is one sale the customer is standing there for, not the books. This is the one named exception to the "See Money" row of brief §17.12 |
+| D36 | **A counter sale paid by payment link is billed at capture, not at save** | Asked and answered 23 Sep 2026 during M2.9. Settles the two readings of brief §13.1: "Counter sale: at save" and, one row above, "In stock online: at payment". Cash and UPI to account are paid at save, so their bill is issued in the same transaction as the sale. A payment link is not paid at save: the jars are held and the link may expire, so no number is spent until Razorpay captures, which is M3.6's webhook calling the same code. Reason: a bill number is permanent, never reused and never deleted, so issuing one for a hold that may expire puts an unpaid non-sale in the register the CA reads |
+| D37 | **A document carries no sentence of its own. It is structural** | Asked and answered 23 Sep 2026 during M2.9. Seller block, labelled fields, lines, totals, payment, and nothing else. No footer, no thank-you, no line explaining in words what a credit note does. A bill is a record, not a note. It is one string in `functions/src/money/copy.ts` if Shefin ever wants one |
+| D38 | **The door line on a bill is an editable field, not a constant** | Asked and answered 23 Sep 2026 during M2.9. "Handed over at Kunnamangalam" stands as the wording, capitalised and without a full stop, where an address would sit. Shefin asked for it to be kept editable with a note saying so, so it lives in the seller settings document with that string as the fallback, and changing it is a settings change rather than a deploy. Same shape as the rest of `settings/seller` (A102) |
 
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
@@ -515,3 +519,71 @@ break.
   the Firebase client appends to it. These sentences are read at the counter with a
   customer waiting, and "[409]" is for a log. Only a bracketed 100 to 599 is removed,
   so "batch [001]" keeps its number. Status: open.
+- A97 (M2.9, 23 Sep): the PDF is drawn with `pdf-lib` (one new dependency, `functions`).
+  Pure JavaScript, no native build, no transitive dependency and no headless browser: a
+  hundred megabytes and several seconds of Chromium for one A5 page on a cold
+  `asia-south1` instance is the wrong trade, and a font file is a binary asset with a
+  licence to track. Status: open.
+- A98 (M2.9, 23 Sep): the rupee sign is drawn as vector paths rather than embedded as a
+  font or replaced with "Rs.". U+20B9 is not in WinAnsi, so a PDF core font cannot print
+  it and throws if handed one. Drawing it keeps the mark on the bill identical to the
+  mark on the screen with no binary asset. There is a test asserting a core font really
+  does throw, so nobody can "fix" it back into a broken state. Status: open.
+- A99 (M2.9, 23 Sep): a discount is not a bill line. It comes off under the subtotal,
+  once, with its reason beside it. The first draft put it in both places, which shows
+  the same fifty rupees twice to somebody checking a bill by hand. Status: open.
+- A100 (M2.9, 23 Sep): `DocumentRecord` stores a frozen snapshot of the seller, the
+  customer, the delivery line, the payment and the money breakdown rather than joining
+  onto `orders` and `customers`. A bill is a record of one moment: a customer who later
+  corrects the spelling of their name has not changed the bill they were given, and
+  re-rendering it in three years must give the same page. Status: open.
+- A101 (M2.9, 23 Sep): against the Storage emulator the bill link is an ordinary
+  download URL with a fixed token and the callable's result says `signed: false`. The
+  emulator has no service account and no `signBlob`, so a signed URL cannot work there.
+  Saying so in the response rather than hiding it is what stops an unsigned link ever
+  shipping quietly. Production is a V4 signed URL expiring in ten minutes. Status: open.
+- A102 (M2.9, 23 Sep): `settings/seller` overrides `DEFAULT_SELLER` field by field, with
+  `gstin` the one field having no fallback. A new address or a renewed FSSAI licence
+  should be a settings change, not a deploy; a GSTIN is never invented. D38 puts the
+  door line in this same block. Status: open.
+- A103 (M2.9, 23 Sep): `splitGst` throws when `settings/gst.enabled` is true rather than
+  returning zeros, and `createCounterSale` checks the switch before it reads or writes
+  anything and refuses with a plain sentence. GST arithmetic is out of M2.9's scope, and
+  a switch that silently issues zero-tax tax invoices is worse than one that refuses.
+  Status: open.
+- A104 (M2.9, 23 Sep): `ensureDocumentPdf` returns null for a missing or malformed
+  document instead of throwing. Trigger delivery is at-least-once and out of band, so a
+  firing can arrive after the document has gone or before it is whole; throwing kills
+  the function instance, which took concurrent counter sales down with it twice during
+  this task. Status: open.
+- A105 (M2.9, 23 Sep): the PDF's creation and modification dates are the issue date, not
+  the render time, so a re-render is byte-identical rather than a page claiming to have
+  been made today. Status: open.
+- A106 (M2.9, 23 Sep): a void that cannot mark its bill still voids the sale and returns
+  the jar, and raises an urgent `concerns` document of type `technicalFailure` for the
+  Owner, in the same commit. Refusing the whole void would leave the count wrong as well
+  as the books, which is worse; and a live bill for a sale that did not happen is money,
+  so it may not end as a silent branch. Nothing is drafted and nothing reaches a
+  customer. Status: open.
+- A107 (M2.9, 23 Sep): that concern's id is derived from the order
+  (`bill-not-voided-{orderId}`), so a retried transaction or a repeated attempt raises
+  one concern rather than a pile. Status: open.
+- A108 (M2.9, 23 Sep): `renderDocumentPdf` fills a blank for any missing field instead
+  of throwing, behind `isRenderable`'s stronger refusal. A blank on a page nobody will
+  ever be given is a thing to notice; a dead function instance takes concurrent counter
+  sales down with it. Status: open.
+- A109 (M2.9, 23 Sep): nothing on a bill is truncated. A word wider than its column is
+  broken character by character, and a long label wraps and keeps its amount level with
+  its last line. A customer's name, their email and the reason they were given a
+  discount are not things to cut short on a bill. Status: open.
+- A110 (M2.9, 23 Sep): a `documents/{id}` is created in exactly one place, `writeDocument`,
+  by a `tx.create` on the number-as-id, which is what makes "never reused" true rather
+  than likely. Every other writer uses `update`, which fails on a missing document where
+  a merging `set` would create a headless row at an already-issued number and wedge the
+  series for good. Two separate paths had this bug and both are now shaped so the
+  mistake cannot be made. Status: open.
+- A111 (M2.9, 23 Sep): a customer name that a core font cannot print falls back to the
+  phone number, and the phone line beneath it is then suppressed so the number is not
+  printed twice. The test is on the flattened name, not the typed one: Kunnamangalam is
+  in Kerala, so a Malayalam name at the counter is ordinary, and it used to leave
+  "Billed to" blank. Status: open.

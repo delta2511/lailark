@@ -1017,6 +1017,18 @@ textarea {
   font-size: var(--font-size-body);
 }
 
+/*
+ * M2.9: the bill's number and the one tap that opens it. The number is a
+ * number, so it takes the number colour; the button beside it is quiet, the
+ * way the Void button is, because neither is the thing this screen is for.
+ */
+.sale-row-bill {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
 .void-form {
   display: flex;
   flex-direction: column;

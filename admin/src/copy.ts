@@ -632,6 +632,14 @@ export const SELL = {
   voidFailed: "That did not go through. Please check the signal and try again.",
   voidDone: (jars: number) =>
     jars === 0 ? "Voided." : jars === 1 ? "Voided. 1 jar is back on the batch." : `Voided. ${jars} jars are back on the batch.`,
+  /* ---- the bill, M2.9, brief 13.1 and D35 ---- */
+  billLabel: "Bill",
+  billOpening: "Opening...",
+  billNone: "No bill for this one yet.",
+  billFailed: "The bill did not open. Please check the signal and try again.",
+  billBlocked: "Your phone stopped the bill opening. Allow pop-ups for this site, then tap again.",
+  billVoided: "This bill is marked void.",
+
   /** Brief 7A.6: same day, before the bill has gone. */
   voidNotAvailable: "The bill has gone, so this is Shefin's to cancel with a credit note.",
 

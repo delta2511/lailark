@@ -20,12 +20,14 @@
 
 import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { toDocumentId } from "@lailark/shared";
 
 import { writeAudit } from "../audit/write";
 import { readStockRelease, ReleaseRefused, writeStockRelease } from "../batches/holds";
 import { BATCHES } from "../batches/store";
 import { getAdminApp } from "../lib/admin";
 import { DEFAULT_MAX_INSTANCES, REGION } from "../lib/options";
+import { markDocumentVoid, raiseUnmarkedBillConcern, readOrderBill, type UnmarkedBillReason } from "../money/issue";
 import { checkSeller, planCounterSaleVoid, type VoidableOrderView } from "./sale";
 import {
   CUSTOMERS,
@@ -69,6 +71,33 @@ export const voidCounterSale = onCall(
           throw new HttpsError("not-found", "There is no sale with that reference.");
         }
         const order = voidableOrderFrom(orderSnap.id, orderSnap.data() ?? {});
+
+        // Brief 13.3: "A counter sale voided the same day before its bill was
+        // sent keeps its number, marked void." So the bill is not deleted and
+        // the counter is not wound back.
+        //
+        // The document is **read** here, in the read phase, and only marked
+        // if it is really there. Writing the mark blind with a merge would
+        // create a document at that id when there is none, which is how a
+        // ghost row with no kind and no total gets into `documents`, wedges
+        // the whole series (every later sale's `tx.create` on that id fails
+        // for good) and crashes the render trigger. A document is created in
+        // exactly one place, and this is not it.
+        const rawBillNumber = orderSnap.get("billNumber");
+        const billNumber =
+          typeof rawBillNumber === "string" && rawBillNumber !== "" ? rawBillNumber : null;
+
+        let billDocumentId: string | null = null;
+        let billProblem: UnmarkedBillReason | null = null;
+        if (billNumber !== null) {
+          try {
+            billDocumentId = toDocumentId(billNumber);
+          } catch {
+            billProblem = "unreadable-number";
+          }
+        }
+        const billSnap = billDocumentId === null ? null : await readOrderBill(tx, db, billDocumentId);
+        if (billSnap !== null && !billSnap.exists) billProblem = "no-document";
 
         const customerRef = db.collection(CUSTOMERS).doc(order.customerPhone);
         const customerSnap = order.customerPhone === "" ? null : await tx.get(customerRef);
@@ -133,6 +162,30 @@ export const voidCounterSale = onCall(
           });
         }
 
+        // The jar goes back either way: refusing the whole void because the
+        // bill cannot be found would leave the count wrong as well as the
+        // books. But a live bill for a sale that did not happen is money, so
+        // the skip is never silent: it raises a concern for the Owner and
+        // goes in the trail. Nothing is drafted or sent to a customer.
+        let concernId: string | null = null;
+        if (billSnap !== null && billSnap.exists) {
+          markDocumentVoid(tx, db, billSnap, plan.orderPatch.voidReason as string, actor);
+        } else if (billNumber !== null && billProblem !== null) {
+          concernId = raiseUnmarkedBillConcern(
+            tx,
+            db,
+            {
+              orderId,
+              customerPhone: order.customerPhone === "" ? null : order.customerPhone,
+              billNumber,
+              total: order.total,
+              reason: billProblem,
+              voidReason: plan.orderPatch.voidReason as string,
+            },
+            actor,
+          );
+        }
+
         if (release !== null) {
           writeStockRelease(tx, db, release, actor);
           writeAudit(tx, db, {
@@ -150,6 +203,11 @@ export const voidCounterSale = onCall(
           batchRef: plan.batchRef,
           jarsReturned: release?.qtyReturned ?? 0,
           reason: plan.orderPatch.voidReason as string,
+          /** The number the bill keeps (13.3), whatever happened to the mark. */
+          billNumber,
+          /** False when the bill could not be marked. Then `concernId` says so. */
+          billMarkedVoid: billSnap !== null && billSnap.exists,
+          concernId,
         };
       },
       { maxAttempts: MAX_TRANSACTION_ATTEMPTS },

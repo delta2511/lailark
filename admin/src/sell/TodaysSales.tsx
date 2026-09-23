@@ -15,6 +15,13 @@
  * The void itself goes through `voidCounterSale`, which puts the jar back on
  * the batch, moves the order to `voided` and writes both to the trail, all
  * in one transaction. Nothing here writes anything.
+ *
+ * **The Bill button (M2.9, D35).** The smallest thing that satisfies "a
+ * counter sale produces a bill PDF viewable from the order screen": one tap
+ * on the row, which asks `billForOrder` for a short-lived link and opens it.
+ * The full Orders screen, where every document for an order is listed, is
+ * M3.9. Nothing here reads `documents` or Storage, and nothing could: both
+ * keep `seesMoney()`, so the Kitchen's only way to a bill is the callable.
  */
 import { formatINR } from "@lailark/shared";
 import type { JSX } from "preact";
@@ -22,7 +29,13 @@ import { useState } from "preact/hooks";
 
 import { PAYMENT_LABEL, SELL } from "../copy";
 import { formatIndianMobile } from "../phone";
-import { callVoidCounterSale, saleErrorMessage, useTodaysCounterSales, type OrderDoc } from "./data";
+import {
+  callBillForOrder,
+  callVoidCounterSale,
+  saleErrorMessage,
+  useTodaysCounterSales,
+  type OrderDoc,
+} from "./data";
 
 /** What the line on this order was, in as few words as the order carries. */
 function describe(order: OrderDoc): string {
@@ -48,9 +61,35 @@ function SaleRow({ order }: RowProps): JSX.Element {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [billing, setBilling] = useState(false);
 
   const voided = order.state === "voided";
   const canVoid = !voided && !billHasGone(order);
+  const billNumber = (order as { billNumber?: string | null }).billNumber ?? null;
+
+  async function openBill(): Promise<void> {
+    setBilling(true);
+    setError(null);
+    try {
+      const link = await callBillForOrder(order.id);
+      // Opened in a new tab rather than navigated to: the seller is in the
+      // middle of a counter session and must not lose the Sell screen. A
+      // phone that blocks the pop-up is told what to do about it, because
+      // "nothing happened" is the worst possible answer at a counter.
+      //
+      // `noopener` is **not** passed in the features string: with it,
+      // `window.open` returns null even when the tab opened perfectly well,
+      // so every successful tap would claim to have been blocked. The
+      // opener is cut afterwards instead, which is the same protection.
+      const opened = window.open(link.url, "_blank");
+      if (opened === null) setError(SELL.billBlocked);
+      else opened.opener = null;
+    } catch (err) {
+      setError(saleErrorMessage(err, SELL.billFailed));
+    } finally {
+      setBilling(false);
+    }
+  }
 
   async function voidIt(): Promise<void> {
     if (reason.trim() === "") {
@@ -95,6 +134,28 @@ function SaleRow({ order }: RowProps): JSX.Element {
           {done}
         </p>
       ) : null}
+
+      {billNumber !== null ? (
+        <div class="sale-row-bill">
+          <span class="field-value number" data-testid={`bill-number-${order.id}`}>
+            {billNumber}
+          </span>
+          <button
+            type="button"
+            class="quiet"
+            data-testid={`bill-${order.id}`}
+            disabled={billing}
+            onClick={() => void openBill()}
+          >
+            {billing ? SELL.billOpening : SELL.billLabel}
+          </button>
+          {voided ? <span class="field-help">{SELL.billVoided}</span> : null}
+        </div>
+      ) : (
+        <p class="field-help" data-testid={`bill-none-${order.id}`}>
+          {SELL.billNone}
+        </p>
+      )}
 
       {!voided && !canVoid ? <p class="field-help">{SELL.voidNotAvailable}</p> : null}
 

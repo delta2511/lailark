@@ -235,10 +235,27 @@ test("Kitchen sells a jar for cash, and the order, the customer, the batch count
   expect((order.payment as Record<string, unknown>).status).toBe("captured");
   expect((order.payment as Record<string, unknown>).amount).toBe(PRICE_IN_STOCK);
   expect(order.discount).toBeNull();
-  // The bill itself is M2.9. Nothing has gone to the customer.
-  expect(order.billNumber).toBeNull();
+  // M2.9, brief 13.1: "Counter sale: at save." The bill is issued in the same
+  // commit as the sale. Nothing has been **sent** to the customer, though:
+  // that is done by hand at launch (D32), so `billSentAt` is still null and
+  // the sale is still voidable.
+  // The serial itself is whatever the series is up to in this emulator run;
+  // what is checked is the spelling, that the order and the document agree,
+  // and that the document exists.
+  expect(order.billNumber).toMatch(/^LK\/\d{2}-\d{2}\/\d{4,}$/);
   expect(order.billSentAt).toBeNull();
   const orderId = order.number as string;
+  const billNumber = order.billNumber as string;
+  const billId = billNumber.split("/").join("-");
+
+  const bill = await readDocument(`documents/${billId}`);
+  expect(bill?.kind).toBe("bill");
+  expect(bill?.orderId).toBe(orderId);
+  expect(bill?.total).toBe(PRICE_IN_STOCK);
+  // GST is off, so all three taxes are written at zero (D26).
+  expect(bill?.cgst).toBe(0);
+  expect(bill?.sgst).toBe(0);
+  expect(bill?.igst).toBe(0);
 
   /* ---- the customer -------------------------------------------------- */
 
@@ -271,6 +288,28 @@ test("Kitchen sells a jar for cash, and the order, the customer, the batch count
 
   await page.getByTestId("new-sale-again").click();
   await expect(page.getByTestId(`sale-row-${orderId}`)).toBeVisible();
+
+  /* ---- and its bill can be opened from the row (M2.9, D35) ------------ */
+
+  await expect(page.getByTestId(`bill-number-${orderId}`)).toHaveText(billNumber);
+
+  // The Kitchen cannot read `documents` or the bucket (both keep
+  // `seesMoney()`), so this button is the only way it ever sees a bill: one
+  // callable, one order, one short-lived link. What is checked here is that
+  // the tap reaches the callable and comes back with a link to this order's
+  // own bill; that the link really serves a PDF is checked against the
+  // emulator in `functions/test/documents.test.ts`, where the bytes can be
+  // read without a browser deciding how to display a PDF.
+  const answered = page.waitForResponse(
+    (response) => response.url().includes("billForOrder") && response.status() === 200,
+  );
+  const opened = page.context().waitForEvent("page");
+  await page.getByTestId(`bill-${orderId}`).click();
+  const body = (await (await answered).json()) as { result: { documentNumber: string; url: string } };
+  expect(body.result.documentNumber).toBe(billNumber);
+  expect(body.result.url).toContain(encodeURIComponent(`${billId}.pdf`));
+  await expect(page.getByTestId(`void-error-${orderId}`)).toHaveCount(0);
+  await (await opened).close();
 });
 
 /* -------------------------------------------------------------------------- */

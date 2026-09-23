@@ -12,6 +12,10 @@
 process.env.GCLOUD_PROJECT ??= "lailark";
 process.env.FIRESTORE_EMULATOR_HOST ??= "127.0.0.1:8080";
 process.env.FIREBASE_AUTH_EMULATOR_HOST ??= "127.0.0.1:9099";
+// M2.9: documents' PDFs. The suite runs `--only firestore,auth,functions,
+// storage`, so this is set for the test process the same way the others are.
+process.env.FIREBASE_STORAGE_EMULATOR_HOST ??= "127.0.0.1:9199";
+process.env.STORAGE_EMULATOR_HOST ??= `http://${process.env.FIREBASE_STORAGE_EMULATOR_HOST}`;
 
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";

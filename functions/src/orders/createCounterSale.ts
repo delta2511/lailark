@@ -59,6 +59,8 @@ import {
 import { BATCHES, PRODUCTS } from "../batches/store";
 import { getAdminApp } from "../lib/admin";
 import { DEFAULT_MAX_INSTANCES, REGION } from "../lib/options";
+import { issueDocument, readDocumentContext, readIssue } from "../money/issue";
+import { type DocumentSource, GST_NOT_BUILT_REFUSAL } from "../money/plan";
 import {
   type BatchCandidate,
   checkSeller,
@@ -72,7 +74,6 @@ import {
   CUSTOMERS,
   findNearMisses,
   freeOrderRef,
-  homeState,
   kitchenDiscountCap,
   ORDERS,
   paymentLinkHoldMinutes,
@@ -152,7 +153,39 @@ export const createCounterSale = onCall(
 
         const kitchenCap = await kitchenDiscountCap(tx, db);
         const linkHoldMinutes = await paymentLinkHoldMinutes(tx, db, PAYMENT_LINK_HOLD_MINUTES);
-        const placeOfSupplyHome = await homeState(tx, db);
+
+        // The seller block, the prefixes and the GST switch, frozen onto the
+        // bill this sale is about to be given (M2.9, brief 13.2). Also where
+        // the place of supply comes from, so `settings/gst` is read once.
+        const documents = await readDocumentContext(tx, db);
+        const placeOfSupplyHome = documents.gst.homeState;
+
+        // GST cannot be worked out yet (A103), so a bill cannot be issued
+        // with it on. Refused here, before anything is read or written, with
+        // a sentence a person at the counter can act on rather than the bare
+        // INTERNAL that the throw inside `splitGst` would become.
+        if (documents.gst.enabled) {
+          throw new HttpsError("failed-precondition", GST_NOT_BUILT_REFUSAL);
+        }
+
+        // **Decision D36.** Brief 13.1 reads "Counter sale: at save" one row
+        // and "In stock online: at payment" the next, and a counter sale paid
+        // by link is both. Shefin's answer: a payment link is billed at
+        // **capture**, not at save. A cash or UPI-to-account sale is paid the
+        // moment it is entered, so its bill is issued here, in this
+        // transaction, and the sale cannot commit without one. A payment link
+        // is not paid at save: the jars are only held, the link may expire,
+        // and no money has moved, so spending a permanent, never-reused,
+        // never-deleted number on it would put an unpaid non-sale in the
+        // register and leave a hole when it lapsed. That bill is issued when
+        // Razorpay captures the payment, in M3.6's webhook, through this same
+        // call.
+        const willIssueBill =
+          input.paymentMethod === "cash" || input.paymentMethod === "upiToAccount";
+        // Read in the read phase, like everything else: the counter document
+        // goes into this transaction's read set, so two sellers at once are
+        // retried against each other rather than taking one number twice.
+        const serial = willIssueBill ? await readIssue(tx, db, "bill", nowMillis, documents) : null;
 
         let product: SaleProductView | null = null;
         if (input.line.productSlug !== null) {
@@ -210,6 +243,7 @@ export const createCounterSale = onCall(
 
         const customerRef = db.collection(CUSTOMERS).doc(input.customerPhone);
         const customerSnap = await tx.get(customerRef);
+        const customerView = customerSnap.exists ? saleCustomerViewFrom(customerSnap) : null;
 
         /* ---- plan ---------------------------------------------------- */
 
@@ -218,7 +252,7 @@ export const createCounterSale = onCall(
           orderId,
           batch: claim === null ? null : saleBatchViewFrom(claim.batchSnap),
           product,
-          customer: customerSnap.exists ? saleCustomerViewFrom(customerSnap) : null,
+          customer: customerView,
           kitchenDiscountCap: kitchenCap,
           homeState: placeOfSupplyHome,
           paymentLinkHoldMinutes: linkHoldMinutes,
@@ -232,15 +266,56 @@ export const createCounterSale = onCall(
         const actor = seller.uid;
         const orderRef = db.collection(ORDERS).doc(orderId);
 
+        // Brief 13.2, from values this transaction already has in hand. The
+        // jar numbers are empty: a jar takes its number when it is packed
+        // (M4.1), and a jar handed over at the door never gets one.
+        const documentSource: DocumentSource = {
+          orderId,
+          channel: "counter",
+          customerName: input.customerName ?? customerView?.name ?? "",
+          customerPhone: input.customerPhone,
+          customerEmail: customerView?.email ?? null,
+          deliveryLines: input.deliveryContact?.lines ?? [],
+          placeOfSupply: plan.order.placeOfSupply as string,
+          lines: [
+            {
+              description: plan.lineDescription,
+              hsn: product?.hsn ?? null,
+              qty: input.line.qty,
+              unitPrice: plan.unitPrice,
+              batchNo: claim?.batchNo ?? null,
+              jarNumbers: [],
+            },
+          ],
+          shippingFee: plan.totals.shippingFee,
+          discount: input.discountPaise,
+          discountReason: input.discountPaise === 0 ? null : input.discountReason,
+          paymentMethod: input.paymentMethod,
+          paymentStatus: plan.stockMode === "paid" ? "captured" : "created",
+          paymentReference: input.upiRef,
+        };
+
         const orderBody: Record<string, unknown> = {
           ...plan.order,
           // A payment link's jars are out of the count until it expires
           // (7A.1 step 5). A paid sale's jar is simply gone.
           holdExpiresAt:
             claim?.expiresAtMillis != null ? Timestamp.fromMillis(claim.expiresAtMillis) : null,
+          // The bill's number, in the same commit as the bill itself.
+          billNumber: serial?.number ?? null,
         };
 
         tx.create(orderRef, withStamps(orderBody, plan.stampFields, actor));
+
+        if (serial !== null) {
+          issueDocument(
+            tx,
+            db,
+            serial,
+            { source: documentSource, context: documents, nowMillis },
+            actor,
+          );
+        }
         writeAudit(tx, db, {
           object: `${ORDERS}/${orderId}`,
           action: "counterSale",
@@ -294,6 +369,7 @@ export const createCounterSale = onCall(
           lineDescription: plan.lineDescription,
           batchRef,
           batchNo: claim?.batchNo ?? null,
+          billNumber: serial?.number ?? null,
           customerCreated: plan.customerIsNew,
           paid: plan.stockMode === "paid",
           holdExpiresAtMillis: claim?.expiresAtMillis ?? null,
@@ -321,6 +397,8 @@ export interface CounterSaleResult {
   readonly lineDescription: string;
   readonly batchRef: string | null;
   readonly batchNo: string | null;
+  /** The bill's number, `"LK/26-27/0001"`, or null when none was issued. */
+  readonly billNumber: string | null;
   readonly customerCreated: boolean;
   readonly paid: boolean;
   readonly holdExpiresAtMillis: number | null;
@@ -356,6 +434,7 @@ function soldAlready(orderId: string, snap: DocumentSnapshot): CounterSaleResult
     lineDescription: str(line.description) ?? "",
     batchRef: str(line.batchRef),
     batchNo: str(line.batchNo),
+    billNumber: str(d.billNumber),
     customerCreated: false,
     paid: str(payment.status) === "captured",
     holdExpiresAtMillis: null,

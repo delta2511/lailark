@@ -11,14 +11,15 @@
     "lint": "eslint .",
     "test": "vitest run && npm run build && npm run test:emulator",
     "test:unit": "vitest run",
-    "test:emulator": "firebase emulators:exec --only firestore,auth,functions --project lailark --config ../firebase.json \"vitest run --config vitest.emulator.config.mts\"",
+    "test:emulator": "firebase emulators:exec --only firestore,auth,functions,storage --project lailark --config ../firebase.json \"vitest run --config vitest.emulator.config.mts\"",
     "serve": "npm run build && firebase emulators:start --only functions",
     "dev": "tsc --watch"
   },
   "dependencies": {
     "@lailark/shared": "0.0.0",
     "firebase-admin": "14.4.0",
-    "firebase-functions": "7.4.0"
+    "firebase-functions": "7.4.0",
+    "pdf-lib": "1.17.1"
   },
   "devDependencies": {
     "eslint": "9.39.5",

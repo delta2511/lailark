@@ -521,6 +521,8 @@ export interface SaleBatchView {
 export interface SaleProductView {
   readonly slug: string;
   readonly name: string;
+  /** M2.9: `products/{slug}.hsn`, carried onto the bill line (D26). */
+  readonly hsn: string | null;
   readonly priceInStock: Paise;
   readonly priceOpen: Paise;
   /** Brief 17.8: what the kitchen may sell at the counter, at a set amount. */
@@ -531,6 +533,8 @@ export interface SaleProductView {
 export interface SaleCustomerView {
   readonly phone: string;
   readonly name: string;
+  /** M2.9: carried onto the bill when there is one. */
+  readonly email: string | null;
   readonly orders: number;
   readonly jars: number;
   readonly consentUpdates: boolean;
