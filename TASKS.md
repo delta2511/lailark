@@ -197,7 +197,7 @@ M2.10 and M2.11 moved to Fast-follow (D29, 23 Sep 2026).
 **Fixes from Shefin's Milestone 2 test, 23 Sep 2026.** Appended to the milestone per
 CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
 
-- [ ] M2.13 [opus] The two-main-ingredient cost collision. `lineIdFor` in
+- [x] M2.13 [opus] The two-main-ingredient cost collision. (fd8852e; Q16 raised) `lineIdFor` in
       `admin/src/batches/CookingActuals.tsx:47` returns the literal `"main"` for every
       line flagged `isMain`, so a recipe with two main ingredients stores both under one
       id: batch 001 flags prawns and dates (D28), and typing a cost on one overwrites
