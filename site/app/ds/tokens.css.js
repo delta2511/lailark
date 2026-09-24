@@ -2,10 +2,9 @@
 // Source: docs/strategy/lailark-in-site-and-sales-flow.md, section 10.
 // One job per colour, system faces only, nothing loaded over the wire.
 //
-// Everything here is prefixed "--ds-" so it can live at :root without
-// colliding with the v0 home page's own local --bg/--fg/--accent
-// variables (page.js, scoped to .v0), which stay as they are until
-// M3.2 replaces the home page with this design system.
+// Everything here is prefixed "--ds-" so a page can add its own scoped
+// CSS without colliding with the tokens. The v0 home page's local
+// --bg/--fg/--accent variables went with the v0 page in M3.2.
 export const dsTokensCss = `
 :root{
   /* Palette: one job each, plus two neutrals. No fifth colour. */

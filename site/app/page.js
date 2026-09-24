@@ -1,174 +1,356 @@
-// v0 home page styles, moved out of the global layout (M3.1) and
-// scoped under .v0 so they cannot leak onto any other route, including
-// the new design-system primitives in app/ds/ and its demo route. This
-// page itself is unchanged in behaviour or appearance: only where its
-// CSS lives has moved. It is replaced, not styled further, in M3.2.
+import { Footer, Header } from "./ds/PageShell";
+import Oil from "./ds/Oil";
+import Settle from "./ds/Settle";
+import { ProductCount } from "./_lib/counts";
+import { inStockPrice, openBatchPrice } from "../lib/money";
+import productContent from "../content/products.json";
+
+// The home page (M3.2). Order fixed by the story doc section 5: hero, what
+// is in the kitchen today, the four jars, the dark band with the two
+// families and the cooking, the method, how a batch works, the open batch,
+// in stock, the batch record, Sumayya's note, the name, footer. The abroad
+// line (brief section 11.6) sits at the very end of the page, after the
+// name, before the footer.
 //
-// ASSUMED: dark mode. This block keeps the v0 palette's own dark
-// variant exactly as it was. The new design system (Flow §10) defines
-// only one, light, palette and does not mention a dark mode at all, so
-// app/ds/ does not attempt one; everything built on the design system
-// (including the /internal/design-system demo route) renders the same
-// regardless of the visitor's OS colour scheme, until Shefin says
-// otherwise.
-const v0Css = `
-.v0{
-  --bg:#faf6ef; --fg:#191510; --muted:#635a4e; --accent:#9a4620; --rule:#ddd3c4;
-  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
-}
-@media (prefers-color-scheme:dark){
-  .v0{ --bg:#15120f; --fg:#ece4d8; --muted:#9d9488; --accent:#d78551; --rule:#332c25; }
-}
-.v0{
-  margin:0; color:var(--fg);
-  font-family:var(--sans); font-size:17px; line-height:1.65;
-  padding:2.5rem 1.35rem 3rem;
-}
-.v0 main{max-width:33rem; margin:0 auto}
-.v0 .mark{display:flex; align-items:center; gap:.55rem; margin-bottom:2.4rem}
-.v0 .mark svg{width:38px; height:auto; display:block; color:var(--fg); flex:none}
-.v0 h1{
-  font-size:1.05rem; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
-  margin:0; line-height:1;
-}
-.v0 p{margin:0 0 1.35rem}
-.v0 .lede{font-family:var(--mono); font-size:1.0rem; line-height:1.75; max-width:31rem}
-.v0 .note{color:var(--muted); font-family:var(--mono); font-size:.95rem; line-height:1.75}
-.v0 figure{margin:2.6rem 0 0}
-.v0 figure img{display:block; width:100%; height:auto; background:var(--rule); border-radius:2px}
-.v0 figcaption{margin-top:.8rem; font-family:var(--mono); font-size:.85rem; line-height:1.7; color:var(--muted)}
-.v0 .cta-p{margin:1.9rem 0 2.1rem}
-.v0 .cta{
-  display:inline; font-weight:600; font-size:1.05rem; color:var(--fg);
-  text-decoration:underline; text-decoration-color:var(--accent);
-  text-decoration-thickness:2px; text-underline-offset:.28em;
-}
-.v0 .cta .arrow{color:var(--accent); padding:0 .1em}
-.v0 .cta .wa{color:var(--accent)}
-.v0 .cta:hover{color:var(--accent)}
-.v0 a{color:var(--fg); text-underline-offset:.18em}
-.v0 footer{
-  margin-top:3rem; padding-top:1.3rem; border-top:1px solid var(--rule);
-  font-family:var(--mono); font-size:.8rem; line-height:1.8; color:var(--muted);
-}
-.v0 footer a{color:var(--muted)}
-@media (min-width:40rem){ .v0{padding:4.5rem 2rem 4rem} }
+// One dark band, and only one: if a second appears the page is telling two
+// stories (story doc section 5). Everything else is paper.
+//
+// The video is the hero's own background rather than the v0 fixed
+// full-page layer, because Flow section 10 puts the atmosphere behind the
+// hero and nothing else. The mechanics from the video doc survive as they
+// were: autoplay muted loop playsinline, no JavaScript, a paper veil over
+// it, and prefers-reduced-motion leaving the still. The video element is
+// the last child of the hero, so with CSS blocked the hero's words are
+// read before it and the page still runs top to bottom.
 
-.v0 .bg{position:fixed; inset:0; z-index:-2; background:var(--bg) url(/assets/jars-loop.jpg) center/cover no-repeat}
-.v0 .bg video{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block}
-@media (prefers-reduced-motion:reduce){ .v0 .bg video{display:none} }
-.v0 .bg::after{content:""; position:fixed; inset:0; z-index:-1; background:rgba(250,246,239,.84)}
-@media (prefers-color-scheme:dark){ .v0 .bg::after{background:rgba(21,18,15,.82)} }
-`;
+// The number of heroes is read off products.json, never typed, so a fifth
+// hero cannot leave two sentences on this page saying "four".
+const NUMBER_WORDS = [
+  "no",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+];
 
-// The "tell me when a batch opens" link is switched from Firestore:
-// config/site.notifyCtaVisible. Fail-open by design: see the inline script below.
-const ctaFlagScript = `
-(function () {
-  var el = document.querySelector('.cta-p');
-  if (!el || !window.fetch) return;
-  fetch('https://firestore.googleapis.com/v1/projects/lailark/databases/(default)'
-        + '/documents/config/site'
-        + '?key=AIzaSyBuM-P0x4vx9qNV2psQ4itvtVQTy9mUvNQ'
-        + '&mask.fieldPaths=notifyCtaVisible', { cache: 'no-store' })
-    .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (d) {
-      var f = d && d.fields && d.fields.notifyCtaVisible;
-      if (f && f.booleanValue === false) el.hidden = true;
-    })
-    .catch(function () {});
-})();
+const heroCount = productContent.heroes.length;
+const heroWord = NUMBER_WORDS[heroCount] ?? String(heroCount);
+const heroWordCap = heroWord.charAt(0).toUpperCase() + heroWord.slice(1);
+
+const jarNotes = {
+  "prawns-and-dates": "The first one we bottled.",
+  koorka: `Koorka only grows for part of the year, so it comes round roughly November to February. The one with no meat in it.`,
+};
+
+const homeCss = `
+.home-main{ flex:1 0 auto; width:100%; font-family:var(--ds-font-body); line-height:1.65 }
+.home-col{ width:100%; max-width:34rem; margin:0 auto; padding:0 var(--ds-space-4) }
+.home-main a{ color:var(--ds-ink) }
+
+/* Hero. The one place the video and the oil are allowed to live. */
+.home-hero{
+  position:relative; isolation:isolate; overflow:hidden;
+  background:var(--ds-paper);
+  display:flex; align-items:flex-end;
+  min-height:58dvh; padding:var(--ds-space-8) 0 var(--ds-space-7);
+}
+.home-hero__media{
+  position:absolute; inset:0; z-index:-2;
+  background:var(--ds-paper) url(/assets/jars-loop.jpg) center/cover no-repeat;
+}
+.home-hero__media video{
+  position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;
+}
+.home-hero__media::after{
+  content:""; position:absolute; inset:0; background:rgba(250,248,244,.84);
+}
+.home-hero__oil{ opacity:.4 }
+@media (prefers-reduced-motion:reduce){ .home-hero__media video{ display:none } }
+
+.home-hero__title{
+  font-family:var(--ds-font-heading); font-weight:600;
+  font-size:1.9rem; line-height:1.18; margin:0 0 var(--ds-space-4); max-width:20ch;
+}
+.home-hero__lede{ margin:0; font-size:1.05rem; max-width:36ch }
+@media (min-width:36rem){ .home-hero__title{ font-size:2.4rem } }
+
+/* Sections on paper. */
+.home-section{ padding:var(--ds-space-7) 0 }
+.home-section h2{
+  font-family:var(--ds-font-heading); font-weight:600;
+  font-size:1.35rem; line-height:1.25; margin:0 0 var(--ds-space-4);
+}
+.home-section p{ margin:0 0 var(--ds-space-4) }
+.home-section p:last-child{ margin-bottom:0 }
+
+/* The one dark band. Story on ink, facts and money on paper. */
+.home-band{ background:var(--ds-ink); color:var(--ds-paper); padding:var(--ds-space-8) 0 }
+.home-band h2, .home-band p{ color:var(--ds-paper) }
+
+/* The four jars. */
+.home-jars{ display:grid; grid-template-columns:1fr; gap:var(--ds-space-4) }
+@media (min-width:30rem){ .home-jars{ grid-template-columns:1fr 1fr } }
+.home-jar{
+  display:flex; flex-direction:column; height:100%;
+  padding:var(--ds-space-4); border:1px solid var(--ds-hairline); border-radius:4px;
+}
+.home-jar__name{
+  font-family:var(--ds-font-heading); font-weight:600; font-size:1.1rem;
+  line-height:1.3; margin:0;
+}
+.home-jar__name a{ text-decoration:none }
+.home-jar__name a:hover{ text-decoration:underline; text-underline-offset:.2em }
+.home-jar__size{
+  font-family:var(--ds-font-mono); font-size:.75rem; color:var(--ds-grey);
+  margin:var(--ds-space-1) 0 var(--ds-space-3);
+}
+.home-jar__note{ font-size:.92rem; margin:0 0 var(--ds-space-3) }
+.home-jar .home-count{ margin-top:auto }
+
+/* The count slot: fixed height, so nothing moves when the counts land. */
+.home-count{ min-height:3.2rem }
+.home-count__reading, .home-count__note{
+  font-family:var(--ds-font-mono); font-size:.75rem; line-height:1.6;
+  color:var(--ds-grey); margin:var(--ds-space-2) 0 0;
+}
+.home-count__note{ margin-top:0 }
+.home-count__price{ color:var(--ds-ink) }
+
+/* Rust is a number colour: the batch number is the only one on this page. */
+.home-batchno{ font-family:var(--ds-font-mono); color:var(--ds-rust) }
+.home-price{ font-family:var(--ds-font-mono) }
+.home-link{ text-underline-offset:.2em }
+
+.home-abroad{ padding:var(--ds-space-7) 0 var(--ds-space-8) }
+.home-abroad p{ margin:0; max-width:38ch }
 `;
 
 export default function HomePage() {
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: v0Css }} />
-      <div className="v0">
-      <main>
-        <div className="mark">
-          <svg
-            viewBox="0 0 73.43 74.98"
-            width="38"
-            height="39"
-            fill="currentColor"
-            role="img"
-            aria-label="Lailark"
-          >
-            <g>
-              <path d="M39.99,36.78c0,.46.11.81.34,1.06.23.25.55.37.98.37h1.28v4.14h-2.35c-1.44,0-2.57-.43-3.37-1.3-.8-.87-1.2-2.09-1.2-3.67V14.71h4.32v22.07Z" />
-              <path d="M46.91,41.12c-1.07-.96-1.61-2.41-1.61-4.36s.54-3.24,1.63-4.17c1.08-.93,2.71-1.39,4.88-1.39h5.02l.25,3.36h-5.26c-.86,0-1.5.18-1.92.54-.43.36-.64.92-.64,1.66,0,.78.28,1.36.83,1.74.55.38,1.39.57,2.51.57,1.37,0,2.39-.15,3.06-.45.67-.3,1-.77,1-1.41l.38,2.67c-.2.59-.56,1.08-1.07,1.48-.51.4-1.13.7-1.85.89-.72.2-1.51.3-2.37.3-2.16,0-3.77-.48-4.84-1.44ZM56.66,30.41c0-1.05-.31-1.86-.93-2.44-.62-.58-1.5-.87-2.63-.87-.72,0-1.43.11-2.13.34-.7.23-1.32.55-1.88.96l-2.87-2.42c.73-.85,1.7-1.52,2.89-2,1.19-.48,2.52-.71,3.97-.71,1.59,0,2.95.27,4.08.82,1.13.55,2,1.34,2.59,2.38.6,1.04.89,2.3.89,3.77v12.05h-3.99v-11.88Z" />
-            </g>
-            <g>
-              <path d="M28.51,44.48h4.5v18.75h-4.5v-18.75ZM37.88,48.58c-.42-.16-.91-.24-1.46-.24-1.08,0-1.92.32-2.52.97-.6.64-.89,1.54-.89,2.68l-.38-4.24c.54-1.12,1.25-1.99,2.12-2.61.87-.62,1.83-.93,2.88-.93.82,0,1.56.12,2.22.37.66.25,1.24.61,1.73,1.09l-2.64,3.63c-.29-.31-.64-.55-1.07-.71Z" />
-              <g>
-                <path d="M58.72,63.22h2.42l-.89-1.56c-.5.53-1.01,1.05-1.53,1.56Z" />
-                <path d="M51.68,54.86l3.26,5.91c1.05-1,2.05-2.07,2.98-3.19h0l-3.48-6.08,5.79-7.03h-4.79l-6.83,8.77v-8.89h-4.32v18.86h4.32v-4.63l3.07-3.73Z" />
-              </g>
-            </g>
-            <g>
-              <path d="M68.39,13.71c-2.44-4.5-5.46-7.51-9.93-9.99-4.47-2.48-9.7-3.72-15.71-3.72-7.96,0-24.38,1.61-30.91,5.69-6.53,4.08.83,7.31-2.91,14.22C5.21,26.82.41,36.82.03,45.14c-.27,5.86,1.22,11.07,3.67,15.6,2.44,4.54,5.92,8.05,10.42,10.52,4.5,2.48,9.72,3.72,15.66,3.72,7.96,0,15.2-2.04,21.73-6.13,2.63-1.65,5.04-3.53,7.22-5.63h-2.43l-1.35-2.45s0,0,0,0c-1.69,1.61-3.53,3.07-5.53,4.37-5.69,3.7-12.03,5.55-19.01,5.55-5.03,0-9.46-1.05-13.3-3.14-3.84-2.09-6.84-5.08-9.01-8.95-2.16-3.87-3.25-8.46-3.25-13.77,0-7.12,1.61-13.81,4.82-20.05,3.21-6.25,7.64-11.24,13.3-14.98,5.65-3.73,12.01-5.6,19.06-5.6,5.03,0,9.48,1.03,13.35,3.09,3.87,2.06,7.29,4.82,9.01,8.9,1.8,4.29,1.55,8.45,1.55,13.75,0,7.26.04,14.03-3.17,20.28-1.38,2.69-3,5.15-4.84,7.37l2.34,4.08s.02-.02,0,0c2.58-2.76,4.77-5.83,6.64-9.3,3.73-6.91,5.6-14.45,5.6-22.62,0-8.6-1.66-11.53-4.11-16.04Z" />
-            </g>
-            <circle cx="70.84" cy="3.1" r="2.59" />
-          </svg>
-          <h1>Lailark Kitchen</h1>
-        </div>
+      {/* The hero still is the page's largest paint, and it arrives as a
+          CSS background, which the browser cannot give a priority hint of
+          its own. React hoists this into <head>, so the still is fetched
+          at high priority ahead of the 485 KB video behind it. */}
+      <link
+        rel="preload"
+        as="image"
+        href="/assets/jars-loop.jpg"
+        fetchPriority="high"
+      />
+      <style dangerouslySetInnerHTML={{ __html: homeCss }} />
+      <div className="ds-shell">
+        <Header />
 
-        <p className="lede">
-          A small kitchen in Kunnamangalam, Kozhikode. We make oil pickles in
-          batches of fifteen to forty jars. When a batch is gone it is gone,
-          and the next one starts.
-        </p>
+        <main className="home-main">
+          <section className="home-hero">
+            <div className="home-col">
+              <h1 className="home-hero__title">
+                Oil pickles from a house in Kunnamangalam
+              </h1>
+              <p className="home-hero__lede">
+                Sumayya cooks them in batches of fifteen to forty jars, by
+                hand.
+              </p>
+            </div>
 
-        <p className="note">
-          The site is still being built. This address will not change, so
-          anything printed on a jar will keep working.
-        </p>
+            <Oil className="home-hero__oil" />
 
-        <p className="cta-p">
-          <a
-            className="cta"
-            href="https://wa.me/918891923827?text=Tell%20me%20when%20a%20batch%20opens"
-          >
-            Tell me when a batch opens{" "}
-            <span className="arrow" aria-hidden="true">
-              &#8594;
-            </span>{" "}
-            <span className="wa">WhatsApp</span>
-          </a>
-        </p>
+            <div className="home-hero__media" aria-hidden="true">
+              <video autoPlay muted loop playsInline poster="/assets/jars-loop.jpg">
+                <source src="/assets/jars-loop.mp4" type="video/mp4" />
+              </video>
+            </div>
+          </section>
 
-        <figure>
-          {/* eslint-disable-next-line @next/next/no-img-element -- plain <img>
-              is the deliberate choice here (DECISIONS ST1: no next/image). */}
-          <img
-            src="/assets/jar-001.jpg"
-            width="1008"
-            height="1344"
-            loading="lazy"
-            decoding="async"
-            alt="A jar of Lailark prawns and dates pickle, held in one hand."
-          />
-          <figcaption>Batch 001. Prawns and dates.</figcaption>
-        </figure>
+          <section className="home-section">
+            <div className="home-col">
+              <h2>What is in the kitchen today</h2>
+              <p>
+                {heroWordCap} pickles. Three of the {heroWord} have dates in
+                them.
+                Some are bottled already, with jars ready to send. The others
+                are open batches, where the pot has not gone on yet and a jar
+                is paid for before it exists. Each one below says which it is.
+              </p>
+            </div>
+          </section>
 
-        <footer>
-          Lailark Kitchen. Neduvanchalil Veedu, Kunnamangalam, Kozhikode,
-          Kerala, India, PIN 673571. Customer support{" "}
-          <a href="tel:+918891923827">+91 88919 23827</a>. FSSAI
-          21323244000035.
-        </footer>
-      </main>
+          <section className="home-section">
+            <div className="home-col">
+              <div className="home-jars">
+                <Settle>
+                  {productContent.heroes.map((hero) => (
+                    <article className="home-jar" key={hero.slug}>
+                      <h3 className="home-jar__name">
+                        <a href={`/pickles/${hero.slug}`}>{hero.name}</a>
+                      </h3>
+                      <p className="home-jar__size">{hero.jarGrams} g jar</p>
+                      {jarNotes[hero.slug] ? (
+                        <p className="home-jar__note">{jarNotes[hero.slug]}</p>
+                      ) : null}
+                      <ProductCount slug={hero.slug} />
+                    </article>
+                  ))}
+                </Settle>
+              </div>
+            </div>
+          </section>
 
-      <div className="bg" aria-hidden="true">
-        <video autoPlay muted loop playsInline poster="/assets/jars-loop.jpg">
-          <source src="/assets/jars-loop.mp4" type="video/mp4" />
-        </video>
+          <section className="home-section home-band">
+            <div className="home-col">
+              <h2>Two houses</h2>
+              <p>
+                The family is Mappila. One side is from Chaliyam, where the
+                river meets the sea. The other is from Kunnamangalam, at the
+                foot of Wayanad, on the old malancharakku road that carried
+                hill produce and spice down to the Kozhikode port. One side
+                knew fish, the other knew spice.
+              </p>
+              <p>
+                Sumayya grew up cooking in both. She learned at her own
+                mother&apos;s side in Chaliyam and has been at it for decades,
+                all by hand. None of it was ever written down, and no
+                restaurant ever bothered to hold on to it.
+              </p>
+              <p>Sumayya is Shefin&apos;s mother.</p>
+              <p>
+                The fish still comes from Chaliyam, because that is where she
+                is from.
+              </p>
+            </div>
+          </section>
+
+          <section className="home-section">
+            <div className="home-col">
+              <h2>The method</h2>
+              <p>
+                Pickles like these have been getting quicker and cheaper for
+                years. Lighter oils, a few shortcuts, a shorter spice list,
+                until a lot of it stopped tasting the way it should. We keep
+                the original method and the whole list, and that is what it
+                costs to make properly.
+              </p>
+            </div>
+          </section>
+
+          <section className="home-section">
+            <div className="home-col">
+              <h2>How a batch works</h2>
+              <p>
+                A batch is fifteen to forty jars. Nothing is cooked to sit in
+                storage, so when the jars from one batch are gone, the next
+                batch starts.
+              </p>
+              <p>
+                Every bottled batch carries a number, and that number is
+                printed on the jar. It points at a page here that records what
+                went into the batch, when it was bottled and how many jars it
+                gave.
+              </p>
+            </div>
+          </section>
+
+          <section className="home-section">
+            <div className="home-col">
+              <h2>An open batch</h2>
+              <p>
+                An open batch has not been cooked yet. The jars are listed, you
+                pay <span className="home-price">{openBatchPrice()}</span> for
+                one, and your jar is kept for you. Once half the batch is paid
+                for we buy what the batch needs and start cooking, and we will
+                send you photos from the kitchen as it happens. We do not put a
+                date on it, because the sea does not keep one.
+              </p>
+              <p>
+                There is no closing time and no draw. The batch fills, and
+                there is a limit of a quarter of it per person, so nobody takes
+                the whole pot.
+              </p>
+            </div>
+          </section>
+
+          <section className="home-section">
+            <div className="home-col">
+              <h2>In stock</h2>
+              <p>
+                There is no stock here, only leftovers. Anything listed as in
+                stock is what was left over from the previous batch of that
+                pickle, at <span className="home-price">{inStockPrice()}</span>{" "}
+                a jar, two jars per person.
+              </p>
+              <p>
+                It goes out the next day, anywhere in India, and shipping is
+                free. Sumayya&apos;s note goes in the box with it.
+              </p>
+            </div>
+          </section>
+
+          <section className="home-section">
+            <div className="home-col">
+              <h2>The batch record</h2>
+              <p>
+                The page a jar points at does not change once it is up. It is
+                the record of that batch and it stays where it is, so a jar
+                bought today still leads somewhere years from now. Batch{" "}
+                <span className="home-batchno">001</span> is up.
+              </p>
+              <p>
+                <a className="home-link" href="/batch/001">
+                  Read the batch 001 record
+                </a>
+              </p>
+            </div>
+          </section>
+
+          <section className="home-section">
+            <div className="home-col">
+              <h2>The note in the box</h2>
+              <p>
+                Sumayya writes a note by hand for every box that goes out. Not
+                a printed one.
+              </p>
+            </div>
+          </section>
+
+          <section className="home-section">
+            <div className="home-col">
+              <h2>The name</h2>
+              <p>
+                Neduvanchalil is the house, and it is printed on every jar as
+                the maker. Nedu is long, chal is channel. The land was a creek
+                once, water coming off the hills to the east and finding its
+                way west towards Kunnamangalam town. The house was built in the
+                water&apos;s path and took the land&apos;s name instead of
+                giving it one.
+              </p>
+            </div>
+          </section>
+
+          <section className="home-abroad">
+            <div className="home-col">
+              <p>
+                We ship all over India. Not outside it yet. If you are abroad,{" "}
+                <a
+                  className="home-link"
+                  href="https://wa.me/918891923827?text=I%20am%20abroad%2C%20can%20I%20get%20a%20jar%3F"
+                >
+                  message us
+                </a>{" "}
+                and we will find a way to get one to you.
+              </p>
+            </div>
+          </section>
+        </main>
+
+        <Footer />
       </div>
-      </div>
-
-      <script dangerouslySetInnerHTML={{ __html: ctaFlagScript }} />
     </>
   );
 }

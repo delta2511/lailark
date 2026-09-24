@@ -3,10 +3,9 @@
 // design system imports from (header, demo route, and M3.2/M3.3 onward)
 // rather than a hand copy in each place that needs it.
 //
-// ASSUMED: the v0 home page (app/page.js) keeps its own pre-existing
-// inline copy of this same path data untouched for this task. De-duping
-// that copy against this one is a page.js change, and page.js is not
-// touched until M3.2 replaces the home page.
+// M3.2 replaced the v0 home page, which carried its own inline copy of
+// this path data, so this component and public/assets/lark.svg are now
+// the only two places it lives.
 export default function Lark({ size = 32, className, title = "Lailark" }) {
   const height = Math.round(size * (74.98 / 73.43) * 100) / 100;
   return (

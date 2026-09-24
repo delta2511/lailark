@@ -782,6 +782,48 @@ break.
   the built static export on port 4300 so the site can be opened in a browser without the
   Firebase hosting emulator. Tooling only, nothing deployed. Status: open.
 
+- A153 (M3.2, 24 Sep): the `/api/counts` response shape, since M3.3 owns the endpoint:
+  `{ products: { "<slug>": { mode: "inStock"|"open"|"none", count, total } } }`, `count`
+  reading as jars left for `inStock` and jars paid for `open`. `readProduct` in
+  `site/app/_lib/counts.js` is the one function M3.3 changes if it lands elsewhere.
+  Status: open.
+- A154 (M3.2, 24 Sep): `config/site.notifyCtaVisible` and its Firestore fetch are dropped
+  with the v0 page. The new home page has no "tell me when a batch opens" call to action
+  for the switch to hide; notify-me belongs on a product card at Cooking (brief §7.5),
+  which is M3.3's. The `notify` and `config/site` collections and their rules are
+  untouched and still tested. The site now makes no foreign request at all. Status: open.
+- A155 (M3.2, 24 Sep): the video moved from v0's fixed full-page layer to the hero's own
+  background, because Flow §10 puts the atmosphere behind the hero only. The video doc's
+  rule that the `<video>` sits after the main content is kept in spirit: it is the last
+  child of the hero, after the hero's words, so with CSS blocked the heading and lede are
+  still read first. Status: open.
+- A156 (M3.2, 24 Sep): squid and beef carry no descriptive line, because no doc describes
+  them and inventing flavour copy is not the builder's to do. Beef's shipping caveat is
+  parked (Flow §7), so the page says nothing about it. Status: open.
+- A157 (M3.2, 24 Sep): the four heroes' static facts (slug, name, jar grams) live in
+  `site/content/products.json`. No count and no price is ever in that file. M3.3 may
+  generate it from `products` at build time instead. Status: open.
+- A158 (M3.2, 24 Sep): the open-batch paragraph names no ingredient. Brief §7.4 drafts "we
+  buy the prawns" because it is the prawns batch page; the home page explains every open
+  batch, including beef and koorka, so it reads "we buy what the batch needs". Status:
+  open.
+- A159 (M3.2, 24 Sep): the two sentences a customer reads when there is no count to draw,
+  "We cannot show the count just now." and "Not in the kitchen just now." Neither is
+  drafted in any doc and customer-facing copy is on the never-assume list, so Shefin
+  confirms or replaces both. Status: open.
+- A160 (M3.2, 24 Sep): v0's hero sentence "When a batch is gone it is gone, and the next
+  one starts." is cut. The copy review called it proverb-shaped repetition, and "How a
+  batch works" already says the fact plainly. It has been live on lailark.in since
+  September, so Shefin may want it back, in which case it belongs in "How a batch works"
+  rather than the hero. Status: open.
+- A161 (M3.2, 24 Sep): a count is validated on the raw JSON values, never on `Number(...)`
+  of them, and `total` must be at least 1. `Number(null)`, `Number(false)`, `Number([])`
+  and `Number("")` are all 0, and 0 is a valid integer, so coercing first turned a payload
+  carrying no count into a confident "0 jars left of 8". Found by the M3.2 tester. A real
+  sold-out batch, 0 of 22, still draws. A total above 60 is refused as bad data rather
+  than drawn, which a batch above 60 planned jars would trip (D40 lets the Owner set any
+  planned count). Status: open.
+
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 
 Shefin walked the ten steps in `docs/milestones/MILESTONE-2-TEST-ROUND-2.md` and reported

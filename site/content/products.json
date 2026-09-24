@@ -1,0 +1,9 @@
+{
+  "_note": "The four heroes (sales flow doc section 2). Build-time facts only: slug, name, jar size. Counts are never in here and never typed into a page: they come from /api/counts at runtime (CLAUDE.md section 3). Prices come from @lailark/shared through site/lib/money.js. Slugs match functions/scripts/seed-products.mjs, which is what /pickles/<slug> is built from in M3.3.",
+  "heroes": [
+    { "slug": "prawns-and-dates", "name": "Prawns and dates", "jarGrams": 200 },
+    { "slug": "squid-and-dates", "name": "Squid and dates", "jarGrams": 200 },
+    { "slug": "beef-and-dates", "name": "Beef and dates", "jarGrams": 200 },
+    { "slug": "koorka", "name": "Koorka", "jarGrams": 200 }
+  ]
+}
