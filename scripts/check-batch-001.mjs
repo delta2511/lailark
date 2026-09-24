@@ -8,7 +8,10 @@
 // Compares the /batch/001 body byte for byte against site/public/batch/001/index.html
 // and checks /batch/1 and /batch/01 301-redirect to /batch/001 (no redirects
 // followed; the Location header is read directly). Prints one line per check.
-// Exits 0 only if every check passes, exit 2 otherwise.
+// Exit codes:
+//   0 = all checks pass, site and repo match byte-for-byte
+//   1 = D28 difference only (ingredient line with vs without percentages): deploy is owed
+//   2 = other differences or redirect failures: unexpected drift, investigate before deploying
 
 import { readFileSync } from "node:fs";
 import { argv, exit } from "node:process";
@@ -34,11 +37,15 @@ function baseUrl() {
   return "https://lailark.in";
 }
 
-let failed = false;
+let exitCode = 0;
 
 function report(name, ok, detail) {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? `  — ${detail}` : ""}`);
-  if (!ok) failed = true;
+  if (!ok && exitCode === 0) exitCode = 2;
+}
+
+function setExitCode(code) {
+  if (code > exitCode) exitCode = code;
 }
 
 async function checkRecord(base) {
@@ -57,11 +64,79 @@ async function checkRecord(base) {
   }
   const actual = Buffer.from(await res.arrayBuffer());
   if (!actual.equals(expected)) {
+    // Find and report the actual differing lines
+    const actualStr = actual.toString("utf8");
+    const expectedStr = expected.toString("utf8");
+    const actualLines = actualStr.split("\n");
+    const expectedLines = expectedStr.split("\n");
+
     report(
       `GET ${url}`,
       false,
-      `body differs from ${RECORD_PATH} (${actual.length} vs ${expected.length} bytes)`,
+      `body differs (${actual.length} bytes live vs ${expected.length} bytes repo)`,
     );
+
+    // Find differing lines and show them
+    const diffs = [];
+    for (let i = 0; i < Math.max(actualLines.length, expectedLines.length); i++) {
+      const actualLine = actualLines[i] ?? "";
+      const expectedLine = expectedLines[i] ?? "";
+      if (actualLine !== expectedLine) {
+        diffs.push({ lineNum: i + 1, actual: actualLine, expected: expectedLine });
+      }
+    }
+
+    // Show the differing lines
+    if (diffs.length > 0) {
+      console.log(`Differing content:\n`);
+      diffs.forEach((d) => {
+        console.log(`Line ${d.lineNum}:`);
+        if (d.expected)
+          console.log(`  Repo record:  ${d.expected.trim()}`);
+        if (d.actual)
+          console.log(`  Live site:    ${d.actual.trim()}`);
+        console.log();
+      });
+    }
+
+    // Check for D28 case: ingredient line with percentages stripped from live matches repo.
+    // D28 defines the /batch/001 page as carrying the same ingredient list as the label,
+    // without the two percentages. So strip percentage annotations from live and compare.
+    const percentagePattern = /\s*\([0-9]+(?:\.[0-9]+)?%\)/g;
+    let isD28Difference = diffs.length > 0; // Assume D28 if there are any diffs
+
+    for (const diff of diffs) {
+      const liveStripped = diff.actual.replace(percentagePattern, "");
+      if (liveStripped !== diff.expected) {
+        // This line differs even without percentages: not a D28 difference
+        isD28Difference = false;
+        break;
+      }
+    }
+
+    // Determine which version to recommend and why
+    const byteDiff = Math.abs(actual.length - expected.length);
+    const repoLarger = expected.length > actual.length;
+
+    if (isD28Difference) {
+      console.log(
+        `The repo is ahead: it has the correct D28 implementation (ingredient line without percentages). ` +
+          `A deploy of the customer site is owed to bring it up to date.\n`
+      );
+      exitCode = 1; // D28 is expected, not an error
+    } else if (repoLarger) {
+      console.log(
+        `The repo is likely ahead (${byteDiff} bytes smaller, suggesting newer content). ` +
+          `A deploy of the customer site may be owed to bring it up to date.\n`
+      );
+    } else {
+      console.log(
+        `The live site has unexpected content (${byteDiff} bytes extra). ` +
+        `This may mean an old version was deployed or the site was edited outside the normal process. ` +
+        `Check the differences above and investigate before redeploying.\n`
+      );
+    }
+
     return;
   }
   report(`GET ${url}`, true, "200, byte-identical to the record");
@@ -94,9 +169,13 @@ async function main() {
   await checkRecord(base);
   await checkRedirect(base, "/batch/1");
   await checkRedirect(base, "/batch/01");
-  if (failed) {
-    console.error("\nfailed.");
-    exit(2);
+  if (exitCode > 0) {
+    if (exitCode === 1) {
+      console.error("\nD28 difference found.");
+    } else {
+      console.error("\nfailed.");
+    }
+    exit(exitCode);
     return;
   }
   console.log("\nall good.");

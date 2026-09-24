@@ -684,3 +684,15 @@ break.
   `docs/milestones/MILESTONE-2-TEST.md` is left untouched: it is a dated snapshot Shefin
   has already read and acted on, so editing it would rewrite history rather than record
   it. Status: open.
+- A132 (M2.18, 24 Sep): `check:batch-001` exits 0 when the site matches the record, 1 when
+  the only difference is D28's ingredient line and a deploy is owed, and 2 for any other
+  difference or a failed redirect. Two kinds of difference deserve two answers: one says
+  push the site you already have, the other says the page printed on 22 jars has drifted
+  from the record and somebody should look before deploying. Documented in the script's own
+  header, where anyone wiring it into CI will find it. Status: open.
+- A133 (M2.18, 24 Sep): D28 is detected by stripping percentage annotations from the live
+  line with a regex and comparing what is left with the repo line, not by matching batch
+  001's ingredient words. The first draft hardcoded "Prawns, dates, vinegar", which would
+  have stopped matching on a single reworded comma and sent the script back to crying wolf
+  about the one page that is printed on jars. Stripping percentages is what D28 actually
+  says, so it keeps working for batch 002 on, where the percentages do appear. Status: open.

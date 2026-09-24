@@ -234,7 +234,7 @@ CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
       Remove the subcollection's rules, its `OrderEvent` type, its rules tests and its
       seed coverage, and check nothing reads it. Done when: the rules tests pass without
       it and no reference to it survives outside `DECISIONS.md`.
-- [ ] M2.18 [haiku] `npm run check:batch-001` says which side is ahead. It currently
+- [x] M2.18 [haiku] `npm run check:batch-001` says which side is ahead. It currently
       reports "body differs" with two byte counts, which reads like a regression when
       the truth is usually that the repo is ahead of the live site and a deploy is
       owed: that is exactly what it said at the M2 break, where the only difference was
