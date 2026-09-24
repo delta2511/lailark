@@ -56,6 +56,11 @@ const REF_TWO_MAIN = "b-m242mn";
 const REF_LEGACY = "b-m24lgc";
 const REF_WINDOW = "b-m24wnd";
 const REF_ORPHAN = "b-m24orp";
+// M2.16: price and the per-person cap, edited in place (D40, D44).
+const REF_PRICE = "b-m24prc";
+const REF_ARCHIVED = "b-m24arc";
+const REF_LIMIT = "b-m24lim";
+const REF_B001 = "b-m24001";
 
 const ALL_REFS = [
   REF_OWNER,
@@ -72,6 +77,10 @@ const ALL_REFS = [
   REF_LEGACY,
   REF_WINDOW,
   REF_ORPHAN,
+  REF_PRICE,
+  REF_ARCHIVED,
+  REF_LIMIT,
+  REF_B001,
 ];
 
 async function seedCatalogue(): Promise<void> {
@@ -1054,4 +1063,267 @@ test("one batch, created on the form, walked by Owner and Kitchen to a number", 
     await deleteDocument(`approvals/half-${ref}`);
     await deleteDocument(`approvals/open-${ref}`);
   }
+});
+
+/* -------------------------------------------------------------------------- */
+/* M2.16: price and the per-person cap, edited in place, D40 and D44          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * D40: both prices are editable on every batch, in any state, with no lock.
+ * The MRP still holds, and the screen says so before the write so nobody
+ * meets a raw permission error. `firestore.rules` checks the same thing by
+ * value (`rules-tests/`), because this screen writes straight to Firestore.
+ */
+test("Owner retypes both prices in place on an open batch, and the MRP still holds", async ({
+  page,
+}) => {
+  await seedBatch(REF_PRICE, {
+    productSlug: PRODUCT,
+    productName: "M24 Prawns Pickle",
+    recipeId: RECIPE,
+    state: "open",
+    plannedJars: 22,
+    bookableJars: 19,
+    perPersonLimit: 4,
+    perPersonLimitOverride: null,
+    paidCount: 3,
+    priceOpen: 59_900,
+    priceInStock: 64_900,
+  });
+
+  await signIn(page, OWNER_PHONE);
+  await openBatch(page, REF_PRICE);
+
+  // The boxes come up holding what is stored, in rupees.
+  await expect(page.getByTestId("input-priceOpen")).toHaveValue("599");
+  await expect(page.getByTestId("input-priceInStock")).toHaveValue("649");
+  // The line that is always true, said once, with no confirmation attached.
+  await expect(page.getByTestId("price-help")).toHaveText(BATCHES.priceHelp);
+  // Not archived, so no P&L line.
+  await expect(page.getByTestId("price-archived-note")).toHaveCount(0);
+
+  // A price above the MRP is refused here, and nothing is written.
+  await page.getByTestId("input-priceOpen").fill("650");
+  await page.getByTestId("input-priceOpen").blur();
+  await expect(page.getByTestId("batch-field-error")).toHaveText(BATCHES.priceAboveMrp);
+  expect((await readDocument(`batches/${REF_PRICE}`))?.priceOpen).toBe(59_900);
+
+  // Exactly the MRP is fine.
+  await page.getByTestId("input-priceOpen").fill("649");
+  await page.getByTestId("input-priceOpen").blur();
+  await expect
+    .poll(async () => (await readDocument(`batches/${REF_PRICE}`))?.priceOpen)
+    .toBe(64_900);
+  await expect(page.getByTestId("undo-toast")).toBeVisible();
+
+  // And the other price takes a change too, in paise, with its own toast.
+  await page.getByTestId("input-priceInStock").fill("620.50");
+  await page.getByTestId("input-priceInStock").blur();
+  await expect
+    .poll(async () => (await readDocument(`batches/${REF_PRICE}`))?.priceInStock)
+    .toBe(62_050);
+
+  // Undo puts the price back, through the same seam every other field uses.
+  await page.getByTestId("undo-toast-undo").click();
+  await expect
+    .poll(async () => (await readDocument(`batches/${REF_PRICE}`))?.priceInStock)
+    .toBe(64_900);
+});
+
+/**
+ * D40: editing a price on an Archived batch moves that batch's P&L. That is
+ * said plainly on the screen and then the edit goes through: it is flagged,
+ * not prevented, and nothing asks for a confirmation.
+ */
+test("an archived batch says its P&L moves, and takes the price change anyway", async ({
+  page,
+}) => {
+  await seedBatch(REF_ARCHIVED, {
+    productSlug: PRODUCT,
+    productName: "M24 Prawns Pickle",
+    recipeId: RECIPE,
+    state: "archived",
+    plannedJars: 22,
+    bookableJars: 19,
+    perPersonLimit: 4,
+    perPersonLimitOverride: null,
+    paidCount: 19,
+    priceOpen: 59_900,
+    priceInStock: 64_900,
+  });
+
+  await signIn(page, OWNER_PHONE);
+  await openBatch(page, REF_ARCHIVED);
+
+  await expect(page.getByTestId("price-archived-note")).toHaveText(BATCHES.priceArchivedNote);
+  // Nothing is disabled and nothing stands between the box and the write.
+  await expect(page.getByTestId("input-priceOpen")).toBeEditable();
+
+  await page.getByTestId("input-priceOpen").fill("500");
+  await page.getByTestId("input-priceOpen").blur();
+  await expect
+    .poll(async () => (await readDocument(`batches/${REF_ARCHIVED}`))?.priceOpen)
+    .toBe(50_000);
+  await expect(page.getByTestId("batch-field-error")).toHaveCount(0);
+});
+
+/**
+ * D44: the limit per person is a number the Owner may type on any batch in
+ * any state. Blank is automatic and shows the computed quarter as the box's
+ * placeholder; a typed number stands through a later planned-jar change; and
+ * clearing it back to blank returns to automatic.
+ */
+test("the limit per person is blank for automatic, and a typed number stands", async ({ page }) => {
+  await seedBatch(REF_LIMIT, {
+    productSlug: PRODUCT,
+    productName: "M24 Prawns Pickle",
+    recipeId: RECIPE,
+    state: "open",
+    plannedJars: 22,
+    bookableJars: 19,
+    perPersonLimit: 4,
+    perPersonLimitOverride: null,
+    paidCount: 2,
+    priceOpen: 59_900,
+    priceInStock: 64_900,
+  });
+
+  await signIn(page, OWNER_PHONE);
+  await openBatch(page, REF_LIMIT);
+
+  // Nobody has typed a cap: the box is empty, the computed quarter is its
+  // placeholder, and the number on the Fill row is that quarter.
+  const box = page.getByTestId("input-perPersonLimitOverride");
+  await expect(box).toHaveValue("");
+  await expect(box).toHaveAttribute("placeholder", "4");
+  await expect(page.getByTestId("view-perPersonLimit")).toHaveText("4");
+  await expect(page.getByTestId("limit-help")).toHaveText(BATCHES.limitPerPersonAuto(4));
+
+  // A cap above the bookable jars is a cap on nothing, and is refused here.
+  await box.fill("40");
+  await box.blur();
+  await expect(page.getByTestId("error-perPersonLimitOverride")).toHaveText(
+    BATCHES.limitPerPersonOverBookable(19),
+  );
+  expect((await readDocument(`batches/${REF_LIMIT}`))?.perPersonLimitOverride).toBeNull();
+
+  // The Owner types 2. It is stored beside the computed quarter, never over it.
+  await box.fill("2");
+  await box.blur();
+  await expect
+    .poll(async () => (await readDocument(`batches/${REF_LIMIT}`))?.perPersonLimitOverride)
+    .toBe(2);
+  expect((await readDocument(`batches/${REF_LIMIT}`))?.perPersonLimit).toBe(4);
+  await expect(page.getByTestId("view-perPersonLimit")).toHaveText("2");
+
+  // The planned jars move under it: the computed quarter follows the jars,
+  // the number he typed does not.
+  await patchDocument(`batches/${REF_LIMIT}`, {
+    plannedJars: 40,
+    bookableJars: 36,
+    perPersonLimit: 9,
+  });
+  await expect(page.getByTestId("view-perPersonLimit")).toHaveText("2");
+  await expect(page.getByTestId("input-perPersonLimitOverride")).toHaveValue("2");
+
+  // Cleared back to blank, it is automatic again, and the quarter it falls
+  // back to is the new one.
+  await page.getByTestId("input-perPersonLimitOverride").fill("");
+  await page.getByTestId("input-perPersonLimitOverride").blur();
+  await expect
+    .poll(async () => (await readDocument(`batches/${REF_LIMIT}`))?.perPersonLimitOverride)
+    .toBeNull();
+  await expect(page.getByTestId("view-perPersonLimit")).toHaveText("9");
+  await expect(page.getByTestId("input-perPersonLimitOverride")).toHaveAttribute("placeholder", "9");
+});
+
+/**
+ * Prices and the cap are the Owner's (brief 17.12, "set prices"). The Kitchen
+ * does not see the Price section at all, and gets no box for the cap.
+ */
+test("the Kitchen gets no price box and no per-person cap box", async ({ page }) => {
+  await seedBatch(REF_KITCHEN, {
+    productSlug: PRODUCT,
+    productName: "M24 Prawns Pickle",
+    recipeId: RECIPE,
+    state: "open",
+    plannedJars: 22,
+    bookableJars: 19,
+    perPersonLimit: 4,
+    perPersonLimitOverride: null,
+    paidCount: 2,
+    priceOpen: 59_900,
+    priceInStock: 64_900,
+  });
+
+  await signIn(page, KITCHEN_PHONE);
+  await openBatch(page, REF_KITCHEN);
+
+  await expect(page.getByTestId("input-priceOpen")).toHaveCount(0);
+  await expect(page.getByTestId("input-priceInStock")).toHaveCount(0);
+  await expect(page.getByTestId("view-priceOpen")).toHaveCount(0);
+  await expect(page.getByTestId("input-perPersonLimitOverride")).toHaveCount(0);
+});
+
+/**
+ * M2.16's done-when names batch 001 by number: "all three are editable on
+ * batch 001". Nothing on this screen special-cases a batch number, so the
+ * behaviour follows from the tests above. This checks it rather than infers
+ * it, on a batch carrying the printed number that is on 22 real jars, in the
+ * state those jars are actually in.
+ */
+test("all three are editable on batch 001 itself", async ({ page }) => {
+  await seedBatch(REF_B001, {
+    batchNo: "001",
+    productSlug: PRODUCT,
+    productName: "M24 Prawns Pickle",
+    recipeId: RECIPE,
+    state: "inStock",
+    plannedJars: 22,
+    bookableJars: 19,
+    perPersonLimit: 4,
+    perPersonLimitOverride: null,
+    paidCount: 19,
+    bottledJars: 22,
+    packedOn: "2026-09-04",
+    bestBefore: "2027-03-04",
+    saleStopOn: "2027-01-02",
+    priceOpen: 59_900,
+    priceInStock: 64_900,
+  });
+
+  await signIn(page, OWNER_PHONE);
+  await openBatch(page, REF_B001);
+
+  // The printed number, so this is unmistakably batch 001 and not a stand-in.
+  await expect(page.getByTestId("detail-label")).toHaveText("Batch 001");
+
+  // 1. Price, open batch.
+  await page.getByTestId("input-priceOpen").fill("575");
+  await page.getByTestId("input-priceOpen").blur();
+  await expect.poll(async () => (await readDocument(`batches/${REF_B001}`))?.priceOpen).toBe(57_500);
+
+  // 2. Price in stock.
+  await page.getByTestId("input-priceInStock").fill("610");
+  await page.getByTestId("input-priceInStock").blur();
+  await expect
+    .poll(async () => (await readDocument(`batches/${REF_B001}`))?.priceInStock)
+    .toBe(61_000);
+
+  // 3. The limit per person.
+  await page.getByTestId("input-perPersonLimitOverride").fill("3");
+  await page.getByTestId("input-perPersonLimitOverride").blur();
+  await expect
+    .poll(async () => (await readDocument(`batches/${REF_B001}`))?.perPersonLimitOverride)
+    .toBe(3);
+  await expect(page.getByTestId("view-perPersonLimit")).toHaveText("3");
+
+  // No lock, no transition button in the way, and nothing refused.
+  await expect(page.getByTestId("batch-field-error")).toHaveCount(0);
+  // The MRP still holds here too, on the batch that is actually printed.
+  await page.getByTestId("input-priceInStock").fill("650");
+  await page.getByTestId("input-priceInStock").blur();
+  await expect(page.getByTestId("batch-field-error")).toHaveText(BATCHES.priceAboveMrp);
+  expect((await readDocument(`batches/${REF_B001}`))?.priceInStock).toBe(61_000);
 });

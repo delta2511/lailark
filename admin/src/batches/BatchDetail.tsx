@@ -1,14 +1,40 @@
 /**
  * One batch, per brief section 17.4.
  *
- * Fields the Owner may set are only ever taken by the Draft -> Open button
- * (section 8.2's row): there is no later transition row that changes
- * `plannedJars`, `priceOpen`, `priceInStock` or `limitPerPerson`, and a raw
- * field write to `plannedJars` would leave `bookableJars` (a protected,
- * server-computed field) stale. ASSUMED (M2.4): so this screen shows Fill and
- * Price read only once the batch exists, rather than offering an edit that
- * brief 17.4 describes ("planned is editable while Open") but that M2.3's
- * transition table has no safe row for yet.
+ * **Price and the per-person limit are edited here, in place, on every batch
+ * in every state, with no lock (D40, D44, M2.16.)** M2.4 showed them read
+ * only and reasoned that the Draft -> Open button was the only safe way to
+ * set them; Shefin was shown the risk of the alternative (a price changed
+ * after people have booked and paid at the old one) and the two safer
+ * options, and chose full flexibility, batch 001 and archived batches
+ * included. That reasoning is gone rather than left here to mislead. Two
+ * things hold it up:
+ *
+ * - **Nothing is ever repriced retrospectively.** An order line carries its
+ *   own `unitPrice`, written once when the line is priced
+ *   (`functions/src/orders/sale.ts`), and every bill, receipt and total is
+ *   arithmetic on that line (`functions/src/money/plan.ts`). Nothing reads a
+ *   batch's price back for an order that already exists.
+ * - **An archived batch's P&L moves, and the screen says so.** D40: flagged,
+ *   not prevented. The line is a consequence stated once, next to the boxes.
+ *   It asks for nothing and blocks nothing.
+ *
+ * The ₹649 MRP still holds. It is checked here so nobody meets a raw
+ * permission error, and by value in `firestore.rules` (`batchPricesOk`)
+ * because the screen is not the last word: a batch's prices are a direct
+ * client write with no callable in the way, exactly like `costs` below.
+ *
+ * `plannedJars` stays read only, for the reason M2.4 gave and D40 did not
+ * touch: a raw write to it would leave `bookableJars` (protected, server
+ * computed) stale. The Draft -> Open row is still the only thing that moves
+ * it.
+ *
+ * The limit per person is the one field with a shape of its own (D44).
+ * `perPersonLimit` is still the protected, server-computed quarter; the box
+ * writes `perPersonLimitOverride` beside it, and shows the computed quarter
+ * as its placeholder. Blank is automatic, a typed number stands through
+ * later planned-jar changes, and everything that enforces the cap reads
+ * `effectivePerPersonLimit` rather than either field on its own.
  *
  * Every other kitchen field here (`KITCHEN_BATCH_FIELDS`) is safe to edit in
  * place because nothing else is computed from it, except `packedOn`, which
@@ -23,12 +49,20 @@
  * way and, from M2.14, offers its own 8 second undo on its own toast (A79
  * superseded): see that file for the race analysis.
  */
-import { batchLabelCapitalised, formatINR, liveHeldJars, type BatchCosts, type Role } from "@lailark/shared";
+import {
+  batchLabelCapitalised,
+  effectivePerPersonLimit,
+  formatINR,
+  liveHeldJars,
+  MRP_PAISE,
+  type BatchCosts,
+  type Role,
+} from "@lailark/shared";
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";
 
 import { BATCHES } from "../copy";
-import { isCostPaise, parseRupeesToPaise } from "../products/productMoney";
+import { isCostPaise, isSellablePaise, parseRupeesToPaise } from "../products/productMoney";
 import type { IngredientDoc, ProductDoc, RecipeDoc } from "../products/data";
 import { Timeline } from "../timeline/Timeline";
 import { UndoToast, type UndoToastState } from "../ui/UndoToast";
@@ -76,6 +110,18 @@ export function BatchDetail({ batch, role, uid, product, recipe, ingredients, on
   const held = liveHeldJars(batch.heldJars, Date.now());
   const costs = batch.costs ?? ZERO_COSTS;
 
+  // Whether the Price section appears at all. It is not a write gate, and it
+  // is deliberately not named like one: the Kitchen never sees a price
+  // (brief 17.12 gives "set prices" to the Owner), and the Viewer sees the
+  // numbers and edits nothing. What may be *written* is the nested
+  // `role === "owner"` below, which is the only gate to copy if another
+  // field joins this section.
+  const showsPrices = role === "owner" || role === "viewer";
+  // D44: the computed quarter is the placeholder and the fallback; the
+  // number anything actually enforces is the effective one.
+  const computedLimit = batch.perPersonLimit ?? 0;
+  const effectiveLimit = effectivePerPersonLimit(batch);
+
   // M2.6: the toast's `before` is the `audit/{id}` entry this write just
   // created (see `admin/src/audit/write.ts`), not the field's old value.
   const [toast, setToast] = useState<UndoToastState<string> | null>(null);
@@ -109,6 +155,36 @@ export function BatchDetail({ batch, role, uid, product, recipe, ingredients, on
     } catch (caught) {
       setFieldError(isPermissionDenied(caught) ? BATCHES.saveRefused : BATCHES.saveFailed);
     }
+  }
+
+  /**
+   * One of the two prices, in paise, already checked against the MRP by the
+   * box that typed it. Nothing here reprices an order: an order line carries
+   * its own `unitPrice`, and this changes only what the *next* sale is
+   * offered at. See the file header.
+   */
+  function commitPrice(field: "priceOpen" | "priceInStock", label: string, paise: number): void {
+    const before = batch[field] ?? null;
+    if (before === paise) return;
+    void commitWithUndo({ [field]: paise }, { [field]: before }, BATCHES.fieldChanged(label, formatINR(paise)));
+  }
+
+  /**
+   * The Owner's own per-person cap (D44). `null` clears it back to automatic,
+   * which is a real value here and not the "blank means not given" every
+   * other box on this screen uses: blank *is* the instruction, and the
+   * computed quarter takes over again.
+   */
+  function commitLimit(next: number | null): void {
+    const before = batch.perPersonLimitOverride ?? null;
+    if (before === next) return;
+    void commitWithUndo(
+      { perPersonLimitOverride: next },
+      { perPersonLimitOverride: before },
+      next === null
+        ? BATCHES.limitPerPersonCleared
+        : BATCHES.fieldChanged(BATCHES.limitPerPerson, String(next)),
+    );
   }
 
   /**
@@ -170,7 +246,7 @@ export function BatchDetail({ batch, role, uid, product, recipe, ingredients, on
         <StateButton batch={batch} role={role} />
       </div>
 
-      {/* ---- Fill, brief 17.4: read only, see the file header note ---- */}
+      {/* ---- Fill, brief 17.4. `plannedJars` stays read only: see the header ---- */}
       <p class="section-heading">{BATCHES.fillHeading}</p>
       <div class="fill-numbers">
         <Field label={BATCHES.plannedJars} value={String(batch.plannedJars ?? "")} testId="view-plannedJars" numeric />
@@ -179,29 +255,70 @@ export function BatchDetail({ batch, role, uid, product, recipe, ingredients, on
         <Field label={BATCHES.heldNow} value={String(held)} testId="view-heldNow" numeric />
         <Field
           label={BATCHES.limitPerPerson}
-          value={String(batch.perPersonLimit ?? "")}
+          value={String(effectiveLimit)}
           testId="view-perPersonLimit"
           numeric
         />
       </div>
       <FillBar paid={batch.paidCount ?? 0} bookable={batch.bookableJars ?? 0} />
 
-      {/* ---- Price, Owner only, read only (see file header note) ---- */}
-      {role === "owner" || role === "viewer" ? (
+      {/* ---- The Owner's own cap, D44. Blank is automatic. The Viewer gets
+               no box: the Fill row above already shows the effective cap,
+               and brief 17.12 gives a Viewer no input anywhere. ---- */}
+      {role === "owner" ? (
+        <EditableLimit
+          computed={computedLimit}
+          override={batch.perPersonLimitOverride ?? null}
+          bookable={batch.bookableJars ?? 0}
+          onCommit={commitLimit}
+        />
+      ) : null}
+
+      {/* ---- Price, Owner edits, Viewer reads. D40: no lock, in any state ---- */}
+      {showsPrices ? (
         <>
           <p class="section-heading">{BATCHES.priceHeading}</p>
-          <Field
-            label={BATCHES.priceOpen}
-            value={batch.priceOpen === undefined ? "" : formatINR(batch.priceOpen)}
-            testId="view-priceOpen"
-            numeric
-          />
-          <Field
-            label={BATCHES.priceInStock}
-            value={batch.priceInStock === undefined ? "" : formatINR(batch.priceInStock)}
-            testId="view-priceInStock"
-            numeric
-          />
+          <p class="notice-line" data-testid="price-help">
+            {BATCHES.priceHelp}
+          </p>
+          {batch.state === "archived" ? (
+            <p class="notice-line" data-testid="price-archived-note">
+              {BATCHES.priceArchivedNote}
+            </p>
+          ) : null}
+          {role === "owner" ? (
+            <>
+              <EditablePrice
+                label={BATCHES.priceOpen}
+                value={batch.priceOpen ?? null}
+                testId="priceOpen"
+                onCommit={(paise) => commitPrice("priceOpen", BATCHES.priceOpen, paise)}
+                onInvalid={setFieldError}
+              />
+              <EditablePrice
+                label={BATCHES.priceInStock}
+                value={batch.priceInStock ?? null}
+                testId="priceInStock"
+                onCommit={(paise) => commitPrice("priceInStock", BATCHES.priceInStock, paise)}
+                onInvalid={setFieldError}
+              />
+            </>
+          ) : (
+            <>
+              <Field
+                label={BATCHES.priceOpen}
+                value={batch.priceOpen === undefined ? "" : formatINR(batch.priceOpen)}
+                testId="view-priceOpen"
+                numeric
+              />
+              <Field
+                label={BATCHES.priceInStock}
+                value={batch.priceInStock === undefined ? "" : formatINR(batch.priceInStock)}
+                testId="view-priceInStock"
+                numeric
+              />
+            </>
+          )}
         </>
       ) : null}
 
@@ -490,6 +607,138 @@ function EditableNumber({
       />
       {error ? (
         <p class="error" data-testid={`error-${testId}`}>
+          {error}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * One of a batch's two prices, edited in place (D40, M2.16).
+ *
+ * The box refuses anything the rules would refuse, so nobody meets a raw
+ * permission error: a price is a whole number of paise, at least one, and
+ * never above the ₹649 MRP printed on the jar. `firestore.rules`
+ * (`batchPricesOk`) checks the same thing by value, because this screen
+ * writes straight to Firestore with no callable in the way and so cannot be
+ * the last word on it.
+ *
+ * Blank changes nothing, like every other box on this screen: a price of
+ * nothing is not a price, and a batch with no price on it is refused at the
+ * counter by name (`functions/src/orders/sale.ts`) rather than sold for zero.
+ */
+function EditablePrice({
+  label,
+  value,
+  testId,
+  onCommit,
+  onInvalid,
+}: {
+  readonly label: string;
+  readonly value: number | null;
+  readonly testId: string;
+  readonly onCommit: (paise: number) => void;
+  readonly onInvalid: (message: string) => void;
+}): JSX.Element {
+  const stored = value === null ? "" : String(value / 100);
+
+  return (
+    <>
+      <label for={`edit-${testId}`}>{label}</label>
+      <input
+        key={`${testId}-${value}`}
+        id={`edit-${testId}`}
+        type="text"
+        inputMode="decimal"
+        defaultValue={stored}
+        data-testid={`input-${testId}`}
+        onChange={(event) => {
+          const input = event.target as HTMLInputElement;
+          const raw = input.value.trim();
+          if (raw === "") {
+            input.value = stored;
+            return;
+          }
+          const paise = parseRupeesToPaise(raw);
+          if (paise === null) {
+            onInvalid(BATCHES.priceInvalid);
+            return;
+          }
+          if (!isSellablePaise(paise)) {
+            onInvalid(paise > MRP_PAISE ? BATCHES.priceAboveMrp : BATCHES.priceTooLow);
+            return;
+          }
+          onCommit(paise);
+        }}
+      />
+    </>
+  );
+}
+
+/**
+ * The limit per person (D44), edited in place on any batch in any state.
+ *
+ * `perPersonLimit` stays the protected, server-computed quarter of the
+ * bookable jars; this box writes `perPersonLimitOverride` beside it. The
+ * computed quarter is the placeholder, so a batch nobody has touched shows
+ * the number it is actually enforcing even though the box is empty, and an
+ * empty box is the instruction "go back to automatic" rather than this
+ * screen's usual "nothing given". A typed number stands through every later
+ * planned-jar change, because only the computed field moves with the jars.
+ */
+function EditableLimit({
+  computed,
+  override,
+  bookable,
+  onCommit,
+}: {
+  readonly computed: number;
+  readonly override: number | null;
+  readonly bookable: number;
+  readonly onCommit: (next: number | null) => void;
+}): JSX.Element {
+  const [error, setError] = useState<string | null>(null);
+  const stored = override === null ? "" : String(override);
+
+  return (
+    <>
+      <label for="edit-perPersonLimitOverride">{BATCHES.limitPerPerson}</label>
+      <input
+        key={`perPersonLimitOverride-${override}`}
+        id="edit-perPersonLimitOverride"
+        type="text"
+        inputMode="numeric"
+        placeholder={String(computed)}
+        defaultValue={stored}
+        data-testid="input-perPersonLimitOverride"
+        onChange={(event) => {
+          const raw = (event.target as HTMLInputElement).value.trim();
+          if (raw === "") {
+            setError(null);
+            onCommit(null);
+            return;
+          }
+          const n = Number(raw);
+          if (!Number.isInteger(n) || n < 1) {
+            setError(BATCHES.limitPerPersonInvalid);
+            return;
+          }
+          // The same ceiling `planOpen` puts on the Draft -> Open row: a cap
+          // above the bookable jars is a cap on nothing.
+          if (bookable > 0 && n > bookable) {
+            setError(BATCHES.limitPerPersonOverBookable(bookable));
+            return;
+          }
+          setError(null);
+          onCommit(n);
+        }}
+      />
+      <p class="field-help" data-testid="limit-help">
+        {override === null ? BATCHES.limitPerPersonAuto(computed) : BATCHES.limitPerPersonHelp}
+      </p>
+      {error ? (
+        <p class="error" data-testid="error-perPersonLimitOverride">
           {error}
         </p>
       ) : null}

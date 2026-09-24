@@ -146,6 +146,25 @@ async function orderDoc(orderId: string) {
   return data;
 }
 
+/**
+ * Every paise figure an order carries, by name: the line prices, the totals,
+ * the shipping fee, the discount and the payment. Nothing else on the
+ * document is money, so nothing else belongs in a check about money.
+ */
+function moneyFieldsOf(order: Record<string, unknown>): number[] {
+  const payment = (order.payment ?? {}) as Record<string, unknown>;
+  const discount = (order.discount ?? null) as Record<string, unknown> | null;
+  const lines = (order.lines ?? []) as Array<Record<string, unknown>>;
+  return [
+    ...lines.map((line) => line.unitPrice),
+    order.total,
+    order.shippingFee,
+    payment.amount,
+    payment.refundedAmount,
+    discount?.amount,
+  ].filter((value): value is number => typeof value === "number");
+}
+
 async function auditFor(object: string) {
   const found = await db().collection("audit").where("object", "==", object).get();
   return found.docs.map((doc) => doc.data());
@@ -892,5 +911,84 @@ describe("a custom line tied to a batch", () => {
 
     const after = (await db().collection("customers").doc(ASHA).get()).data() ?? {};
     expect((after.stats as Record<string, unknown>).lastOrderAt).toBeTruthy();
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* D40: editing a batch's price never reprices an order already placed        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The Owner may change a batch's two prices at any time, on any batch, in any
+ * state, with no lock (D40, M2.16). The one thing that must hold is that an
+ * order already placed keeps the price it was actually charged.
+ *
+ * It holds by construction: an order line carries its own `unitPrice`, written
+ * once when the line is priced (`planLine`, `functions/src/orders/sale.ts`),
+ * and every total, bill and receipt is arithmetic on that stored line
+ * (`functions/src/money/plan.ts`). Nothing anywhere reads a batch's price back
+ * for an order that exists. This test is what makes that a fact rather than a
+ * reading of the code: it sells a jar, moves the batch's price under it, and
+ * looks at the order again.
+ */
+describe("a batch whose price changes after a jar has been sold", () => {
+  let ref = "";
+  let orderId = "";
+  const NEW_PRICE_PAISE = 50_000;
+
+  beforeAll(async () => {
+    await clearFirestore();
+    await seedProduct();
+    await seedCustomer(ASHA, "Asha");
+    ref = await inStockBatch(PRODUCT);
+    await leaveJarsFree(ref, 5);
+    const sale = await mustSell("kitchen", {
+      line: { kind: "product", productSlug: PRODUCT, batchRef: ref, qty: 1 },
+    });
+    orderId = sale.orderId as string;
+    // The Owner retypes the price on the batch screen. This is the same
+    // document write that screen makes, minus the audit entry beside it.
+    await db().collection("batches").doc(ref).update({ priceInStock: NEW_PRICE_PAISE });
+  });
+
+  it("leaves the sold order's recorded price and every total exactly where they were", async () => {
+    const order = await orderDoc(orderId);
+    const lines = order.lines as Array<Record<string, unknown>>;
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0].unitPrice).toBe(PRICE_IN_STOCK_PAISE);
+    expect(order.total).toBe(PRICE_IN_STOCK_PAISE);
+    expect((order.payment as Record<string, unknown>).amount).toBe(PRICE_IN_STOCK_PAISE);
+
+    // ...and no *money* field anywhere on the order carries the new number.
+    // Named field by field on purpose. An earlier draft of this swept
+    // `JSON.stringify(order)` for the price as a substring, which read as a
+    // stronger check and was in fact a weaker one: it matched a timestamp's
+    // nanoseconds as readily as a price (an emulator stamp is millisecond
+    // aligned, so any millisecond ending in 5 prints "50000" inside its
+    // `_nanoseconds`, which is 111 of every 1000), so a lucky stamp could
+    // not be told from a genuinely repriced order. This says what it means.
+    expect(moneyFieldsOf(order)).not.toContain(NEW_PRICE_PAISE);
+  });
+
+  it("leaves the bill that was issued for it alone too", async () => {
+    const bills = await db().collection("documents").where("orderId", "==", orderId).get();
+    for (const bill of bills.docs) {
+      const data = bill.data();
+      expect(data.total).toBe(PRICE_IN_STOCK_PAISE);
+      for (const line of (data.lines ?? []) as Array<Record<string, unknown>>) {
+        expect(line.unitPrice).toBe(PRICE_IN_STOCK_PAISE);
+      }
+    }
+  });
+
+  it("charges the new price for the next jar, which is the whole point of the edit", async () => {
+    const sale = await mustSell("kitchen", {
+      line: { kind: "product", productSlug: PRODUCT, batchRef: ref, qty: 1 },
+      expectedTotalPaise: NEW_PRICE_PAISE,
+    });
+    expect(sale.total).toBe(NEW_PRICE_PAISE);
+    const order = await orderDoc(sale.orderId as string);
+    expect((order.lines as Array<Record<string, unknown>>)[0].unitPrice).toBe(NEW_PRICE_PAISE);
   });
 });

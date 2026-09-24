@@ -86,6 +86,10 @@ export function batchViewFrom(snap: DocumentSnapshot): BatchView {
     plannedJars: numberOr(d.plannedJars, 0),
     bookableJars: numberOr(d.bookableJars, 0),
     perPersonLimit: numberOr(d.perPersonLimit, 0),
+    // D44: null, or absent, is automatic. Read through
+    // `effectivePerPersonLimit`, never on its own.
+    perPersonLimitOverride:
+      typeof d.perPersonLimitOverride === "number" ? d.perPersonLimitOverride : null,
     priceOpen: numberOr(d.priceOpen, 0),
     priceInStock: numberOr(d.priceInStock, 0),
     paidCount: numberOr(d.paidCount, 0),

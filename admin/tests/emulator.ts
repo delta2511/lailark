@@ -341,6 +341,8 @@ export function batchFields(overrides: Record<string, Json>): Record<string, Jso
     plannedJars: 0,
     bookableJars: 0,
     perPersonLimit: 0,
+    // D44: automatic until the Owner types his own cap.
+    perPersonLimitOverride: null,
     priceOpen: 59_900,
     priceInStock: 64_900,
     paidCount: 0,

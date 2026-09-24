@@ -65,6 +65,7 @@ function batchView(over: Partial<BatchView> = {}): BatchView {
     plannedJars: 22,
     bookableJars: maths.bookableJars,
     perPersonLimit: maths.perPersonLimit,
+    perPersonLimitOverride: null,
     priceOpen: PRICE_OPEN_PAISE,
     priceInStock: PRICE_IN_STOCK_PAISE,
     paidCount: 0,
@@ -532,9 +533,32 @@ describe("draft -> open: the Owner publishes the card", () => {
     expect(value.concerns).toEqual([]);
   });
 
-  it("takes the Owner's override of the per-person limit", () => {
+  // D44: `perPersonLimit` is always the computed quarter, so the box on the
+  // batch screen can show it as a placeholder and mean it. A number typed on
+  // this row is the Owner's own cap and lands in `perPersonLimitOverride`
+  // beside it, where it stands through every later planned-jar change.
+  it("takes the Owner's own per-person cap, beside the computed quarter", () => {
     const value = ok(plan({ ref: REF, to: "open", data: { limitPerPerson: 2 } })).value;
-    expect(value.patch.perPersonLimit).toBe(2);
+    expect(value.patch.perPersonLimitOverride).toBe(2);
+    expect(value.patch.perPersonLimit).toBe(4);
+    expect(value.computed.perPersonLimit).toBe(2);
+  });
+
+  it("leaves a cap the Owner typed earlier standing when the jars move", () => {
+    const value = ok(
+      plan({ ref: REF, to: "open", data: { plannedJars: 40 } }, { batch: batchView({ perPersonLimitOverride: 2 }) }),
+    ).value;
+    expect(value.patch.perPersonLimit).toBe(9);
+    expect(value.patch.perPersonLimitOverride).toBe(2);
+    expect(value.computed.perPersonLimit).toBe(2);
+  });
+
+  it("clears the cap back to automatic when the box is emptied", () => {
+    const value = ok(
+      plan({ ref: REF, to: "open", data: { limitPerPerson: null } }, { batch: batchView({ perPersonLimitOverride: 2 }) }),
+    ).value;
+    expect(value.patch.perPersonLimitOverride).toBeNull();
+    expect(value.computed.perPersonLimit).toBe(4);
   });
 
   it("refuses a limit above the bookable jars", () => {

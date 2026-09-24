@@ -36,6 +36,7 @@ export const BATCH_DOC = {
   plannedJars: 22,
   bookableJars: 19,
   perPersonLimit: 4,
+  perPersonLimitOverride: null,
   priceOpen: 59900,
   priceInStock: 64900,
   paidCount: 3,

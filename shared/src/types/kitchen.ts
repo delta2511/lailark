@@ -81,7 +81,23 @@ export interface Batch extends BaseDoc {
   readonly plannedJars: number;
   /** `floor(plannedJars * 9 / 10)`. This is the number the card shows. */
   readonly bookableJars: number;
+  /**
+   * The computed cap: a quarter of `bookableJars`, rounded down, minimum 1.
+   * Server written and protected, exactly as it always was. Nothing enforcing
+   * the cap reads this field directly: see `perPersonLimitOverride`.
+   */
   readonly perPersonLimit: number;
+  /**
+   * The Owner's own cap, or null for automatic. D44: the limit per person is
+   * a number the Owner may type on any batch in any state, and left blank it
+   * falls back to the computed quarter above, which is what the box shows as
+   * its placeholder. A typed number stands through later planned-jar changes,
+   * because only `perPersonLimit` moves with the jars; this one does not.
+   *
+   * Read it through `effectivePerPersonLimit` (`shared/src/batch.ts`), never
+   * on its own.
+   */
+  readonly perPersonLimitOverride: number | null;
   readonly priceOpen: Paise;
   readonly priceInStock: Paise;
   /** Changed only inside a transaction on this document. */

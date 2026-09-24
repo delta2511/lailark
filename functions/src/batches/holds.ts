@@ -50,6 +50,7 @@ import {
   BATCH_STATES_IN_STOCK,
   BATCH_STATES_OPEN_FOR_BOOKING,
   canHold,
+  effectivePerPersonLimit,
   inStockAvailability,
   remainingPerPersonAllowance,
   withinPerPersonLimit,
@@ -257,7 +258,9 @@ export async function readStockClaim(
     customerJars += order.jars;
   }
 
-  const limit = batch.perPersonLimit;
+  // D44: the Owner's own cap when he has typed one, the computed quarter
+  // otherwise. Never `batch.perPersonLimit` on its own.
+  const limit = effectivePerPersonLimit(batch);
   const limitOverridden = request.overrideLimit === true;
   if (!limitOverridden && !withinPerPersonLimit(customerJars, qty, limit)) {
     const remaining = remainingPerPersonAllowance(customerJars, limit);

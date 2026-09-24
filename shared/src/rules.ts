@@ -32,7 +32,10 @@ type BatchField = keyof Batch;
  *   `paid + live holds + requested <= bookable` first (CLAUDE.md section 3).
  *   A client write here would oversell a batch.
  * - **Server computed.** `bookableJars` and `perPersonLimit` are arithmetic on
- *   `plannedJars`; `bestBefore` and `saleStopOn` are arithmetic on `packedOn`;
+ *   `plannedJars` (D44 leaves `perPersonLimit` exactly that, and puts the
+ *   Owner's own cap in `perPersonLimitOverride` beside it, which is his to
+ *   write and so is deliberately **not** on this list); `bestBefore` and
+ *   `saleStopOn` are arithmetic on `packedOn`;
  *   `pnl` is kept current by a trigger; `state`, `pausedFrom` and the four
  *   `...At` stamps are the lifecycle, moved only by the `transitionBatch`
  *   callable (M2.3) so the transition table in brief section 8.2 is the only
@@ -72,7 +75,8 @@ export type ProtectedBatchField = (typeof PROTECTED_BATCH_FIELDS)[number];
  * Bottled" and "Weights, costs, photos, updates". The move is a callable, not
  * a field write, so what is left for the rules is the sourcing note, the three
  * dates, the three weights and the packaging costs. Prices, planned jars, the
- * recipe and the product are the Owner's.
+ * recipe and the product are the Owner's, `perPersonLimitOverride` (D44)
+ * included.
  *
  * `updatedAt` and `updatedBy` are on the list because the admin's write
  * wrapper stamps them on every save (M2.6). Without them every kitchen save

@@ -328,6 +328,17 @@ describe("a batch, from the Kitchen", () => {
     await assertFails(patch(who.kitchen, path, { plannedJars: 40 }));
   });
 
+  // D40 and D44 open the prices and the per-person cap to the Owner. They are
+  // his, not the kitchen's: 17.12 gives "set prices" to the Owner alone.
+  // A price the rules would take from the Owner is still refused from the
+  // Kitchen. The number has to differ from the one on the seeded batch:
+  // `onlyChanged` compares the keys whose value actually moved, so rewriting
+  // ₹649 over ₹649 changes nothing and is rightly allowed.
+  it("cannot set a price the Owner could set, nor the per-person cap", async () => {
+    await assertFails(patch(who.kitchen, path, { priceInStock: 60_000 }));
+    await assertFails(patch(who.kitchen, path, { perPersonLimitOverride: 2 }));
+  });
+
   it("cannot create a batch: opening one is the Owner's", async () => {
     await assertFails(write(who.kitchen, "batches/b-000002", { ...base, productSlug: "x" }));
   });
@@ -434,6 +445,60 @@ describe("a batch, from the Owner", () => {
 
   it("takes a price change", async () => {
     await assertSucceeds(patch(who.owner, path, { priceOpen: 59900, priceInStock: 64900 }));
+  });
+
+  /**
+   * D40, M2.16: the Owner edits a batch's two prices in place, on any batch,
+   * in any state, with no lock, and that write goes straight to Firestore with
+   * no callable in the way. So these rules are the last thing between a slip
+   * of the thumb and a price a customer could be charged, exactly as they are
+   * for a product's prices and a batch's costs. CLAUDE.md section 3: whole
+   * paise, and never above the ₹649 MRP printed on the jar.
+   */
+  it("refuses a batch price that is not money, even from the Owner", async () => {
+    for (const bad of [0, -1, 64_901, 649.5, 64_900.5, "649", null]) {
+      await assertFails(patch(who.owner, path, { priceInStock: bad }));
+      await assertFails(patch(who.owner, path, { priceOpen: bad }));
+    }
+  });
+
+  it("takes a batch price at exactly the MRP, and at one paise", async () => {
+    await assertSucceeds(patch(who.owner, path, { priceInStock: 64_900 }));
+    await assertSucceeds(patch(who.owner, path, { priceOpen: 64_900 }));
+    await assertSucceeds(patch(who.owner, path, { priceOpen: 1 }));
+  });
+
+  it("refuses a price over the MRP on a create too", async () => {
+    await assertFails(
+      write(who.owner, "batches/b-000021", {
+        ...base,
+        productSlug: "prawns-and-dates",
+        plannedJars: 22,
+        priceOpen: 59_900,
+        priceInStock: 65_000,
+      }),
+    );
+  });
+
+  /**
+   * D44: `perPersonLimit` stays protected and server computed; the Owner's own
+   * cap lives beside it in `perPersonLimitOverride`, which is his to type on
+   * any batch in any state. Null is "automatic", and a zero or a fraction is
+   * a cap nobody meant.
+   */
+  it("takes the Owner's per-person cap, and null to clear it", async () => {
+    await assertSucceeds(patch(who.owner, path, { perPersonLimitOverride: 2 }));
+    await assertSucceeds(patch(who.owner, path, { perPersonLimitOverride: null }));
+  });
+
+  it("refuses a per-person cap that is not a whole number of jars", async () => {
+    for (const bad of [0, -1, 2.5, "2", true]) {
+      await assertFails(patch(who.owner, path, { perPersonLimitOverride: bad }));
+    }
+  });
+
+  it("still refuses the computed quarter itself, from the Owner", async () => {
+    await assertFails(patch(who.owner, path, { perPersonLimit: 2 }));
   });
 
   it("takes the kitchen fields too: the Owner does the kitchen's job on a bad day", async () => {

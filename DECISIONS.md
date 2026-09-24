@@ -77,6 +77,7 @@ confirm or replace at the next milestone break.
 | D41 | **Sourcing to Cooking asks for a weight and a cost per main ingredient, each named** | Asked and answered 23 Sep 2026, surfaced while fixing M2.13. Brief §14.1 says "the main ingredient's" raw weight and cost, which assumes one; batch 001 has two, prawns and dates, and the form silently recorded only the first, so the dates bought for the batch were never costed at that step. The form now asks once per main line and names the ingredient it is asking about. Reason: the main ingredients are the two costs that most move the batch P&L, and dates are not cheap. Built in M2.19 |
 | D42 | **The per-ingredient actuals are value checked in `firestore.rules`, not only on the screen** | Asked and answered 23 Sep 2026, surfaced by the M2.14 tester. `batches/{ref}/lines/{lineId}` allows create and update on `isStaff()` alone and never looks at the number, so `qtyActual` and `costActual` are guarded by the screen only: anything writing outside it (a seeding script, a function with a bug, a signed-in staff account talking to Firestore directly) can put a negative, a fractional paise or an absurd cost straight in. A84 already checks the batch's own costs and a product's two prices this way; the line documents were missed. Shefin was told the risk is low today, since every write does go through the screen, and chose to close it now rather than at launch: these are the two numbers that most move a batch P&L. Also fixes `rupeesToPaise` silently rounding, so `12.345` is refused rather than saved as `1235`. Built in M2.20 |
 | D43 | **One undo toast for the whole Cooking actuals section, not one per ingredient row** | Asked and answered 23 Sep 2026, confirming A112 from M2.14. A second cost typed inside the 8 seconds replaces the first toast, so only the second edit stays undoable. Shefin was shown the alternative (a toast and its own 8 seconds per row) and kept the single toast: nothing is lost either way, both edits are in the timeline and the old number can be retyped, and several stacked bars at the bottom of a phone at a busy counter is worse than the thing it fixes |
+| D44 | **The limit per person is an editable field with the computed quarter as its placeholder and its default** | Asked and answered 23 Sep 2026 during M2.16, following D40. `perPersonLimit` was a protected, server-computed field (a quarter of the bookable jars, minimum 1). It is now a number the Owner may type on any batch in any state. Left blank it falls back to the computed quarter, which is what the box shows as its placeholder, so a batch nobody has touched behaves exactly as it does today and a planned-jar change still moves the limit. Once the Owner types a number it stands, through later planned-jar changes, until it is cleared back to blank. Reason: Shefin wanted the freedom without losing the automatic number underneath it |
 
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
@@ -620,3 +621,31 @@ break.
   SDK delivers as `null`) sorts newest, reproducing what Firestore's own
   `orderBy("at", "desc")` does server side. Sorting it last put the edit someone had just
   made at the bottom of the list for the round trip, then made it jump. Status: open.
+- A117 (M2.16, 23 Sep): the in-place limit box refuses a cap above the bookable jars,
+  matching the ceiling `planOpen` already puts on the Draft -> Open row, so the two paths
+  give the same answer. D44 names no ceiling. `firestore.rules` checks only "whole number,
+  one or more", because on a create there is no `bookableJars` yet to compare against, so
+  an override above the bookable count is accepted server side and refused by the screen.
+  The M2.16 tester raised the asymmetry and it was left deliberately: a cap above the
+  bookable jars is a cap on nothing and cannot oversell. Status: open.
+- A118 (M2.16, 23 Sep): a blank price box changes nothing, like every other box on this
+  screen, rather than clearing the price to null. A batch with no price is refused by name
+  at the counter, which is better than a jar priced at zero. Status: open.
+- A119 (M2.16, 23 Sep): `planOpen`'s existing `limitPerPerson` input writes
+  `perPersonLimitOverride` rather than overwriting the computed `perPersonLimit`, and
+  accepts null to clear it. D44 fixes the behaviour, not the mechanism; without this the
+  placeholder would show a number that is not the computed quarter. Status: open.
+- A120 (M2.16, 23 Sep): the wording of `priceHelp`, `priceArchivedNote`, `priceTooLow`,
+  `limitPerPersonHelp`, `limitPerPersonAuto`, `limitPerPersonInvalid`,
+  `limitPerPersonOverBookable` and `limitPerPersonCleared`. Admin-facing, so assumable per
+  CLAUDE.md §5. The archived line states the consequence and blocks nothing: "This batch is
+  archived. Changing a price here moves its P&L." Status: open.
+- A121 (M2.16, 23 Sep): the price and the limit each get their own undo toast, per the
+  per-field pattern the batch's own fields already use, not D43's one-toast-per-section
+  shape. No collision, because each commit touches exactly one field, which is what makes
+  `undoAuditEntry`'s race guard safe. Status: open.
+- A122 (M2.16, 24 Sep): `effectivePerPersonLimit` treats a zero, a negative or a
+  fractional override as no override and falls back to the computed quarter. The field is
+  validated where it is written (the rules, the screen and `planOpen`), so this is the belt
+  to that braces: a bad value that somehow lands can never become a cap nobody meant.
+  Status: open.

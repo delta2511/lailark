@@ -87,6 +87,8 @@ const EXPECTED_EXPORTS = [
   "bookableJars",
   "halfOfBookable",
   "perPersonLimit",
+  "effectivePerPersonLimit",
+  "isPerPersonLimitOverride",
   "batchMaths",
   "surplusJars",
   "withinPerPersonLimit",

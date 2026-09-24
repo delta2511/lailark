@@ -7,10 +7,12 @@ import {
   canHold,
   DEFAULT_SHELF_LIFE_RULE,
   daysToSaleStop,
+  effectivePerPersonLimit,
   halfOfBookable,
   type HeldJars,
   inStockAvailability,
   isOnlineSaleAllowed,
+  isPerPersonLimitOverride,
   liveHeldJars,
   minRemainingDaysOnArrival,
   perPersonLimit,
@@ -83,6 +85,46 @@ describe("perPersonLimit", () => {
     expect(perPersonLimit(3)).toBe(1);
     expect(perPersonLimit(4)).toBe(1);
     expect(perPersonLimit(8)).toBe(2);
+  });
+});
+
+describe("effectivePerPersonLimit, D44", () => {
+  it("is the computed quarter when nobody has typed a cap", () => {
+    expect(effectivePerPersonLimit({ perPersonLimit: 4, perPersonLimitOverride: null })).toBe(4);
+    expect(effectivePerPersonLimit({ perPersonLimit: 4 })).toBe(4);
+    expect(effectivePerPersonLimit({ perPersonLimit: 9, perPersonLimitOverride: undefined })).toBe(9);
+  });
+
+  it("is the Owner's number the moment he types one", () => {
+    expect(effectivePerPersonLimit({ perPersonLimit: 9, perPersonLimitOverride: 2 })).toBe(2);
+    expect(effectivePerPersonLimit({ perPersonLimit: 1, perPersonLimitOverride: 6 })).toBe(6);
+  });
+
+  it("stands while the computed quarter moves under it, which is the point", () => {
+    // The Owner typed 2 on a 22 jar batch, then replanned it at 40 jars: the
+    // computed quarter goes 4 -> 9 and the cap he typed does not move.
+    expect(effectivePerPersonLimit({ perPersonLimit: 4, perPersonLimitOverride: 2 })).toBe(2);
+    expect(effectivePerPersonLimit({ perPersonLimit: 9, perPersonLimitOverride: 2 })).toBe(2);
+  });
+
+  it("falls back rather than enforcing nonsense a bad write left behind", () => {
+    for (const bad of [0, -3, 2.5, Number.NaN]) {
+      expect(effectivePerPersonLimit({ perPersonLimit: 4, perPersonLimitOverride: bad })).toBe(4);
+    }
+  });
+
+  it("reads a missing computed quarter as no cap at all rather than throwing", () => {
+    expect(effectivePerPersonLimit({})).toBe(0);
+  });
+});
+
+describe("isPerPersonLimitOverride", () => {
+  it("takes a whole number of jars, one or more, and nothing else", () => {
+    expect(isPerPersonLimitOverride(1)).toBe(true);
+    expect(isPerPersonLimitOverride(22)).toBe(true);
+    for (const bad of [0, -1, 1.5, null, undefined, "2", Number.NaN]) {
+      expect(isPerPersonLimitOverride(bad)).toBe(false);
+    }
   });
 });
 

@@ -63,6 +63,37 @@ export function perPersonLimit(bookable: number): number {
   return Math.max(1, Math.floor(bookable / PER_PERSON_LIMIT_DIVISOR));
 }
 
+/**
+ * The cap everything that enforces the per-person limit must read. D44.
+ *
+ * `perPersonLimit` is the computed quarter: server written, protected, and it
+ * moves whenever the planned jars move. `perPersonLimitOverride` is the number
+ * the Owner typed, on any batch in any state, and it stands until it is
+ * cleared back to null. So the effective cap is the override when there is
+ * one, and the computed quarter otherwise.
+ *
+ * It is one exported function rather than an inline `??` at each call site so
+ * that no caller can read the raw field by accident and quietly enforce a cap
+ * the Owner replaced. A zero, a negative or a fractional override is treated
+ * as no override: the field is validated where it is written (`firestore.
+ * rules`, the Batches screen and `planOpen`), and this is the belt to that.
+ */
+export function effectivePerPersonLimit(batch: {
+  readonly perPersonLimit?: number | null;
+  readonly perPersonLimitOverride?: number | null;
+}): number {
+  const override = batch.perPersonLimitOverride;
+  if (typeof override === "number" && Number.isInteger(override) && override >= 1) {
+    return override;
+  }
+  return typeof batch.perPersonLimit === "number" ? batch.perPersonLimit : 0;
+}
+
+/** True for a value the Owner may store in `perPersonLimitOverride`. */
+export function isPerPersonLimitOverride(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1;
+}
+
 export interface BatchMaths {
   readonly plannedJars: number;
   readonly bookableJars: number;

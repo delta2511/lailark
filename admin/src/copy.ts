@@ -306,6 +306,7 @@ export const BATCHES = {
   plannedJarsInvalid: "Please enter a whole number of jars.",
   priceInvalid: "Please enter a price in rupees.",
   priceAboveMrp: "A jar is never priced above ₹649. Please enter ₹649 or less.",
+  priceTooLow: "Please enter a price of at least one paisa.",
   costInvalid: "Please enter a cost in rupees, zero or more.",
   weightInvalid: "Please enter a weight in grams, zero or more.",
   bookableZero: "That many planned jars leaves no bookable jar at the 90% cap. Please plan for more.",
@@ -316,9 +317,23 @@ export const BATCHES = {
   paid: "Paid",
   heldNow: "Held now",
   limitPerPerson: "Limit per person",
+  /* D44: blank is automatic. The box shows the computed quarter as its
+     placeholder, so the number a customer meets is on screen either way. */
+  limitPerPersonHelp: "Leave it blank to keep a quarter of the bookable jars.",
+  limitPerPersonAuto: (limit: number) => `${limit}, worked out from the bookable jars`,
+  limitPerPersonInvalid: "Please enter a whole number of jars, one or more.",
+  limitPerPersonOverBookable: (bookable: number) =>
+    `That is more than the ${bookable} bookable jars. Please enter ${bookable} or less.`,
+  limitPerPersonCleared: "Limit per person is back to automatic.",
 
   /* ---- Price, Owner only ---- */
   priceHeading: "Price",
+  /* D40: prices are editable on every batch, in any state, with no lock. The
+     two lines below say the two things that are true and nothing more: an
+     order keeps what it was charged, and an archived batch's P&L moves. No
+     confirmation, no warning colour, no block. */
+  priceHelp: "An order already placed keeps the price it was charged.",
+  priceArchivedNote: "This batch is archived. Changing a price here moves its P&L.",
 
   /* ---- Sourcing ---- */
   sourcingHeading: "Sourcing",

@@ -21,6 +21,7 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
 
 ## Answered
 
+- ~~Q17 (M2.16, 23 Sep): D40 makes the limit per person editable, but `perPersonLimit` is computed (a quarter of the bookable jars) and sits in `PROTECTED_BATCH_FIELDS`. Should a typed limit survive a later change to the planned jar count, or be recomputed away by it?~~ Answered 23 Sep: keep the field editable, with the computed value as its placeholder and its default when the Owner has not entered one. Recorded as D44, built in M2.16.
 - ~~Q14 (M2.6, 21 Sep): should `audit` be the only order history, and `orders/{id}/events` dropped before order writes are built on top of it?~~ Answered 23 Sep at the M2 break: drop it. Recorded as D39, built in M2.17.
 - ~~Q15 (M2.9, 23 Sep): may Kitchen open the bill PDF for a sale? Brief §17.12 gives "See Money" to Owner and Viewer only, and both `firestore.rules` and `storage.rules` already deny Kitchen any read of `documents/**`. But Kitchen is who rings up a counter sale, so as the rules stand she sells the jar and then cannot see its bill.~~ Answered 23 Sep: yes, for any order, through a server callable only; the money collections stay shut to her. Recorded as D35, built in M2.9.
 - ~~Q7 (M2.1, 18 Sep): the label basis doc §4 column A printed gingelly oil as 15.3% and mustard as 0.3%, where 920/6033 is 15.2% and 15/6033 is 0.2%. Should the doc be corrected?~~ Answered 19 Sep: yes. Corrected in the doc (both were double rounding), and the test table in `shared/src/recipe.test.ts` follows. Recorded as D28.

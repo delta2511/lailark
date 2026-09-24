@@ -335,6 +335,8 @@ export interface BatchView {
   readonly plannedJars: number;
   readonly bookableJars: number;
   readonly perPersonLimit: number;
+  /** The Owner's own cap, or null for automatic (D44). */
+  readonly perPersonLimitOverride: number | null;
   readonly priceOpen: number;
   readonly priceInStock: number;
   readonly paidCount: number;
@@ -1050,6 +1052,9 @@ function planCreate(
         plannedJars,
         bookableJars: maths.bookableJars,
         perPersonLimit: maths.perPersonLimit,
+        // D44: automatic until the Owner types his own cap, and written as
+        // an explicit null for the same reason `batchNo` is.
+        perPersonLimitOverride: null,
         priceOpen,
         priceInStock,
         paidCount: 0,
@@ -1142,15 +1147,27 @@ function planOpen(
     );
   }
 
-  let limit = perPersonLimitOf(bookable);
+  // D44: `perPersonLimit` is always the computed quarter, so the box on the
+  // batch screen can show it as its placeholder and mean it. A number typed
+  // on this row is the Owner's own cap and goes to `perPersonLimitOverride`
+  // beside it, where it stands through every later planned-jar change until
+  // he clears it. Everything that enforces the cap reads
+  // `effectivePerPersonLimit`, which is the override when there is one.
+  const computedLimit = perPersonLimitOf(bookable);
+  let limitOverride = batch.perPersonLimitOverride;
   if (d.limitPerPerson !== undefined) {
-    const parsed = wholeNumber(d.limitPerPerson, "limitPerPerson", 1);
-    if (isFailure(parsed)) return parsed;
-    if (parsed > bookable) {
-      return invalid(`limitPerPerson cannot be more than the ${bookable} bookable jars.`);
+    if (d.limitPerPerson === null) {
+      limitOverride = null;
+    } else {
+      const parsed = wholeNumber(d.limitPerPerson, "limitPerPerson", 1);
+      if (isFailure(parsed)) return parsed;
+      if (parsed > bookable) {
+        return invalid(`limitPerPerson cannot be more than the ${bookable} bookable jars.`);
+      }
+      limitOverride = parsed;
     }
-    limit = parsed;
   }
+  const limit = limitOverride ?? computedLimit;
 
   return {
     ok: true,
@@ -1163,7 +1180,8 @@ function planOpen(
         state: "open",
         plannedJars,
         bookableJars: bookable,
-        perPersonLimit: limit,
+        perPersonLimit: computedLimit,
+        perPersonLimitOverride: limitOverride,
         priceOpen,
         priceInStock,
         pausedReason: null,
