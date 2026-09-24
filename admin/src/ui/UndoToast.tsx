@@ -48,7 +48,9 @@ export function UndoToast<T>({ toast, onUndo, onExpire }: UndoToastProps<T>): JS
 
   return (
     <div class="undo-toast" role="status" data-testid="undo-toast">
-      <p class="undo-toast-message">{toast.message}</p>
+      <p class="undo-toast-message" data-testid="undo-toast-message">
+        {toast.message}
+      </p>
       <button
         type="button"
         class="quiet undo-toast-button"

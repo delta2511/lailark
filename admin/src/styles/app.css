@@ -539,13 +539,32 @@ textarea {
   font-size: var(--font-size-small);
 }
 
-.undo-toast-button {
+/* The Undo button is the one button in the admin that sits on a dark
+   surface, so it is the one that has to beat `button.quiet`.
+
+   M2.21: it did not, and the label was invisible from M2.6 until now. The
+   markup is `class="quiet undo-toast-button"`, and `button.quiet` is an
+   element plus a class (0,1,1) against a bare class (0,1,0), so the quiet
+   rule won and the background stayed transparent: ink on the toast's own
+   ink, contrast 1:1, an empty rounded outline where the word should be. The
+   selector below carries the element too, which ties on specificity and sits
+   later in the file, so it wins the way this stylesheet settles every other
+   tie. No `!important`, and `button.quiet` is untouched: it is correct
+   everywhere else it is used, which is always on paper. */
+button.undo-toast-button {
   width: auto;
   min-height: 36px;
   padding: var(--space-1) var(--space-3);
   color: var(--ink);
   background: var(--paper);
   border-color: var(--paper);
+}
+
+/* The global focus ring is `2px solid var(--ink)` at a 2px offset, which puts
+   an ink ring on the ink toast: invisible for the same reason the label was.
+   On this one surface the ring is paper. */
+button.undo-toast-button:focus-visible {
+  outline: 2px solid var(--paper);
 }
 
 .photo-section {
