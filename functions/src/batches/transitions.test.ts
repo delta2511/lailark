@@ -11,6 +11,8 @@ import {
   bestBefore,
   DEFAULT_CUSTOMER_MESSAGES,
   formatCalDate,
+  MAX_LINE_COST_PAISE,
+  MAX_LINE_QTY_G,
   MRP_PAISE,
   PRICE_IN_STOCK_PAISE,
   PRICE_OPEN_PAISE,
@@ -896,6 +898,127 @@ describe("sourcing -> cooking: the kitchen starts the pot", () => {
       expect(value.lines).toEqual([
         { id: "main", ingredientId: "main", qtyActual: 12000, costActual: 480000 },
       ]);
+    });
+  });
+
+  /**
+   * M2.23. M2.20 capped `qtyActual` and `costActual` in `firestore.rules`,
+   * but this callable writes both through the Admin SDK, which the rules
+   * never see. `MAX_LINE_QTY_G` and `MAX_LINE_COST_PAISE` from
+   * `@lailark/shared` are the one statement of each ceiling; these tests
+   * prove the callable now enforces the same numbers, at the boundary in
+   * both directions, on both shapes the step accepts.
+   */
+  describe("the ceiling M2.20 put on one ingredient line's actuals (D42)", () => {
+    it("accepts exactly the weight and cost ceiling, flat shape", () => {
+      const value = ok(
+        plan(
+          { ref: REF, to: "cooking", data: cookingInputs({ weightRaw: MAX_LINE_QTY_G, costRaw: MAX_LINE_COST_PAISE }) },
+          sourcing,
+        ),
+      ).value;
+      expect(value.lines).toEqual([
+        { id: "prawns", ingredientId: "prawns", qtyActual: MAX_LINE_QTY_G, costActual: MAX_LINE_COST_PAISE },
+      ]);
+    });
+
+    it("refuses one gram over the weight ceiling, flat shape, naming the ingredient", () => {
+      const refusal = refused(
+        plan({ ref: REF, to: "cooking", data: cookingInputs({ weightRaw: MAX_LINE_QTY_G + 1 }) }, sourcing),
+      );
+      expect(refusal.message).toContain("prawns");
+      expect(refusal.message).toContain(String(MAX_LINE_QTY_G));
+    });
+
+    it("refuses one paisa over the cost ceiling, flat shape, naming the ingredient", () => {
+      const refusal = refused(
+        plan({ ref: REF, to: "cooking", data: cookingInputs({ costRaw: MAX_LINE_COST_PAISE + 1 }) }, sourcing),
+      );
+      expect(refusal.message).toContain("prawns");
+    });
+
+    it("refuses over the ceiling with no main ingredient named, without crashing on the placeholder id", () => {
+      const noMain = { ...sourcing, mainLines: [] };
+      const refusal = refused(
+        plan({ ref: REF, to: "cooking", data: cookingInputs({ weightRaw: MAX_LINE_QTY_G + 1 }) }, noMain),
+      );
+      expect(refusal.ok).toBe(false);
+      expect(refusal.message).toContain("main");
+    });
+
+    describe("per-main shape, batch 001's two-ingredient recipe", () => {
+      const twoMain = {
+        ...sourcing,
+        mainLines: [
+          { ingredientId: "prawns", lineId: "prawns" },
+          { ingredientId: "dates", lineId: "dates" },
+        ],
+      };
+      const base = { landedOn: "2026-09-01", source: "Beypore harbour" };
+
+      it("accepts exactly the ceiling on each ingredient's own line", () => {
+        const value = ok(
+          plan(
+            {
+              ref: REF,
+              to: "cooking",
+              data: {
+                ...base,
+                mains: [
+                  { ingredientId: "prawns", weightRaw: MAX_LINE_QTY_G, costRaw: 480000 },
+                  { ingredientId: "dates", weightRaw: 1000, costRaw: MAX_LINE_COST_PAISE },
+                ],
+              },
+            },
+            twoMain,
+          ),
+        ).value;
+        expect(value.lines).toEqual([
+          { id: "prawns", ingredientId: "prawns", qtyActual: MAX_LINE_QTY_G, costActual: 480000 },
+          { id: "dates", ingredientId: "dates", qtyActual: 1000, costActual: MAX_LINE_COST_PAISE },
+        ]);
+      });
+
+      it("refuses one gram over the ceiling on the second ingredient only, naming it", () => {
+        const refusal = refused(
+          plan(
+            {
+              ref: REF,
+              to: "cooking",
+              data: {
+                ...base,
+                mains: [
+                  { ingredientId: "prawns", weightRaw: 12000, costRaw: 480000 },
+                  { ingredientId: "dates", weightRaw: MAX_LINE_QTY_G + 1, costRaw: 30000 },
+                ],
+              },
+            },
+            twoMain,
+          ),
+        );
+        expect(refusal.message).toContain("dates");
+        expect(refusal.message).not.toContain("prawns weighs");
+      });
+
+      it("refuses one paisa over the cost ceiling on the first ingredient, naming it", () => {
+        const refusal = refused(
+          plan(
+            {
+              ref: REF,
+              to: "cooking",
+              data: {
+                ...base,
+                mains: [
+                  { ingredientId: "prawns", weightRaw: 12000, costRaw: MAX_LINE_COST_PAISE + 1 },
+                  { ingredientId: "dates", weightRaw: 1000, costRaw: 30000 },
+                ],
+              },
+            },
+            twoMain,
+          ),
+        );
+        expect(refusal.message).toContain("prawns");
+      });
     });
   });
 

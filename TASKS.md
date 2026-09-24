@@ -284,6 +284,21 @@ CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
       rounded, every value the screen legitimately writes today still passes, and the
       existing actuals tests still pass.
 
+- [x] M2.23 [sonnet] The server can still write an over-ceiling actual. Found by M2.20's
+      builder, 24 Sep. M2.20 closed the client path: `firestore.rules` now caps
+      `costActual` at ₹1,00,000 and `qtyActual` at 100 kg on `batches/{ref}/lines/{id}`.
+      But `transitionBatch`'s Sourcing to Cooking step writes those same two fields through
+      the Admin SDK, which bypasses rules entirely, and its own validators
+      (`positiveNumber`, `paise` in `functions/src/batches/transitions.ts`) have no upper
+      bound at all. Nothing it writes today breaks the ceilings, so this is defence in
+      depth rather than a live bug, but it is the last unguarded path into the two numbers
+      that most move a batch P&L, and M2.19 just made that path write one document per main
+      ingredient. Use the same two constants from `shared/src/batchLines.ts` that the rules
+      restate, so there is one statement of each ceiling. Done when: the callable refuses a
+      cost above the ceiling and a weight above it, with a message naming the ingredient,
+      proven by a functions test; every value it legitimately writes today still passes;
+      and the ceilings are not restated by hand a third time.
+
 ---
 
 ## Milestone 3: Launch

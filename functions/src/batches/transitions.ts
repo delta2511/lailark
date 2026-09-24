@@ -35,6 +35,8 @@ import {
   checkCustomerText,
   isPaise,
   isProtectedBatchField,
+  MAX_LINE_COST_PAISE,
+  MAX_LINE_QTY_G,
   type MainBatchLine,
   MRP_PAISE,
   type MessagesSettings,
@@ -869,6 +871,48 @@ function sellingPaise(value: unknown, field: string): number | Failure {
   return parsed;
 }
 
+/**
+ * A main ingredient's raw weight, Sourcing to Cooking (D41, D42). Same shape
+ * as {@link positiveNumber}, plus the ceiling `firestore.rules` already
+ * enforces on the client path: M2.20 found that this callable, going through
+ * the Admin SDK, was the one path into `qtyActual` those rules do not reach.
+ * `MAX_LINE_QTY_G` is the one statement of the number; see the comment on it
+ * in `shared/src/batchLines.ts` for why 100 kg.
+ *
+ * `positiveNumber` itself stays unbounded: `weightCleaned` and
+ * `weightCooked` in `planBottle` below are batch-level weights, not one
+ * ingredient line's actual, and a lakh-gram ceiling meant for a single
+ * ingredient has no business on them.
+ */
+function ingredientWeightGrams(value: unknown, ingredientId: string): number | Failure {
+  const parsed = positiveNumber(value, `${ingredientId} weightRaw`);
+  if (isFailure(parsed)) return parsed;
+  if (parsed > MAX_LINE_QTY_G) {
+    return invalid(
+      `${ingredientId} weighs ${parsed} g, above the ${MAX_LINE_QTY_G} g ceiling for one ingredient's actuals.`,
+    );
+  }
+  return parsed;
+}
+
+/**
+ * A main ingredient's raw cost, Sourcing to Cooking (D41, D42). See
+ * {@link ingredientWeightGrams}: same reasoning, the paise ceiling instead of
+ * the gram one, and `paise()` itself stays unbounded for the same reason
+ * `positiveNumber()` does (`sellingPaise` above already shows the pattern,
+ * for the MRP ceiling on a price rather than a cost).
+ */
+function ingredientCostPaise(value: unknown, ingredientId: string): number | Failure {
+  const parsed = paise(value, `${ingredientId} costRaw`);
+  if (isFailure(parsed)) return parsed;
+  if (parsed > MAX_LINE_COST_PAISE) {
+    return invalid(
+      `${ingredientId} costs ${formatINR(parsed)}, above the ${formatINR(MAX_LINE_COST_PAISE)} ceiling for one ingredient's actuals.`,
+    );
+  }
+  return parsed;
+}
+
 function text(value: unknown, field: string, max: number): string | Failure {
   if (typeof value !== "string" || value.trim() === "") {
     return invalid(`${field} must be some text.`);
@@ -1392,9 +1436,9 @@ function mainIngredientActuals(
           `mains entry ${i + 1} is for ${String(item.ingredientId)}; the recipe's is ${main.ingredientId}.`,
         );
       }
-      const weightRaw = positiveNumber(item.weightRaw, `${main.ingredientId} weightRaw`);
+      const weightRaw = ingredientWeightGrams(item.weightRaw, main.ingredientId);
       if (isFailure(weightRaw)) return weightRaw;
-      const costRaw = paise(item.costRaw, `${main.ingredientId} costRaw`);
+      const costRaw = ingredientCostPaise(item.costRaw, main.ingredientId);
       if (isFailure(costRaw)) return costRaw;
       const unexpected = Object.keys(item).filter(
         (key) => !["ingredientId", "weightRaw", "costRaw"].includes(key),
@@ -1419,12 +1463,12 @@ function mainIngredientActuals(
   if (!flat) {
     return invalid("Sourcing to Cooking asks for weightRaw, costRaw.");
   }
-  const weightRaw = positiveNumber(d.weightRaw, "weightRaw");
+  const only = mainLines[0] ?? { ingredientId: "main", lineId: "main" };
+  const weightRaw = ingredientWeightGrams(d.weightRaw, only.ingredientId);
   if (isFailure(weightRaw)) return weightRaw;
-  const costRaw = paise(d.costRaw, "costRaw");
+  const costRaw = ingredientCostPaise(d.costRaw, only.ingredientId);
   if (isFailure(costRaw)) return costRaw;
 
-  const only = mainLines[0] ?? { ingredientId: "main", lineId: "main" };
   return [{ ...only, weightRaw, costRaw }];
 }
 

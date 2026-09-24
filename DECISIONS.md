@@ -742,3 +742,13 @@ break.
   the half paisa between 12.34 and 12.35. Its one non-test caller, `parseRupeesToPaise`,
   already caught and returned null, and all fourteen of that function's call sites already
   treat null as "not an amount yet". Status: open.
+- A144 (M2.23, 24 Sep): the ceiling goes on two new bounded validators,
+  `ingredientWeightGrams` and `ingredientCostPaise`, rather than onto the general
+  `positiveNumber` and `paise` helpers. Those two have other callers,
+  `weightCleaned` and `weightCooked` in `planBottle` and `paise` inside `sellingPaise`,
+  none of which is an ingredient actual, so a batch line's ceiling does not belong to them.
+  It is the same wrapper shape `sellingPaise` already uses in that file. Status: open.
+- A145 (M2.23, 24 Sep): the refusal names the ingredient, the figure and the ceiling, so a
+  person reading it knows whether it was the prawns or the dates and by how much. Where a
+  recipe names no main line at all, the existing placeholder id is used, as it already is
+  everywhere else on that path. Status: open.
