@@ -28,3 +28,16 @@ export function lineTotal(unitPaise, qty) {
   }
   return formatINR(unitPaise * qty);
 }
+
+/**
+ * The Legal Metrology "unit sale price" (brief 20.3): price per gram, e.g.
+ * `₹3.25/g` for a ₹649 200 g jar, the same figure the printed label carries.
+ * Rounded to the nearest paisa for display only; the paise integer the price
+ * actually comes from is never touched.
+ */
+export function unitPricePerGram(paise, grams) {
+  if (!Number.isInteger(grams) || grams < 1) {
+    throw new RangeError(`jar grams must be a positive whole number, got ${grams}`);
+  }
+  return `${formatINR(Math.round(paise / grams))}/g`;
+}

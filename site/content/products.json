@@ -1,9 +1,37 @@
 {
-  "_note": "The four heroes (sales flow doc section 2). Build-time facts only: slug, name, jar size. Counts are never in here and never typed into a page: they come from /api/counts at runtime (CLAUDE.md section 3). Prices come from @lailark/shared through site/lib/money.js. Slugs match functions/scripts/seed-products.mjs, which is what /pickles/<slug> is built from in M3.3.",
+  "_note": "The four heroes (sales flow doc section 2). Build-time facts only: slug, name, jar size, generic name, season. Counts, prices and shelf-life dates are never in here and never typed into a page: they come from /api/counts at runtime (CLAUDE.md section 3). Prices come from @lailark/shared through site/lib/money.js. Slugs match functions/scripts/seed-products.mjs, which is what /pickles/<slug> is built from in M3.3. genericName is M3.3's own addition (ASSUMED, ledger M3.3): the Legal Metrology block (brief 20.3) needs a generic name and none is drafted anywhere, so it follows the label's own naming pattern, '<name> pickle'. seasonStart/seasonEnd match functions/scripts/seed-products.mjs (null for everything but koorka, which is 11-01 to 02-28 there and 11-01 to 02-29 here only because shared/src/catalogue.ts's isWithinSeasonWindow is inclusive of a leap 29 Feb; the difference is one calendar day in a leap February and does not change which months read as in season).",
   "heroes": [
-    { "slug": "prawns-and-dates", "name": "Prawns and dates", "jarGrams": 200 },
-    { "slug": "squid-and-dates", "name": "Squid and dates", "jarGrams": 200 },
-    { "slug": "beef-and-dates", "name": "Beef and dates", "jarGrams": 200 },
-    { "slug": "koorka", "name": "Koorka", "jarGrams": 200 }
+    {
+      "slug": "prawns-and-dates",
+      "name": "Prawns and dates",
+      "jarGrams": 200,
+      "genericName": "Prawns and dates pickle",
+      "seasonStart": null,
+      "seasonEnd": null
+    },
+    {
+      "slug": "squid-and-dates",
+      "name": "Squid and dates",
+      "jarGrams": 200,
+      "genericName": "Squid and dates pickle",
+      "seasonStart": null,
+      "seasonEnd": null
+    },
+    {
+      "slug": "beef-and-dates",
+      "name": "Beef and dates",
+      "jarGrams": 200,
+      "genericName": "Beef and dates pickle",
+      "seasonStart": null,
+      "seasonEnd": null
+    },
+    {
+      "slug": "koorka",
+      "name": "Koorka",
+      "jarGrams": 200,
+      "genericName": "Koorka pickle",
+      "seasonStart": "11-01",
+      "seasonEnd": "02-29"
+    }
   ]
 }

@@ -50,27 +50,34 @@ const jarNotes = {
 
 const homeCss = `
 .home-main{ flex:1 0 auto; width:100%; font-family:var(--ds-font-body); line-height:1.65 }
-.home-col{ width:100%; max-width:34rem; margin:0 auto; padding:0 var(--ds-space-4) }
+.home-col{ width:100%; max-width:var(--ds-measure); margin:0 auto; padding:0 var(--ds-space-4) }
 .home-main a{ color:var(--ds-ink) }
 
-/* Hero. The one place the video and the oil are allowed to live. */
+/* Hero. The one place the video and the oil are allowed to live.
+   The veil is ink rather than paper (Shefin, 24 Sep 2026): the video shows
+   through a dark wash and the words over it are paper. No new colour, the
+   two ends of the palette. Note this makes the hero the page's second dark
+   surface after the "Two houses" band, which story doc section 5 says should
+   be the only one; Shefin overruled that for the hero. */
 .home-hero{
   position:relative; isolation:isolate; overflow:hidden;
-  background:var(--ds-paper);
+  background:var(--ds-ink); color:var(--ds-paper);
   display:flex; align-items:flex-end;
   min-height:58dvh; padding:var(--ds-space-8) 0 var(--ds-space-7);
 }
 .home-hero__media{
   position:absolute; inset:0; z-index:-2;
-  background:var(--ds-paper) url(/assets/jars-loop.jpg) center/cover no-repeat;
+  background:var(--ds-ink) url(/assets/jars-loop.jpg) center/cover no-repeat;
 }
 .home-hero__media video{
   position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;
 }
 .home-hero__media::after{
-  content:""; position:absolute; inset:0; background:rgba(250,248,244,.84);
+  content:""; position:absolute; inset:0; background:rgba(23,21,15,.72);
 }
-.home-hero__oil{ opacity:.4 }
+/* The oil is a paper-to-hairline gradient, which would glow on an ink
+   ground, so it drops to a whisper here rather than being cut. */
+.home-hero__oil{ opacity:.12; mix-blend-mode:soft-light }
 @media (prefers-reduced-motion:reduce){ .home-hero__media video{ display:none } }
 
 .home-hero__title{

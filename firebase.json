@@ -72,6 +72,15 @@
               "value": "no-store"
             }
           ]
+        },
+        {
+          "source": "/api/counts",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=15, s-maxage=15"
+            }
+          ]
         }
       ]
     },

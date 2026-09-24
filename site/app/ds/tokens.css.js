@@ -20,6 +20,11 @@ export const dsTokensCss = `
   --ds-font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --ds-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
+  /* The one column measure. The header's mark, every page's content and the
+     footer's legal line all sit on it, so the page has a single left edge
+     from the top of the screen to the bottom. */
+  --ds-measure: 34rem;
+
   /* Spacing scale. */
   --ds-space-1: 0.25rem;
   --ds-space-2: 0.5rem;

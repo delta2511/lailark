@@ -8,9 +8,11 @@ export const dsPrimitivesCss = `
   font-family:var(--ds-font-body); line-height:1.6;
 }
 
-/* Header. */
+/* Header. Sits on the shared measure, so the lark mark starts at the same
+   left edge as the page's first heading rather than hugging the window. */
 .ds-header{
   display:flex; align-items:center; gap:var(--ds-space-2);
+  width:100%; max-width:var(--ds-measure); margin-inline:auto;
   padding:var(--ds-space-5) var(--ds-space-4) var(--ds-space-4);
 }
 .ds-header__mark{width:28px; height:auto; display:block; color:var(--ds-ink); flex:none}
@@ -21,13 +23,15 @@ export const dsPrimitivesCss = `
 
 /* Main. */
 .ds-main{
-  flex:1 0 auto; width:100%; max-width:34rem; margin:0 auto;
+  flex:1 0 auto; width:100%; max-width:var(--ds-measure); margin:0 auto;
   padding:0 var(--ds-space-4) var(--ds-space-6);
 }
 
 /* Footer: the legal line, mono like everything checked against the jar. */
 .ds-footer{
-  margin-top:auto; padding:var(--ds-space-4);
+  margin-top:auto;
+  width:100%; max-width:var(--ds-measure); margin-inline:auto;
+  padding:var(--ds-space-4);
   border-top:1px solid var(--ds-hairline);
   font-family:var(--ds-font-mono); font-size:.8rem; line-height:1.8;
   color:var(--ds-grey);

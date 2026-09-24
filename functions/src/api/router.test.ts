@@ -78,3 +78,63 @@ describe("handleApiRequest", () => {
     expect(res.statusCode).toBe(405);
   });
 });
+
+describe("handleApiRequest /counts", () => {
+  const payload = {
+    products: {
+      "prawns-and-dates": { mode: "inStock" as const, count: 3, total: 8 },
+    },
+  };
+
+  it("returns 200 + the payload, cached for 15s at the CDN, for GET /api/counts", async () => {
+    const res = createResponse();
+    await handleApiRequest(
+      { path: "/api/counts", method: "GET" },
+      res,
+      { getCounts: async () => payload },
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(payload);
+    expect(res.headers["Cache-Control"]).toBe("public, max-age=15, s-maxage=15");
+  });
+
+  it("returns 200 for GET /counts (direct function URL shape)", async () => {
+    const res = createResponse();
+    await handleApiRequest({ path: "/counts", method: "GET" }, res, {
+      getCounts: async () => payload,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(payload);
+  });
+
+  it("returns 405 for POST on /api/counts", async () => {
+    const res = createResponse();
+    await handleApiRequest(
+      { path: "/api/counts", method: "POST" },
+      res,
+      { getCounts: async () => payload },
+    );
+
+    expect(res.statusCode).toBe(405);
+    expect(res.body).toEqual({ ok: false, error: "method not allowed" });
+  });
+
+  it("never invents a count: a read failure is 503, uncached, no payload", async () => {
+    const res = createResponse();
+    await handleApiRequest(
+      { path: "/api/counts", method: "GET" },
+      res,
+      {
+        getCounts: async () => {
+          throw new Error("firestore is down");
+        },
+      },
+    );
+
+    expect(res.statusCode).toBe(503);
+    expect(res.headers["Cache-Control"]).toBe("no-store");
+    expect(res.body).toEqual({ ok: false, error: "counts unavailable" });
+  });
+});

@@ -79,6 +79,8 @@ confirm or replace at the next milestone break.
 | D43 | **One undo toast for the whole Cooking actuals section, not one per ingredient row** | Asked and answered 23 Sep 2026, confirming A112 from M2.14. A second cost typed inside the 8 seconds replaces the first toast, so only the second edit stays undoable. Shefin was shown the alternative (a toast and its own 8 seconds per row) and kept the single toast: nothing is lost either way, both edits are in the timeline and the old number can be retyped, and several stacked bars at the bottom of a phone at a busy counter is worse than the thing it fixes |
 | D44 | **The limit per person is an editable field with the computed quarter as its placeholder and its default** | Asked and answered 23 Sep 2026 during M2.16, following D40. `perPersonLimit` was a protected, server-computed field (a quarter of the bookable jars, minimum 1). It is now a number the Owner may type on any batch in any state. Left blank it falls back to the computed quarter, which is what the box shows as its placeholder, so a batch nobody has touched behaves exactly as it does today and a planned-jar change still moves the limit. Once the Owner types a number it stands, through later planned-jar changes, until it is cleared back to blank. Reason: Shefin wanted the freedom without losing the automatic number underneath it |
 | D45 | **The Orders page is `/orders`. The four other policy pages nest under `/policies/`** | Asked and answered 24 Sep 2026 during M3.1. `/orders` (D2, brief §10.4), `/policies/shipping`, `/policies/terms`, `/policies/privacy`, `/policies/contact`. Customer-site URL paths are permanent and were on the never-assume list, and no doc named one. Shefin chose the mixed shape deliberately: the Orders page is the one a customer is actually sent to, so it gets the short path beside `/pickles/<slug>` and `/batch/<nnn>`, while the four pages that exist for Razorpay's activation review and the E-Commerce Rules group together out of the root namespace. The footer carries the `/orders` link from M3.1; M5.7 writes all five pages |
+| D46 | **The home page hero's veil is ink, not paper, and its words are paper** | Asked for by Shefin, 24 Sep 2026, while checking M3.3. The video shows through a dark wash instead of a light one. No new colour: it is the two ends of the existing palette. This knowingly overrides story doc §5's "one dark band per page", since the hero now joins the "Two houses" band as a second dark surface. Shefin was told and chose it anyway. The oil gradient is paper-to-hairline, which would glow on an ink ground, so behind the dark hero it drops to a whisper rather than being cut |
+| D47 | **`/pickles/<slug>` is the sales page and keeps the Legal Metrology block. `/batch/<nnn>` is the record page and is where the batch's story and photos go** | Settled with Shefin on 24 Sep 2026 during the M3.3 check, after he read the product page as the QR's destination. The two are different pages: the QR printed on a jar points at `/batch/<nnn>`, which is the add-on story page for that batch, while `/pickles/<slug>` is where a customer chooses and pays. So the four Legal Metrology fields (MRP, unit sale price, date of packing, best before, brief §20.3) stay on the sales page, which is where Shefin said such details belong, and M3.4 carries the batch's story and a space for its photos |
 
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
@@ -823,6 +825,33 @@ break.
   sold-out batch, 0 of 22, still draws. A total above 60 is refused as bad data rather
   than drawn, which a batch above 60 planned jars would trip (D40 lets the Owner set any
   planned count). Status: open.
+
+- A162 (M3.3, 24 Sep): the `/api/counts` shape M3.2 assumed (A153) is kept and extended
+  additively, with this batch's own prices in paise, the in-stock shelf-life dates, and a
+  `shipping` block. Nothing M3.2 wrote had to change. Status: open.
+- A163 (M3.3, 24 Sep): `site/content/products.json` stays hand-written rather than
+  generated from the `products` collection at build time. Four slugs that rarely change
+  did not seem worth a build-time Firestore dependency. Status: open.
+- A164 (M3.3, 24 Sep): the generic name per hero follows the label's own pattern,
+  "<name> pickle". Legal Metrology needs one and no doc drafts it. Status: open.
+- A165 (M3.3, 24 Sep): the new customer-facing strings on the product page. "Buy"; "Pay
+  ₹<price> to book a jar"; the section heading "What the label says"; the sale-stopped
+  line "This batch is no longer sold online. It is still sold at the counter, up to its
+  best before."; and the two date fallbacks "Printed on the jar." and "Six months from
+  packing, printed on the jar." The open-batch packed-on line is the brief's own §20.3
+  draft, which carries its own "confirm the wording" note. Status: open.
+- A166 (M3.3, 24 Sep): a date never falls back to the count's sentence. Shefin found
+  "Date of packing: We cannot show the count just now." on the page, which was the count's
+  string reused for two fields that are not counts. Both now fall back to where the fact
+  actually is, which is the jar, and a real date renders as "4 Sep 2026" rather than
+  "2026-09-04". Status: open.
+- A167 (M3.3, 24 Sep): unit sale price is computed from the ₹649 MRP, so it reads ₹3.25/g
+  and matches the printed jar, even on an open batch selling at ₹599 (₹3.00/g). Whether
+  Legal Metrology means the MRP or the price actually charged is a compliance question for
+  Shefin's CA, raised with him on 24 Sep and not yet answered. Status: open.
+- A168 (M3.3, 24 Sep): a batch in Cooking reads as "Not in the kitchen just now." rather
+  than brief §7.5's "Being cooked now" card with a notify-me. M3.8 owns booking closing at
+  Cooking, so it was left there rather than half-built here. Status: open.
 
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 

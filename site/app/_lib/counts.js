@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import JarMarks from "../ds/JarMarks";
 import { inStockPrice, openBatchPrice } from "../../lib/money";
+import { MRP_PAISE } from "@lailark/shared";
 
 // Live jar counts for the home page's four jar cards.
 //
@@ -143,4 +144,114 @@ export function ProductCount({ slug }) {
       {body}
     </div>
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* M3.3: the product page's own reading of the same payload                   */
+/* -------------------------------------------------------------------------- */
+//
+// The product page needs more than the home page's card: this batch's own
+// price (D40: every batch may carry its own priceInStock/priceOpen, so a
+// static site must never assume the launch default still holds) and, for an
+// in-stock batch, the three shelf-life dates the Legal Metrology block and
+// the Buy cut-off both need (brief 6.2, 20.3).
+//
+// Same discipline as `readProduct`: every field is checked on its raw JSON
+// value, and anything that does not check out is dropped rather than
+// coerced, because a dropped field degrades to "unavailable" or to no Buy
+// button, and a coerced one could silently draw a wrong price or hide an
+// expired sale-stop date behind a false "still selling".
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isoDateOrNull(value) {
+  return typeof value === "string" && ISO_DATE.test(value) ? value : null;
+}
+
+/** A positive integer paise price at or under the printed MRP, or null. */
+function paiseOrNull(value) {
+  if (!Number.isInteger(value) || value <= 0) return null;
+  if (value > MRP_PAISE) return null; // CLAUDE.md section 3: never above MRP.
+  return value;
+}
+
+/**
+ * The full detail one product page needs, or null if the base count itself
+ * cannot be trusted (readProduct's own rule). A batch whose price or dates
+ * fail validation still returns the count: only the fields that failed come
+ * back null, so the page can still show the jars and simply drop the price
+ * line or the Buy button, rather than hiding a count that is fine.
+ */
+export function readProductDetail(payload, slug) {
+  const base = readProduct(payload, slug);
+  if (!base) return null;
+  if (base.mode === "none") return base;
+
+  const entry = payload?.products?.[slug] ?? {};
+  if (base.mode === "inStock") {
+    return {
+      ...base,
+      priceInStockPaise: paiseOrNull(entry.priceInStockPaise),
+      packedOn: isoDateOrNull(entry.packedOn),
+      bestBefore: isoDateOrNull(entry.bestBefore),
+      saleStopOn: isoDateOrNull(entry.saleStopOn),
+    };
+  }
+  return {
+    ...base,
+    priceOpenPaise: paiseOrNull(entry.priceOpenPaise),
+  };
+}
+
+/**
+ * `{ status: "loading" | "unavailable" }` while there is nothing to show
+ * yet, or `{ status: "ready", entry }` once the payload has landed and
+ * validated. The product page's only source of truth for what to draw.
+ */
+export function useProductDetail(slug) {
+  const state = useCounts();
+  if (state.status === "loading") return { status: "loading" };
+  if (state.status !== "ready") return { status: "unavailable" };
+  const entry = readProductDetail(state.payload, slug);
+  return entry ? { status: "ready", entry } : { status: "unavailable" };
+}
+
+const SHIPPING_RULES = ["free", "flatFee", "freeOnTwo"];
+
+/**
+ * The shipping line's own data, brief section 4.2 and D12: free at launch,
+ * with an editable switch. Read, never typed: a garbage or missing value
+ * degrades to "free" (never to "flatFee", which could show a charge that is
+ * not real) rather than to "unavailable", because this is informational
+ * only until M3.5 builds checkout, and "no surprise charges" (CLAUDE.md
+ * section 3) means the safe default here is the lower one, not the pessimistic
+ * one it would be for a real total.
+ */
+export function readShipping(payload) {
+  const shipping = payload?.shipping;
+  const rule = SHIPPING_RULES.includes(shipping?.rule) ? shipping.rule : "free";
+  const flatFeePaise =
+    Number.isInteger(shipping?.flatFeePaise) && shipping.flatFeePaise >= 0
+      ? shipping.flatFeePaise
+      : 6000;
+  return { rule, flatFeePaise };
+}
+
+/** `null` while the payload has not landed; the shipping line otherwise. */
+export function useShipping() {
+  const state = useCounts();
+  if (state.status !== "ready") return null;
+  return readShipping(state.payload);
+}
+
+/**
+ * Whether the Buy control may show at all, brief section 6.2's shelf-life
+ * stop. The safe default is false: a loading page, a failed fetch, an
+ * invalid date, or any mode other than a validated in-stock entry with a
+ * real `saleStopOn` all hide Buy. This is deliberately the one function
+ * that decides it, so no other code can compute its own, looser check.
+ */
+export function canBuyToday(detail, todayIso = new Date().toISOString().slice(0, 10)) {
+  if (!detail || detail.mode !== "inStock" || !detail.saleStopOn) return false;
+  return todayIso <= detail.saleStopOn;
 }
