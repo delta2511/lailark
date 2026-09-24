@@ -247,7 +247,7 @@ CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
       documents M2.13 established. Done when: batch 001's sourcing step asks for prawns
       and for dates by name, both land on their own line documents, and a recipe with one
       main ingredient behaves exactly as it does today.
-- [ ] M2.21 [sonnet] The Undo button on every toast is invisible. Found by Shefin on
+- [x] M2.21 [sonnet] The Undo button on every toast is invisible. (7ad125a; a second dark-surface button found, M2.22) Found by Shefin on
       24 Sep while checking M2.16. `button.quiet` (`admin/src/styles/app.css:97`, element
       plus class) outscores `.undo-toast-button` (line 542, class only), so the button
       keeps `background: transparent` and `color: var(--ink)` on a toast whose background
@@ -257,6 +257,18 @@ CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
       caught it: nothing asserts it can be seen. Done when: the label is legible on the
       toast, the fix does not reach for `!important`, and a test fails if the button's
       colour ever matches its background again.
+
+- [ ] M2.22 [sonnet] The Sell button's label is invisible while you are on the Sell tab.
+      Found by M2.21's sweep on 24 Sep, with the contrast helper that task built, and
+      confirmed by reading the rules. `.bottom-bar-item-sell` (`app.css:247`, one class)
+      sets `color: var(--paper)` on `background: var(--ink)`; `.bottom-bar-item.active`
+      (line 240, two classes) then overrides the colour to `var(--ink)`, so the word
+      "Sell" renders #17150f on #17150f, contrast 1:1, exactly while that tab is the one
+      you are on. `.bottom-bar-item-sell.active` (line 256) already exists, ties on
+      specificity and sits later, but sets only `text-decoration` and `outline`, never
+      colour. This is the button Sumayya taps most, at the counter. Done when: the label
+      is legible on the Sell tab and on every other tab, the contrast test covers the
+      bottom bar in all four tab states, and no `!important` is used.
 
 - [ ] M2.20 [opus] Value checks on the per-ingredient actuals (D42). Added by the
       orchestrator on 23 Sep from the M2.14 tester's finding. `batches/{ref}/lines/{lineId}`

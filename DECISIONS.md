@@ -649,3 +649,15 @@ break.
   validated where it is written (the rules, the screen and `planOpen`), so this is the belt
   to that braces: a bad value that somehow lands can never become a cap nobody meant.
   Status: open.
+- A123 (M2.21, 24 Sep): WCAG AA 4.5:1 is the readable threshold the contrast helper
+  enforces. The admin's own ink on paper is about 16:1, so a real regression falls far
+  below it rather than grazing it: the number names what "readable" means, it is not a
+  figure to tune against. Status: open.
+- A124 (M2.21, 24 Sep): the focus ring on the undo toast is paper, set on that one
+  surface. The alternative, making `--focus-ring` context aware everywhere, is a design
+  system change well outside a bug fix. Status: open.
+- A125 (M2.21, 24 Sep): `data-testid="undo-toast-message"` added to `UndoToast.tsx` so the
+  message can be asserted as well as the button. Status: open.
+- A126 (M2.21, 24 Sep): the focus test forces `:focus-visible` over CDP. A programmatic
+  `.focus()` does not match it in Chromium, and `outlineColor` then reports `currentColor`,
+  so the test would measure a ring that is never drawn. Status: open.
