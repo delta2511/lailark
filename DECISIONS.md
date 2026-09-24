@@ -752,3 +752,25 @@ break.
   person reading it knows whether it was the prawns or the dates and by how much. Where a
   recipe names no main line at all, the existing placeholder id is used, as it already is
   everywhere else on that path. Status: open.
+
+### The Milestone 2 round-two break (24 Sep 2026, S)
+
+Shefin walked the ten steps in `docs/milestones/MILESTONE-2-TEST-ROUND-2.md` and reported
+them green. Milestone 2 was merged into `main` and tagged `v2.0` (`c601c87`) on his word,
+before that walkthrough rather than after it, which he chose knowingly.
+
+A117 to A145, the twenty-nine assumptions logged across M2.13 to M2.23, were put in front
+of him in section 5 of that note and none was overruled. Two were called out by name
+because each changes a number, and both stand:
+
+- **A134**, the batch's own `weightRaw` is the sum of the main ingredients' raw weights
+  where a recipe names more than one. A one-main recipe is unchanged.
+- **A139**, one ingredient line is capped at ₹1,00,000 and 100 kg, argued from the batch's
+  own size rather than from the ₹649 MRP.
+
+Both are cheap to change later: neither is printed on a jar and neither is baked into a
+customer-facing page. Q16 stays open by choice, not by oversight.
+
+Still outstanding at this break, and not a code change: a deploy of the customer site is
+owed. `npm run check:batch-001` exits 1 and names D28's ingredient line, the live page
+still carrying the two percentages the repo has removed.
