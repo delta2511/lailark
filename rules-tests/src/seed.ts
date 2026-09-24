@@ -98,7 +98,6 @@ export async function seedFirestore(env: RulesTestEnvironment): Promise<void> {
         total: 59900,
         payment: { method: "cash", status: "created" },
       }),
-      put(`orders/${ORDER_ID}/events/e1`, { ...base, kind: "created" }),
 
       // kitchen
       put(`batches/${BATCH_REF}`, BATCH_DOC),

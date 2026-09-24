@@ -223,12 +223,6 @@ describe("a jar sold for cash", () => {
     expect(sold).toHaveLength(1);
     expect((sold[0].after as Record<string, number>).paidCount).toBe(after.paidCount);
   });
-
-  it("writes nothing to orders/{id}/events, because Q14 is open", async () => {
-    const orders = await db().collection("orders").limit(1).get();
-    const events = await orders.docs[0].ref.collection("events").get();
-    expect(events.empty).toBe(true);
-  });
 });
 
 /* -------------------------------------------------------------------------- */

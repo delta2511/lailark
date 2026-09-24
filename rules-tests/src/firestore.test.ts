@@ -178,7 +178,6 @@ describe("see everything except Money", () => {
     `batches/${BATCH_REF}/updates/${UPDATE_ID}`,
     `batches/${BATCH_REF}/writeOffs/w1`,
     `orders/${ORDER_ID}`,
-    `orders/${ORDER_ID}/events/e1`,
     `customers/${CUSTOMER_PHONE}`,
     `customers/${CUSTOMER_PHONE}/addresses/a1`,
     "products/prawns-and-dates",
@@ -267,12 +266,6 @@ describe("orders", () => {
       await assertFails(patch(ctx, `orders/${ORDER_ID}`, { kitchenNote: "hello" }));
       await assertFails(patch(ctx, `orders/${ORDER_ID}`, { payment: { status: "captured" } }));
       await assertFails(remove(ctx, `orders/${ORDER_ID}`));
-    }
-  });
-
-  it("take no client write on the event timeline either", async () => {
-    for (const [, ctx] of everyRole(who)) {
-      await assertFails(write(ctx, `orders/${ORDER_ID}/events/new-1`, { ...base }));
     }
   });
 });

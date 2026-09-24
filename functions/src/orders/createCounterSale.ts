@@ -32,12 +32,9 @@
  * request carries what the screen *showed*, and the sale is refused if the
  * server's own total differs, rather than charging the difference).
  *
- * ## Q14
+ * ## History
  *
- * Brief 18.1 names `orders/{id}/events/{id}` as "the timeline for the order",
- * and M2.6 made `audit/{id}` the one history. Until Shefin answers, this
- * writes `audit` only and leaves `orders/{id}/events` untouched. See the
- * `TODO(Q14)` below for the one place the other choice would be made.
+ * D39: `audit/{id}` is the only order history. This writes `audit` only.
  */
 
 import {
@@ -323,13 +320,6 @@ export const createCounterSale = onCall(
           beforeSnap: null,
           by: actor,
         });
-
-        // TODO(Q14): if Shefin answers that brief 18.1's `orders/{id}/events`
-        // is the order's timeline as well as `audit`, the "sale entered"
-        // event is written here, in this same transaction, from the same
-        // values. Until then `audit` is the only history and
-        // `orders/{id}/events` stays empty, because two timelines drift and
-        // the one that drifts is the one nobody is looking at.
 
         const customerBody = withCustomerTimestamps(plan.customerPatch);
         tx.set(customerRef, withStamps(customerBody, plan.customerStampFields, actor), {

@@ -143,11 +143,6 @@ export const voidCounterSale = onCall(
           by: actor,
         });
 
-        // TODO(Q14): the "voided" event for `orders/{id}/events` would be
-        // written here too, in this same transaction, if Shefin answers that
-        // the order keeps a second timeline. Until then `audit` is the only
-        // history.
-
         if (customerSnap && customerSnap.exists) {
           const customerPatch = withCustomerTimestamps(plan.customerPatch);
           tx.set(customerRef, withStamps(customerPatch, plan.customerStampFields, actor), {

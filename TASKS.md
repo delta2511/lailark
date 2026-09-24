@@ -230,7 +230,7 @@ CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
       and timeline like every other in-place edit. Done when: all three are editable on
       batch 001, a paid order's recorded price is provably unchanged by editing the
       batch, and the MRP ceiling is tested.
-- [ ] M2.17 [sonnet] Drop `orders/{id}/events` (D39). `audit` becomes the only history.
+- [x] M2.17 [sonnet] Drop `orders/{id}/events` (D39). `audit` becomes the only history.
       Remove the subcollection's rules, its `OrderEvent` type, its rules tests and its
       seed coverage, and check nothing reads it. Done when: the rules tests pass without
       it and no reference to it survives outside `DECISIONS.md`.

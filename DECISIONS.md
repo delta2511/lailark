@@ -668,3 +668,19 @@ break.
 - A128 (M2.22, 24 Sep): the element measured is the `<span>` inside each bottom-bar
   button, not the button itself. The span is the surface the words are painted on, which
   is the thing the bug was about. Status: open.
+- A129 (M2.17, 24 Sep): the two `TODO(Q14)` comments in `createCounterSale.ts` and
+  `voidCounterSale.ts` are deleted outright rather than reworded to point at D39. D39 is a
+  closed decision, not a parked one: nothing is deferred, so there is nothing left for a
+  TODO to point at. Status: open.
+- A130 (M2.17, 24 Sep): the functions test asserting a counter sale writes nothing to
+  `orders/{id}/events` is deleted rather than kept as a guard. Once the path has no rules
+  and no type, "a sale does not spontaneously write to an arbitrary untyped path" asserts
+  nothing. Status: open.
+- A131 (M2.17, 24 Sep): the brief's `orders/{id}/events` bullet is struck through with a
+  note naming D39 and M2.17, rather than deleted. Deleting it loses the record that the
+  design once said otherwise; leaving it plain invites somebody to rebuild the
+  subcollection from the spec, which is the drift D39 exists to prevent. `DECISIONS.md`
+  outranks the brief in CLAUDE.md §2, and D28 set the precedent for correcting a doc.
+  `docs/milestones/MILESTONE-2-TEST.md` is left untouched: it is a dated snapshot Shefin
+  has already read and acted on, so editing it would rewrite history rather than record
+  it. Status: open.

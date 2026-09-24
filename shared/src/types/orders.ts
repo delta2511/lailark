@@ -1,4 +1,4 @@
-/** `orders` and its events. Brief sections 9 and 18.1. */
+/** `orders`. Brief sections 9 and 18.1. */
 
 import type { Paise } from "../money.js";
 import type {
@@ -89,14 +89,4 @@ export interface Order extends BaseDoc {
   readonly draft: boolean;
   readonly soldBy: ActorId | null;
   readonly holdExpiresAt: Timestamp | null;
-}
-
-/** `orders/{id}/events/{id}`: the timeline. */
-export interface OrderEvent extends BaseDoc {
-  readonly type: string;
-  readonly from: OrderState | null;
-  readonly to: OrderState | null;
-  readonly note: string | null;
-  readonly by: ActorId;
-  readonly at: Timestamp;
 }
