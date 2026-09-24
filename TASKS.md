@@ -221,7 +221,7 @@ CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
       doing properly: the blocked control says what is missing, and the thing that is
       missing is visibly marked. No red-on-white alarm; follow the design system. Done
       when: saving a sale with anything outstanding points at the outstanding thing.
-- [ ] M2.16 [opus] (Shefin checks) Price in stock, price for an open batch and the limit
+- [x] M2.16 [opus] (Shefin checks) Price in stock, price for an open batch and the limit (c928e82; D44 asked and answered during the task; Shefin checked on his laptop 24 Sep)
       per person editable in place on every batch detail screen, in any state, with no
       lock (D40). Two things this must hold to: an order already placed keeps the price
       it was actually charged, so nothing is ever repriced retrospectively; and editing
@@ -247,6 +247,17 @@ CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
       documents M2.13 established. Done when: batch 001's sourcing step asks for prawns
       and for dates by name, both land on their own line documents, and a recipe with one
       main ingredient behaves exactly as it does today.
+- [ ] M2.21 [sonnet] The Undo button on every toast is invisible. Found by Shefin on
+      24 Sep while checking M2.16. `button.quiet` (`admin/src/styles/app.css:97`, element
+      plus class) outscores `.undo-toast-button` (line 542, class only), so the button
+      keeps `background: transparent` and `color: var(--ink)` on a toast whose background
+      is also `var(--ink)`: #17150f on #17150f, contrast 1:1. The word "Undo" has been
+      unreadable on every undo toast in the admin since M2.6 built it, so this is not an
+      M2.16 regression. The button is still there and still works, which is why no test
+      caught it: nothing asserts it can be seen. Done when: the label is legible on the
+      toast, the fix does not reach for `!important`, and a test fails if the button's
+      colour ever matches its background again.
+
 - [ ] M2.20 [opus] Value checks on the per-ingredient actuals (D42). Added by the
       orchestrator on 23 Sep from the M2.14 tester's finding. `batches/{ref}/lines/{lineId}`
       allows create and update on `isStaff()` alone and never looks at the number, so
