@@ -3,9 +3,9 @@ import Lark from "./Lark";
 // Header with the lark mark (Flow §10). Referencing Lark keeps the
 // mark's path data in one place for the design system rather than a
 // second hand copy here.
-export function Header() {
+export function Header({ className }) {
   return (
-    <header className="ds-header">
+    <header className={["ds-header", className].filter(Boolean).join(" ")}>
       <Lark size={28} className="ds-header__mark" />
       <span className="ds-header__name">Lailark</span>
     </header>

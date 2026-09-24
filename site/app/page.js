@@ -53,6 +53,19 @@ const homeCss = `
 .home-col{ width:100%; max-width:var(--ds-measure); margin:0 auto; padding:0 var(--ds-space-4) }
 .home-main a{ color:var(--ds-ink) }
 
+/* The header sits over the hero rather than above it, so the video runs
+   behind it and the two read as one surface (Shefin, 24 Sep 2026). It
+   carries its own dark scrim, top down, over the hero's veil, and its
+   words are paper. Only the home page does this: every other page keeps
+   the plain header on paper. */
+.home-shell{ position:relative }
+.home-header{
+  position:absolute; top:0; left:0; right:0; z-index:2;
+  color:var(--ds-paper);
+}
+.home-header .ds-header__mark{ color:var(--ds-paper) }
+.home-header .ds-header__name{ color:var(--ds-paper) }
+
 /* Hero. The one place the video and the oil are allowed to live.
    The veil is ink rather than paper (Shefin, 24 Sep 2026): the video shows
    through a dark wash and the words over it are paper. No new colour, the
@@ -63,7 +76,7 @@ const homeCss = `
   position:relative; isolation:isolate; overflow:hidden;
   background:var(--ds-ink); color:var(--ds-paper);
   display:flex; align-items:flex-end;
-  min-height:58dvh; padding:var(--ds-space-8) 0 var(--ds-space-7);
+  min-height:64dvh; padding:calc(var(--ds-space-8) * 2) 0 var(--ds-space-7);
 }
 .home-hero__media{
   position:absolute; inset:0; z-index:-2;
@@ -72,8 +85,14 @@ const homeCss = `
 .home-hero__media video{
   position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block;
 }
+/* Two layers on one element: the flat ink veil over the whole video, and a
+   darker scrim down the top of it so the header's words stay readable
+   whatever frame the loop is on. Full width, because the video is. */
 .home-hero__media::after{
-  content:""; position:absolute; inset:0; background:rgba(23,21,15,.72);
+  content:""; position:absolute; inset:0;
+  background:
+    linear-gradient(to bottom, rgba(23,21,15,.85) 0, rgba(23,21,15,0) 180px),
+    rgba(23,21,15,.72);
 }
 /* The oil is a paper-to-hairline gradient, which would glow on an ink
    ground, so it drops to a whisper here rather than being cut. */
@@ -152,8 +171,8 @@ export default function HomePage() {
         fetchPriority="high"
       />
       <style dangerouslySetInnerHTML={{ __html: homeCss }} />
-      <div className="ds-shell">
-        <Header />
+      <div className="ds-shell home-shell">
+        <Header className="home-header" />
 
         <main className="home-main">
           <section className="home-hero">

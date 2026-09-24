@@ -853,6 +853,15 @@ break.
   than brief §7.5's "Being cooked now" card with a notify-me. M3.8 owns booking closing at
   Cooking, so it was left there rather than half-built here. Status: open.
 
+- A169 (M3.2a, 24 Sep): the home page's header sits over the hero rather than above it,
+  so the video runs behind it and the two read as one surface. Asked for by Shefin on
+  24 Sep ("invert the colour of the header too to gradient of the matching colour of
+  video with the overlay, and the text in white"). The scrim lives on the hero's veil
+  layer, as a top-down gradient over the flat ink veil, because the header is constrained
+  to `--ds-measure` and its own pseudo-element could never span the window. **Only the
+  home page does this**: every other page keeps the plain header on paper, since only the
+  home page has a video to sit on. Say the word if it should be every page. Status: open.
+
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 
 Shefin walked the ten steps in `docs/milestones/MILESTONE-2-TEST-ROUND-2.md` and reported
