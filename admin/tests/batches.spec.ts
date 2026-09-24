@@ -484,6 +484,35 @@ test("two main ingredients take two independent weights and costs", async ({ pag
   await expect
     .poll(async () => await readDocument(`batches/${REF_TWO_MAIN}/lines/${DATES}`))
     .toMatchObject({ ingredientId: DATES, qtyActual: 1100, costActual: 40_000 });
+
+  // D42: the three numbers the rules refuse are refused here too, in words,
+  // and none of them reaches the document. A cost finer than a paisa is the
+  // `rupeesToPaise` half of it: ₹12.345 is not rounded to 1235 any more.
+  for (const [box, typed, message] of [
+    [`actual-cost-${PRAWNS}`, "12.345", BATCHES.costInvalid],
+    [`actual-cost-${PRAWNS}`, "-5", BATCHES.costInvalid],
+    [`actual-cost-${PRAWNS}`, "200000", BATCHES.costTooLarge],
+    [`actual-weight-${PRAWNS}`, "-1", BATCHES.weightInvalid],
+    [`actual-weight-${PRAWNS}`, "100001", BATCHES.weightTooLarge],
+  ] as const) {
+    await page.getByTestId(box).fill(typed);
+    await page.getByTestId(box).blur();
+    await expect(page.getByTestId(`actual-error-${PRAWNS}`)).toHaveText(message);
+  }
+
+  // Still the figures that were typed before any of that.
+  expect(await readDocument(`batches/${REF_TWO_MAIN}/lines/${PRAWNS}`)).toMatchObject({
+    qtyActual: 1600,
+    costActual: 90_000,
+  });
+
+  // And a legitimate two-decimal cost still saves, to the paisa.
+  await page.getByTestId(`actual-cost-${PRAWNS}`).fill("900.55");
+  await page.getByTestId(`actual-cost-${PRAWNS}`).blur();
+  await expect(page.getByTestId(`actual-error-${PRAWNS}`)).toHaveCount(0);
+  await expect
+    .poll(async () => await readDocument(`batches/${REF_TWO_MAIN}/lines/${PRAWNS}`))
+    .toMatchObject({ costActual: 90_055 });
 });
 
 /* -------------------------------------------------------------------------- */
@@ -977,11 +1006,21 @@ test("a negative bottling cost is refused on screen and never reaches Firestore"
   await page.getByTestId("input-cost-jarsLids").blur();
   await expect(page.getByTestId("costs-error")).toHaveText(BATCHES.costInvalid);
 
-  // A typed amount finer than a paisa is rounded to the nearest paise, not
-  // refused and never stored as a float: ₹12.345 is ₹12.35. That is
+  // D42: a typed amount finer than a paisa is refused, not rounded. ₹12.345
+  // is either ₹12.34 or ₹12.35 and only the person typing it knows which, so
+  // the box says so and Firestore never sees a number nobody chose. That is
   // `rupeesToPaise`, the one conversion every price box in the admin goes
-  // through since M2.2, so a cost and a price cannot round differently.
+  // through since M2.2, so a cost and a price cannot differ on this.
   await page.getByTestId("input-cost-jarsLids").fill("12.345");
+  await page.getByTestId("input-cost-jarsLids").blur();
+  await expect(page.getByTestId("costs-error")).toHaveText(BATCHES.costInvalid);
+  expect(
+    ((await readDocument(`batches/${REF_COSTS}`))?.costs as Record<string, unknown> | undefined)
+      ?.jarsLids,
+  ).not.toBe(1235);
+
+  // Two decimals is a real amount and saves.
+  await page.getByTestId("input-cost-jarsLids").fill("12.35");
   await page.getByTestId("input-cost-jarsLids").blur();
   await expect(page.getByTestId("costs-error")).toHaveCount(0);
   await expect

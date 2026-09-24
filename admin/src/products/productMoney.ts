@@ -9,9 +9,12 @@ import { MRP_PAISE, rupeesToPaise, type Paise } from "@lailark/shared";
 
 /**
  * Parses a rupee amount typed into a box. Returns null for anything that is
- * not a finite number: an empty box, "abc", a lone minus sign. Never throws,
- * so a caller mid-keystroke can simply treat null as "not a valid amount
- * yet" rather than catching an exception on every render.
+ * not a finite number: an empty box, "abc", a lone minus sign. Null too for
+ * an amount finer than a paisa, since D42: `rupeesToPaise` refuses 12.345
+ * rather than storing the 1235 nobody typed, and every box here already
+ * reads null as "not an amount yet" and says so. Never throws, so a caller
+ * mid-keystroke can simply treat null as "not a valid amount yet" rather
+ * than catching an exception on every render.
  */
 export function parseRupeesToPaise(text: string): Paise | null {
   const trimmed = text.trim();

@@ -8,9 +8,19 @@ describe("parseRupeesToPaise", () => {
     expect(parseRupeesToPaise("599")).toBe(59_900);
   });
 
-  it("parses paise, rounding half away from zero", () => {
-    expect(parseRupeesToPaise("6.495")).toBe(650);
+  it("parses paise", () => {
     expect(parseRupeesToPaise("12.50")).toBe(1250);
+    expect(parseRupeesToPaise("0.01")).toBe(1);
+    expect(parseRupeesToPaise("0.1")).toBe(10);
+  });
+
+  // D42: a third decimal is a slip or a paste, and rounding it stored a
+  // number nobody typed. Null is what every box here already reads as "not an
+  // amount yet", so the person is told instead.
+  it("is null for an amount finer than a paisa, rather than rounding it", () => {
+    expect(parseRupeesToPaise("6.495")).toBeNull();
+    expect(parseRupeesToPaise("12.345")).toBeNull();
+    expect(parseRupeesToPaise("0.005")).toBeNull();
   });
 
   it("trims surrounding space", () => {

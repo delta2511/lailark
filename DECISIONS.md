@@ -717,3 +717,28 @@ break.
 - A138 (M2.19, 24 Sep): `recipeLoading` is threaded from `Batches.tsx` through
   `BatchDetail.tsx`, because a recipe still loading is not the same as a recipe with no
   main ingredient. The form waits rather than sending the wrong shape. Status: open.
+- A139 (M2.20, 24 Sep): `costActual` is capped at ₹1,00,000 for one ingredient line and
+  `qtyActual` at 100 kg. Neither is drawn from the ₹649 MRP, which is what one jar sells
+  for, not what a batch's ingredients cost. The scale that fits is the batch: 40 jars at
+  ₹649 grosses about ₹26,000, so one ingredient line above a lakh is already four times a
+  whole batch's revenue, which is a rupee figure typed into a paise box or a zero too many.
+  40 jars at 200 g is about 8 kg finished, so 100 kg is several times the largest plausible
+  entry and still catches a kilogram figure in a gram box. Both live in
+  `shared/src/batchLines.ts` and are restated as literals in `firestore.rules`, with a
+  comment on each side. Shefin can move either. Status: open.
+- A140 (M2.20, 24 Sep): `qtyActual` stays fractional and is not integer checked. It is a
+  weight, and a kitchen scale reads 250.5 g. Only the cost is whole-number checked, because
+  only the cost is money. Status: open.
+- A141 (M2.20, 24 Sep): `null` passes both checks. M2.14's undo restores a field to null,
+  and null is where every line starts. Status: open.
+- A142 (M2.20, 24 Sep): the two new admin messages, `costTooLarge` and `weightTooLarge`.
+  The screen mirrors the rule deliberately: without it an over-ceiling number reached
+  Firestore and came back as `permission-denied`, which the screen rendered as "That did
+  not save. Please check your role." That is untrue and gives the person nothing to act on.
+  Status: open.
+- A143 (M2.20, 24 Sep): `rupeesToPaise` throws rather than rounding. The check is not
+  `Number.isInteger(rupees * 100)`, because `0.1 * 100` is `10.000000000000002`; it rounds
+  and compares within a tolerance capped at a thousandth of a paisa, so it can never reach
+  the half paisa between 12.34 and 12.35. Its one non-test caller, `parseRupeesToPaise`,
+  already caught and returned null, and all fourteen of that function's call sites already
+  treat null as "not an amount yet". Status: open.

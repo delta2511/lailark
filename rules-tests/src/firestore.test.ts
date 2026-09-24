@@ -525,6 +525,97 @@ describe("a batch, from the Owner", () => {
   });
 });
 
+/* ── D42: the per-ingredient actuals, checked by value ───────────────────── */
+
+/**
+ * `qtyActual` and `costActual` are the two largest inputs to a batch's P&L,
+ * and until M2.20 the rules asked only who was writing them. These are the
+ * tests that the number itself is checked, so a seeding script or a signed-in
+ * staff account writing straight to Firestore cannot store what the screen
+ * would have refused.
+ */
+describe("a batch line's actuals, by value", () => {
+  const lines = `batches/${BATCH_REF}/lines`;
+  const line = (extra: object) => ({ ...base, ingredientId: "i1", ...extra });
+
+  for (const [name, actor] of [
+    ["from the Kitchen", () => who.kitchen],
+    ["from the Owner", () => who.owner],
+  ] as const) {
+    describe(name, () => {
+      it("takes the weight and cost the actuals screen writes", async () => {
+        await assertSucceeds(
+          write(actor(), `${lines}/new-ok`, line({ qtyActual: 2500, costActual: 1_250_000 })),
+        );
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { qtyActual: 3, costActual: 45_000 }));
+      });
+
+      it("takes a fractional weight, because a scale reads one", async () => {
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { qtyActual: 250.5 }));
+      });
+
+      it("takes exactly zero, on both", async () => {
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { qtyActual: 0, costActual: 0 }));
+      });
+
+      it("takes exactly one, on both", async () => {
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { qtyActual: 1, costActual: 1 }));
+      });
+
+      it("takes exactly the ceiling, on both", async () => {
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { qtyActual: 100_000 }));
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { costActual: 10_000_000 }));
+      });
+
+      it("refuses one past the ceiling, on both", async () => {
+        await assertFails(patch(actor(), `${lines}/l1`, { qtyActual: 100_001 }));
+        await assertFails(patch(actor(), `${lines}/l1`, { costActual: 10_000_001 }));
+      });
+
+      it("refuses a negative cost", async () => {
+        await assertFails(patch(actor(), `${lines}/l1`, { costActual: -1 }));
+        await assertFails(patch(actor(), `${lines}/l1`, { costActual: -5000 }));
+      });
+
+      it("refuses a fraction of a paisa", async () => {
+        await assertFails(patch(actor(), `${lines}/l1`, { costActual: 1234.5 }));
+        await assertFails(patch(actor(), `${lines}/l1`, { costActual: 0.5 }));
+      });
+
+      it("refuses a negative weight", async () => {
+        await assertFails(patch(actor(), `${lines}/l1`, { qtyActual: -1 }));
+      });
+
+      it("refuses either as a string, and a cost as rupees in a string", async () => {
+        await assertFails(patch(actor(), `${lines}/l1`, { qtyActual: "250" }));
+        await assertFails(patch(actor(), `${lines}/l1`, { costActual: "450" }));
+      });
+
+      it("takes null on both: nothing recorded yet, which is what undo restores", async () => {
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { qtyActual: null, costActual: null }));
+      });
+
+      it("refuses the same bad numbers on a create, not only on an update", async () => {
+        await assertFails(write(actor(), `${lines}/new-neg`, line({ costActual: -1 })));
+        await assertFails(write(actor(), `${lines}/new-frac`, line({ costActual: 12.5 })));
+        await assertFails(write(actor(), `${lines}/new-big`, line({ costActual: 10_000_001 })));
+        await assertFails(write(actor(), `${lines}/new-negq`, line({ qtyActual: -0.5 })));
+        await assertFails(write(actor(), `${lines}/new-bigq`, line({ qtyActual: 100_001 })));
+      });
+
+      it("refuses a bad number carried alongside a change to something else", async () => {
+        // The check reads the merged post-state, so a write that leaves a bad
+        // number where it is cannot slip past by touching another field.
+        await assertFails(patch(actor(), `${lines}/l1`, { ingredientId: "i2", costActual: -1 }));
+      });
+    });
+  }
+
+  it("still refuses the Viewer, whatever the numbers are", async () => {
+    await assertFails(write(who.viewer, `${lines}/new-viewer`, line({ qtyActual: 1, costActual: 1 })));
+  });
+});
+
 describe("batch subcollections", () => {
   it("let both staff roles record ingredient actuals, and only the Owner remove one", async () => {
     await assertSucceeds(write(who.kitchen, `batches/${BATCH_REF}/lines/new-1`, { ...base, qtyActual: 2 }));

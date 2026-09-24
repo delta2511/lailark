@@ -203,6 +203,8 @@ const EXPECTED_EXPORTS = [
   "INGREDIENT_ACTUAL_DRIFT_THRESHOLD_PERCENT",
   "ingredientActualDrift",
   // batch lines (M2.13, D41): one id scheme for the screen and the server
+  "MAX_LINE_QTY_G",
+  "MAX_LINE_COST_PAISE",
   "batchLineIds",
   "mainBatchLines",
   // catalogue

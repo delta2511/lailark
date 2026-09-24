@@ -17,6 +17,27 @@
  * of this; `functions/src/batches/transitions.ts` writes against it.
  */
 
+/**
+ * The bounds a line's actuals must be inside, checked by the rules (D42) and
+ * by the actuals screen, so the screen can say what is wrong in words rather
+ * than let Firestore answer "permission denied".
+ *
+ * `firestore.rules` states the same two numbers as literals, because a rules
+ * file cannot import: `actualWeightOk` and `actualCostOk`. Change one, change
+ * both.
+ *
+ * The weight is grams and may be fractional, since a kitchen scale reads
+ * 250.5 g. 100 kg is several times the largest plausible entry for a batch of
+ * 40 jars of 200 g, and still catches a stray zero or a kilogram figure typed
+ * into a gram box. The cost is whole paise: a lakh for one ingredient line is
+ * already four times what a whole batch of 40 jars grosses, so past that it is
+ * a rupee figure in a paise box, not a home kitchen's shopping.
+ */
+export const MAX_LINE_QTY_G = 100_000;
+
+/** See {@link MAX_LINE_QTY_G}. Rs 1,00,000 for one ingredient line. */
+export const MAX_LINE_COST_PAISE = 10_000_000;
+
 /** The part of a recipe line an id is derived from. */
 export interface BatchLineRef {
   readonly ingredientId: string;

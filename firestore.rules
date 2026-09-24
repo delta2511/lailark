@@ -196,6 +196,59 @@ service cloud.firestore {
                  && request.resource.data.perPersonLimitOverride >= 1);
     }
 
+    /* ── a batch line's actuals, checked by value (D42, M2.20) ───────── */
+    //
+    // `batches/{ref}/lines/{id}` holds the two numbers that most move a
+    // batch's P&L: what the pot actually used, and what it actually cost.
+    // Both are a typed box on the Cooking actuals screen and a field on the
+    // Sourcing -> Cooking callable, and until now the rule below asked only
+    // who was writing, never what. Same reasoning as `costsOk()` and
+    // `batchPricesOk()` above: which key changed says nothing about the
+    // number in it, and a seeding script, a function with a bug or a
+    // signed-in staff account talking to Firestore directly is not going
+    // through the screen's check at all.
+    //
+    // Both read the merged post-state, so they are asked on every write to a
+    // line whether or not that write touched the field. They can only ever
+    // refuse, never admit.
+    //
+    // `null` passes both, and deliberately: undoing a row's first edit
+    // restores the field to `null` rather than deleting the key (M2.14), and
+    // `null` is "nothing recorded yet", which is where every line starts.
+
+    // A weight in grams, not money, so a fraction is legitimate: 250.5 g of
+    // prawns is a real number off a kitchen scale, and the screen's box has
+    // always taken one. Zero is legitimate too (an ingredient the pot ended
+    // up not using). The ceiling is 100 kg: the largest batch is 40 jars of
+    // 200 g, so about 8 kg of finished pickle and at most some tens of kg of
+    // raw prawns behind it. 100 kg is several times the largest plausible
+    // entry and still catches the mistakes that matter, a stray extra zero
+    // and a kilogram figure typed into a gram box.
+    function actualWeightOk(value) {
+      return value is number && value >= 0 && value <= 100000;
+    }
+
+    // A cost in whole paise, zero or more (a gift of curry leaves genuinely
+    // costs nothing). The ceiling is ₹1,00,000 for one ingredient line. The
+    // ₹649 MRP is no guide here: that is what one jar sells for, not what a
+    // batch's ingredients cost. The right scale is the batch itself, which
+    // grosses at most 40 x ₹649, about ₹26,000. A single ingredient line
+    // above a lakh is therefore already four times a whole batch's revenue,
+    // which is not a home kitchen buying prawns and dates, it is a rupee
+    // figure typed into a paise box or a zero too many.
+    function actualCostOk(value) {
+      return value is int && value >= 0 && value <= 10000000;
+    }
+
+    function batchLineActualsOk() {
+      return (!('qtyActual' in request.resource.data)
+              || request.resource.data.qtyActual == null
+              || actualWeightOk(request.resource.data.qtyActual))
+             && (!('costActual' in request.resource.data)
+                 || request.resource.data.costActual == null
+                 || actualCostOk(request.resource.data.costActual));
+    }
+
     /** Weights, dates, sourcing note and packaging costs. Kitchen's own. */
     function kitchenBatchFields() {
       return [
@@ -347,7 +400,7 @@ service cloud.firestore {
       /** What the pot actually used. Both staff roles record actuals. */
       match /lines/{lineId} {
         allow read: if isAdmin();
-        allow create, update: if isStaff();
+        allow create, update: if isStaff() && batchLineActualsOk();
         allow delete: if isOwner();
       }
 

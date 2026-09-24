@@ -270,7 +270,7 @@ CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
       is legible on the Sell tab and on every other tab, the contrast test covers the
       bottom bar in all four tab states, and no `!important` is used.
 
-- [ ] M2.20 [opus] Value checks on the per-ingredient actuals (D42). Added by the
+- [x] M2.20 [opus] Value checks on the per-ingredient actuals (D42). Added by the
       orchestrator on 23 Sep from the M2.14 tester's finding. `batches/{ref}/lines/{lineId}`
       allows create and update on `isStaff()` alone and never looks at the number, so
       `qtyActual` and `costActual` are guarded by the screen only: a seeding script, a

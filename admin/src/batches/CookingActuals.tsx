@@ -30,6 +30,8 @@ import {
   formatINR,
   indexIngredients,
   ingredientActualDrift,
+  MAX_LINE_COST_PAISE,
+  MAX_LINE_QTY_G,
   toGrams,
   type IngredientIndex,
   type Role,
@@ -345,6 +347,12 @@ function ActualRow({
       setError(BATCHES.weightInvalid);
       return;
     }
+    // D42: the same ceiling the rules keep, so an extra zero is caught here in
+    // words instead of coming back as a permission error.
+    if (n > MAX_LINE_QTY_G) {
+      setError(BATCHES.weightTooLarge);
+      return;
+    }
     setQtyText(raw);
     setKeptQty(raw);
     void commit("qtyActual", n);
@@ -362,6 +370,12 @@ function ActualRow({
     const paise = parseRupeesToPaise(raw);
     if (!isCostPaise(paise)) {
       setError(BATCHES.costInvalid);
+      return;
+    }
+    // D42: as above. `parseRupeesToPaise` is now null for anything finer than
+    // a paisa too, so 12.345 lands on `costInvalid` rather than saving 1235.
+    if ((paise as number) > MAX_LINE_COST_PAISE) {
+      setError(BATCHES.costTooLarge);
       return;
     }
     setCostText(raw);

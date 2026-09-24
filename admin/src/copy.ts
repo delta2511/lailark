@@ -309,6 +309,10 @@ export const BATCHES = {
   priceTooLow: "Please enter a price of at least one paisa.",
   costInvalid: "Please enter a cost in rupees, zero or more.",
   weightInvalid: "Please enter a weight in grams, zero or more.",
+  // D42: the rules refuse these too, so the box says why rather than letting
+  // Firestore answer with a permission error the person cannot act on.
+  costTooLarge: "That cost looks too large for one ingredient. Please check it.",
+  weightTooLarge: "That weight looks too large for one batch. Please check it.",
   bookableZero: "That many planned jars leaves no bookable jar at the 90% cap. Please plan for more.",
 
   /* ---- Fill (brief 17.4) ---- */
