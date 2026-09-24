@@ -67,19 +67,55 @@ test("passes against a server that serves the exact record and correct redirects
   }
 });
 
-test("exits 2 when the served body differs from the record", async () => {
-  const server = await startServer(Buffer.concat([RECORD, Buffer.from("<!-- tampered -->")]));
+test("exits 2 when the served body differs from the record and shows which lines differ", async () => {
+  // Tamper: add extra content at the end (live site ahead by byte count)
+  const tampered = Buffer.concat([RECORD, Buffer.from("<!-- tampered -->")]);
+  const server = await startServer(tampered);
   const { port } = server.address();
   try {
     const { status, stdout } = await runCheck(`http://127.0.0.1:${port}`);
     assert.equal(status, 2);
     assert.match(stdout, /FAIL.*\/batch\/001/);
     assert.match(stdout, /body differs/);
+    assert.match(stdout, /Differing content:/);
+    assert.match(stdout, /Live site:/);
+    assert.match(stdout, /The live site has unexpected content/);
   } finally {
     server.close();
   }
 });
 
+test("exits 1 for D28 difference (ingredient line without percentages in repo, with percentages on live)", async () => {
+  // Create two versions: repo has no percentages (D28 correct), live has them (old)
+  const recordStr = RECORD.toString("utf8");
+  const oldIngredientLine =
+    '<p>Prawns (59%), dates (22%), vinegar, gingelly (sesame) oil, garlic, green chilli, ginger, salt, Kashmiri chilli powder, red chilli powder, sugar, compounded asafoetida (gum arabic, wheat flour, asafoetida), mustard, curry leaves, fenugreek, turmeric.</p>';
+  const newIngredientLine =
+    "<p>Prawns, dates, vinegar, gingelly (sesame) oil, garlic, green chilli, ginger, salt, Kashmiri chilli powder, red chilli powder, sugar, compounded asafoetida (gum arabic, wheat flour, asafoetida), mustard, curry leaves, fenugreek, turmeric.</p>";
+
+  // Repo has the new line (no percentages, per D28), create a live version with the old line
+  const liveVersionStr = recordStr.replace(newIngredientLine, oldIngredientLine);
+  const liveVersion = Buffer.from(liveVersionStr, "utf8");
+
+  const server = await startServer(liveVersion);
+  const { port } = server.address();
+  try {
+    const { status, stdout } = await runCheck(`http://127.0.0.1:${port}`);
+    assert.equal(status, 1, "D28 difference should exit with code 1");
+    assert.match(stdout, /FAIL.*\/batch\/001/);
+    assert.match(stdout, /Differing content:/);
+    assert.match(stdout, /Repo record:.*Prawns, dates, vinegar/);
+    assert.match(stdout, /Live site:.*Prawns \(59%\), dates \(22%\)/);
+    // D28 case: script detects the ingredient line difference and says repo is ahead
+    assert.match(stdout, /The repo is ahead.*D28 implementation/);
+    assert.match(
+      stdout,
+      /A deploy of the customer site is owed to bring it up to date/
+    );
+  } finally {
+    server.close();
+  }
+});
 test("exits 2 when a redirect is missing (404 instead of 301)", async () => {
   const server = createServer((req, res) => {
     if (req.url === "/batch/001") {

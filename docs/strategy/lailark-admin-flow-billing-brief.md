@@ -1138,7 +1138,11 @@ Every document has `createdAt`, `updatedAt`, `createdBy`. Money amounts are stor
   qty, unitPrice, customDescription, jarNumbers[]), shippingFee, discount{amount, reason, by},
   total, fulfilment (ship, handedOver, collect), payment{method, status, razorpayIds{},
   markedPaidBy, upiRef}, shareCodeUsed, policyVersion, kitchenNote, draft (bool), soldBy
-- `orders/{id}/events/{id}`: the timeline for the order
+- ~~`orders/{id}/events/{id}`: the timeline for the order~~ Dropped by D39 (23 Sep 2026)
+  and removed in M2.17. `audit` is the only history: it is written by the wrapper every
+  client and function write goes through, the timeline screens read it, and undo reads
+  the old value out of it. Two histories for one order drift, and the one that drifts is
+  the one nobody is looking at. Do not rebuild this from the line above.
 
 **Money**
 

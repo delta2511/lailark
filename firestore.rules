@@ -94,6 +94,7 @@ service cloud.firestore {
     /** Counts and server-computed fields. No client writes these, ever. */
     function protectedBatchFields() {
       return [
+        'batchNo',
         'bestBefore',
         'bookableJars',
         'bottledJars',
@@ -103,12 +104,149 @@ service cloud.firestore {
         'halfReachedAt',
         'heldJars',
         'paidCount',
+        'pausedFrom',
         'perPersonLimit',
         'pnl',
         'saleStopOn',
         'state',
         'writtenOff'
       ];
+    }
+
+    /* ── a batch's costs, checked by value ──────────────────────────────── */
+    //
+    // CLAUDE.md section 3: money is integers in paise, never floats. `costs`
+    // is the one money field a client writes directly, straight from the
+    // Bottling section of the Batches screen: no callable sees it, so these
+    // rules are the last line of defence. Checking which keys changed is not
+    // enough, because the *value* is what a typed box controls, and
+    // `parseRupeesToPaise("-50")` is a perfectly well-formed -5000.
+    //
+    // The four lines are brief 17.4's "jar and lid cost, box and insert cost,
+    // labelling and stickering cost" plus 14.1's gas and power. The key list
+    // is closed so no fifth cost can be smuggled in unchecked, and
+    // `get(key, 0)` means a map that simply omits one is read as zero rather
+    // than refused.
+
+    function batchCostLines() {
+      return ['boxInserts', 'gasPower', 'jarsLids', 'labelling'];
+    }
+
+    function costLineOk(costs, key) {
+      return costs.get(key, 0) is int && costs.get(key, 0) >= 0;
+    }
+
+    /** True when this write carries no `costs`, or a `costs` made of whole paise, zero or more. */
+    function costsOk() {
+      return !('costs' in request.resource.data)
+             || (request.resource.data.costs is map
+                 && request.resource.data.costs.keys().hasOnly(batchCostLines())
+                 && costLineOk(request.resource.data.costs, 'boxInserts')
+                 && costLineOk(request.resource.data.costs, 'gasPower')
+                 && costLineOk(request.resource.data.costs, 'jarsLids')
+                 && costLineOk(request.resource.data.costs, 'labelling'));
+    }
+
+    /* ── one sellable price, the ₹649 MRP ceiling ────────────────── */
+    //
+    // Whole paise, at least one, never above the ₹649 MRP printed on the
+    // jar (CLAUDE.md section 3). Shared by a batch's two prices and a
+    // product's two, so the ceiling is written once. It lives up here with
+    // the other shared helpers because the batch rules below the catalogue
+    // block call it too.
+
+    function sellablePaise(value) {
+      return value is int && value >= 1 && value <= 64900;
+    }
+
+    /* ── a batch's two prices, checked by value (D40, M2.16) ─────────── */
+    //
+    // D40: the Owner edits `priceOpen` and `priceInStock` in place on every
+    // batch, in any state, with no lock. That makes a batch's prices a raw
+    // client write, exactly like `costs` above and like a product's two
+    // prices below, so the same reasoning applies: checking *which* keys
+    // changed says nothing about the number in them, and a typed box is
+    // where a ₹650 comes from. `sellablePaise` is the same ceiling the
+    // catalogue uses, stated once (CLAUDE.md section 3: whole paise, at
+    // least one, never above the ₹649 MRP printed on the jar).
+    //
+    // Like `costsOk()` this reads the merged post-state, so it is asked on
+    // every batch write whether or not that write touched a price. It can
+    // only ever refuse, never admit.
+
+    function batchPricesOk() {
+      return (!('priceInStock' in request.resource.data)
+              || sellablePaise(request.resource.data.priceInStock))
+             && (!('priceOpen' in request.resource.data)
+                 || sellablePaise(request.resource.data.priceOpen));
+    }
+
+    /* ── the Owner's own per-person cap (D44) ────────────────────── */
+    //
+    // `perPersonLimit` stays protected and server computed. Beside it sits
+    // `perPersonLimitOverride`, which the Owner types: null (or absent) is
+    // automatic and falls back to the computed quarter, and anything else
+    // must be a whole number of jars, at least one. A zero or a fraction
+    // here would silently become a cap nobody meant.
+
+    function perPersonLimitOverrideOk() {
+      return !('perPersonLimitOverride' in request.resource.data)
+             || request.resource.data.perPersonLimitOverride == null
+             || (request.resource.data.perPersonLimitOverride is int
+                 && request.resource.data.perPersonLimitOverride >= 1);
+    }
+
+    /* ── a batch line's actuals, checked by value (D42, M2.20) ───────── */
+    //
+    // `batches/{ref}/lines/{id}` holds the two numbers that most move a
+    // batch's P&L: what the pot actually used, and what it actually cost.
+    // Both are a typed box on the Cooking actuals screen and a field on the
+    // Sourcing -> Cooking callable, and until now the rule below asked only
+    // who was writing, never what. Same reasoning as `costsOk()` and
+    // `batchPricesOk()` above: which key changed says nothing about the
+    // number in it, and a seeding script, a function with a bug or a
+    // signed-in staff account talking to Firestore directly is not going
+    // through the screen's check at all.
+    //
+    // Both read the merged post-state, so they are asked on every write to a
+    // line whether or not that write touched the field. They can only ever
+    // refuse, never admit.
+    //
+    // `null` passes both, and deliberately: undoing a row's first edit
+    // restores the field to `null` rather than deleting the key (M2.14), and
+    // `null` is "nothing recorded yet", which is where every line starts.
+
+    // A weight in grams, not money, so a fraction is legitimate: 250.5 g of
+    // prawns is a real number off a kitchen scale, and the screen's box has
+    // always taken one. Zero is legitimate too (an ingredient the pot ended
+    // up not using). The ceiling is 100 kg: the largest batch is 40 jars of
+    // 200 g, so about 8 kg of finished pickle and at most some tens of kg of
+    // raw prawns behind it. 100 kg is several times the largest plausible
+    // entry and still catches the mistakes that matter, a stray extra zero
+    // and a kilogram figure typed into a gram box.
+    function actualWeightOk(value) {
+      return value is number && value >= 0 && value <= 100000;
+    }
+
+    // A cost in whole paise, zero or more (a gift of curry leaves genuinely
+    // costs nothing). The ceiling is ₹1,00,000 for one ingredient line. The
+    // ₹649 MRP is no guide here: that is what one jar sells for, not what a
+    // batch's ingredients cost. The right scale is the batch itself, which
+    // grosses at most 40 x ₹649, about ₹26,000. A single ingredient line
+    // above a lakh is therefore already four times a whole batch's revenue,
+    // which is not a home kitchen buying prawns and dates, it is a rupee
+    // figure typed into a paise box or a zero too many.
+    function actualCostOk(value) {
+      return value is int && value >= 0 && value <= 10000000;
+    }
+
+    function batchLineActualsOk() {
+      return (!('qtyActual' in request.resource.data)
+              || request.resource.data.qtyActual == null
+              || actualWeightOk(request.resource.data.qtyActual))
+             && (!('costActual' in request.resource.data)
+                 || request.resource.data.costActual == null
+                 || actualCostOk(request.resource.data.costActual));
     }
 
     /** Weights, dates, sourcing note and packaging costs. Kitchen's own. */
@@ -218,31 +356,43 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow read: if isAdmin();
       allow create, update, delete: if false;
-
-      match /events/{eventId} {
-        allow read: if isAdmin();
-        allow write: if false;
-      }
     }
 
     /* ══ kitchen ════════════════════════════════════════════════════════ */
 
-    match /batches/{batchNo} {
+    // Decision D21c: the document id is the batch's **internal reference**
+    // (`b-7f3a2c`), fixed for its whole life. The printed number is the
+    // `batchNo` field, which is absent until bottling, is allocated from
+    // `counters/batch` inside the Cooking -> Bottled transaction, and is on
+    // `protectedBatchFields()` so no client can write one. Anything that
+    // resolves a batch by its printed number queries that field, not this id.
+    match /batches/{batchRef} {
       allow read: if isAdmin();
 
-      // Owner opens a batch and sets its prices (17.12). The document id is
-      // the batch number and numbers are allocated by the `nextBatchNo`
-      // transaction (M2.2), so a create here is the draft body only: no
-      // counts, no state, no computed dates. `transitionBatch` (M2.3) puts it
-      // into `draft` and moves it from there.
+      // Owner opens a batch and sets its prices (17.12). A create here is the
+      // draft body only: no counts, no state, no computed dates and no batch
+      // number. `transitionBatch` (M2.3) puts it into `draft` and moves it
+      // from there.
       allow create: if isOwner()
-                    && !request.resource.data.keys().hasAny(protectedBatchFields());
+                    && !request.resource.data.keys().hasAny(protectedBatchFields())
+                    && costsOk()
+                    && batchPricesOk()
+                    && perPersonLimitOverrideOk();
 
       // Owner: everything except the counts and the computed fields.
       // Kitchen: the weights, dates, sourcing note and costs, and nothing
       // else. Brief 18.2, "checked by comparing which keys changed".
-      allow update: if (isOwner() && !touches(protectedBatchFields()))
-                    || (isKitchen() && onlyChanged(kitchenBatchFields()));
+      // `costsOk()` is asked first and of both roles: the costs map is money,
+      // and the one money field a client writes to a batch without a callable
+      // in the way. On a merge write `request.resource.data` is the merged
+      // post-state, so this is checked on every update whether or not that
+      // update touched the costs — which is the right way round, because it
+      // can only ever refuse a write, never admit one.
+      allow update: if costsOk()
+                    && batchPricesOk()
+                    && perPersonLimitOverrideOk()
+                    && ((isOwner() && !touches(protectedBatchFields()))
+                        || (isKitchen() && onlyChanged(kitchenBatchFields())));
 
       // A batch is archived, never deleted. Numbers are never reused.
       allow delete: if false;
@@ -250,7 +400,7 @@ service cloud.firestore {
       /** What the pot actually used. Both staff roles record actuals. */
       match /lines/{lineId} {
         allow read: if isAdmin();
-        allow create, update: if isStaff();
+        allow create, update: if isStaff() && batchLineActualsOk();
         allow delete: if isOwner();
       }
 
@@ -289,9 +439,52 @@ service cloud.firestore {
 
     // Prices live on products, so products are the Owner's: 17.12 gives
     // "set prices" to Owner alone.
+    /* ── a product's prices, checked by value ───────────────────────────── */
+    //
+    // CLAUDE.md section 3: money is integers in paise, and never above the
+    // ₹649 MRP printed on the jar. A product's two prices are typed into a box
+    // on the Products screen and written straight here with no callable in the
+    // way, exactly like a batch's `costs`, so the same reasoning applies: the
+    // screen checks, and these rules are what make the check true.
+    //
+    // The ceiling itself is `sellablePaise` above, shared with a batch's two
+    // prices (D40, M2.16), so ₹649 is written once in this file.
+    //
+    // A custom line is what the kitchen may sell at the counter under this
+    // product's name. Its amount is a price too, so it takes the same ceiling.
+    // Rules cannot walk a list, so the count is capped and each entry checked
+    // by hand; a longer list than this would need the lines to become their
+    // own documents, which is a change to the data model, not to a rule.
+
+    function productPricesOk() {
+      return (!('priceInStock' in request.resource.data)
+              || sellablePaise(request.resource.data.priceInStock))
+             && (!('priceOpen' in request.resource.data)
+                 || sellablePaise(request.resource.data.priceOpen));
+    }
+
+    // A custom line may legitimately be free (something thrown in with an
+    // order), so the floor is 0 rather than 1 paise. The ceiling is the same.
+    function customLineAmountOk(value) {
+      return value is int && value >= 0 && value <= 64900;
+    }
+
+    function customLineOk(index) {
+      return !(request.resource.data.customLines.size() > index)
+             || customLineAmountOk(request.resource.data.customLines[index].amountPaise);
+    }
+
+    function customLinesOk() {
+      return !('customLines' in request.resource.data)
+             || (request.resource.data.customLines is list
+                 && request.resource.data.customLines.size() <= 8
+                 && customLineOk(0) && customLineOk(1) && customLineOk(2) && customLineOk(3)
+                 && customLineOk(4) && customLineOk(5) && customLineOk(6) && customLineOk(7));
+    }
+
     match /products/{slug} {
       allow read: if isAdmin();
-      allow write: if isOwner();
+      allow write: if isOwner() && productPricesOk() && customLinesOk();
     }
 
     // Ingredients and recipes, question Q4 (Shefin): "For now admin only, but
@@ -380,10 +573,27 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // An approval is raised by a trigger and answered through a callable. The
+    // Owner's update right here is the fallback, not the road: the admin app
+    // always answers through `answerApproval`, `transitionBatch` or
+    // `approveBatchFull`, which decide what an answer may say.
+    //
+    // `sentAt` is the one field that must never be reachable from a client at
+    // all. It is the record that a customer has actually been messaged, so a
+    // client that can write it can make Lailark believe a message went out
+    // that never did, or that one is finished with when it is still waiting.
+    // Every callable deliberately leaves it alone and says so in a comment;
+    // this is what makes that a fact rather than an intention. Sending lands
+    // in M5 and will write it with the Admin SDK, which is not bound by these
+    // rules.
+    function approvalServerFields() {
+      return ['sentAt', 'kind', 'batchRef', 'updateId', 'dueAt', 'dueAtSupersededBy'];
+    }
+
     match /approvals/{approvalId} {
       allow read: if isAdmin();
       allow create: if false;
-      allow update: if isOwner();
+      allow update: if isOwner() && !touches(approvalServerFields());
       allow delete: if false;
     }
 
@@ -432,11 +642,46 @@ service cloud.firestore {
     // edit or remove an entry, or undo would be lying. `by` must be the
     // caller and `at` must be the server's clock, so an entry cannot be
     // backdated or pinned on somebody else.
+    // An entry must describe a change that is really happening, in this same
+    // commit. Without this an entry is just a document a signed-in staff
+    // account may write, so anyone could append a page of history that never
+    // occurred: a price that was never set, a weight nobody recorded, an undo
+    // of a write that never happened. A trail that can be written to freely
+    // answers "what did somebody type" rather than "what happened", and the
+    // second is the only question worth keeping it for.
+    //
+    // `getAfter` reads the target document as it will be **after this commit**.
+    // The wrapper (`admin/src/audit/write.ts`) always writes the change and
+    // its entry in one batch, and always stamps `updatedAt` with the server
+    // clock, so on a genuine write that stamp is this commit's own time. An
+    // entry arriving on its own finds the target's `updatedAt` unchanged from
+    // whenever it was really last touched, and is refused. The check is on the
+    // document as it will be, not as it is, so the first write to a document
+    // that does not exist yet (a new actuals line) carries its own entry the
+    // same way every later one does.
+    //
+    // This costs one document read per entry, which at a few dozen writes a
+    // day is nothing, and it is what makes the wrapper's promise a fact
+    // rather than a comment. Functions are not bound by these rules and write
+    // their own entries through the Admin SDK inside their transaction.
+    function auditTarget() {
+      return path('/databases/' + database + '/documents/' + request.resource.data.object);
+    }
+
+    function auditDescribesARealWrite() {
+      return request.resource.data.object is string
+             && request.resource.data.object.size() > 0
+             && request.resource.data.object.size() < 900
+             && existsAfter(auditTarget())
+             && getAfter(auditTarget()).data.updatedAt == request.time;
+    }
+
     match /audit/{entryId} {
       allow read: if isAdmin();
       allow create: if isStaff()
                     && request.resource.data.by == request.auth.uid
-                    && request.resource.data.at == request.time;
+                    && request.resource.data.at == request.time
+                    && auditDescribesARealWrite();
       allow update, delete: if false;
     }
 

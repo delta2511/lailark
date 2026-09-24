@@ -209,3 +209,68 @@ export function kolkataDate(instant: InstantInput): CalDate {
 export function kolkataStartOfDay(input: CalDateInput): number {
   return toDayNumber(input) * MS_PER_DAY - KOLKATA_UTC_OFFSET_MINUTES * MS_PER_MINUTE;
 }
+
+/* -------------------------------------------------------------------------- */
+/* The business day (M2.8)                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * When one working day of this kitchen ends and the next begins, as an hour
+ * in Asia/Kolkata.
+ *
+ * **Why this is not midnight.** Brief section 7A.6 lets either role "void a
+ * sale entered by mistake (same day, before the bill is sent)". Read as the
+ * calendar date, "same day" breaks in exactly the situation it exists for: a
+ * jar sold at the door at 23:50 and a wrong number spotted at 00:10 while the
+ * counter is still being tidied would be two different days, and the mistake
+ * would be un-voidable twenty minutes after it was made. A kitchen that
+ * closes after midnight is one working evening, not two days.
+ *
+ * So a Lailark day runs from 05:00 to 05:00. A sale belongs to the business
+ * day its `createdAt` falls in, and may be voided while the clock is still in
+ * that same business day: an evening sale stays voidable until five the next
+ * morning, and a sale entered at 00:20 belongs to the evening it was part of.
+ *
+ * 05:00 rather than 04:00 or 06:00 because nothing is ever sold at the door
+ * at five in the morning, which is what makes it a safe seam: no sale can
+ * land on the wrong side of it by being a little late. Day close (brief 7A.3,
+ * M2.11) totals the same window, so the sales a day close covers are exactly
+ * the sales that were voidable that day.
+ *
+ * ASSUMED (M2.8): the brief says "same day" and names no hour.
+ */
+export const BUSINESS_DAY_START_HOUR_IST = 5;
+
+const MS_PER_HOUR = 3_600_000;
+
+/**
+ * The business day an instant belongs to, named by its **opening** calendar
+ * date in Asia/Kolkata. 23:50 on 21 Sep and 00:20 on 22 Sep are both the
+ * business day `{ y: 2026, m: 9, d: 21 }`.
+ */
+export function businessDay(
+  instant: InstantInput,
+  startHour: number = BUSINESS_DAY_START_HOUR_IST,
+): CalDate {
+  return kolkataDate(toEpochMillis(instant) - startHour * MS_PER_HOUR);
+}
+
+/** `"2026-09-21"`, the business day's own name. Day close is keyed by this. */
+export function businessDayKey(
+  instant: InstantInput,
+  startHour: number = BUSINESS_DAY_START_HOUR_IST,
+): string {
+  return formatCalDate(businessDay(instant, startHour));
+}
+
+/**
+ * Whether two instants fall in the same business day. This is the whole of
+ * "same day" in brief 7A.6's void rule.
+ */
+export function inSameBusinessDay(
+  a: InstantInput,
+  b: InstantInput,
+  startHour: number = BUSINESS_DAY_START_HOUR_IST,
+): boolean {
+  return businessDayKey(a, startHour) === businessDayKey(b, startHour);
+}

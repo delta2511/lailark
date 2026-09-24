@@ -22,6 +22,7 @@ import {
   setDoc,
   Timestamp,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import type { RulesTestContext, RulesTestEnvironment } from "@firebase/rules-unit-testing";
 import { assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
@@ -38,7 +39,7 @@ import {
   OWNER_UID,
   VIEWER_UID,
 } from "./env.js";
-import { BATCH_DOC, BATCH_NO, CUSTOMER_PHONE, DOCUMENT_ID, ORDER_ID, seedFirestore, UPDATE_ID } from "./seed.js";
+import { BATCH_DOC, BATCH_REF, CUSTOMER_PHONE, DOCUMENT_ID, ORDER_ID, seedFirestore, UPDATE_ID } from "./seed.js";
 
 let env: RulesTestEnvironment;
 let who: Callers;
@@ -52,6 +53,27 @@ const write = (ctx: RulesTestContext, path: string, data: object) =>
 const patch = (ctx: RulesTestContext, path: string, data: object) =>
   updateDoc(doc(ctx.firestore(), path), data);
 const remove = (ctx: RulesTestContext, path: string) => deleteDoc(doc(ctx.firestore(), path));
+
+/**
+ * A change and its audit entry in one commit, which is the only way the admin
+ * ever writes one (`admin/src/audit/write.ts`). The rules read the target's
+ * `updatedAt` as it will be after this commit to check the entry describes a
+ * change that is really happening, so an entry written on its own is refused
+ * and an entry written beside its change is not.
+ */
+const writeAudited = (
+  ctx: RulesTestContext,
+  entryId: string,
+  target: string,
+  patchFields: object,
+  entry: object,
+) => {
+  const db = ctx.firestore();
+  const batch = writeBatch(db);
+  batch.set(doc(db, target), { ...patchFields, updatedAt: serverTimestamp() }, { merge: true });
+  batch.set(doc(db, "audit", entryId), entry);
+  return batch.commit();
+};
 
 beforeAll(async () => {
   env = await makeTestEnvironment();
@@ -71,7 +93,7 @@ beforeEach(async () => {
 
 describe("the public internet", () => {
   const closed = [
-    `batches/${BATCH_NO}`,
+    `batches/${BATCH_REF}`,
     `orders/${ORDER_ID}`,
     `customers/${CUSTOMER_PHONE}`,
     `users/${OWNER_UID}`,
@@ -91,7 +113,7 @@ describe("the public internet", () => {
 
   it("cannot write anything, including a collection nobody named", async () => {
     await assertFails(write(who.unauth, "whatever/x", { a: 1 }));
-    await assertFails(write(who.unauth, `batches/${BATCH_NO}/lines/new`, { a: 1 }));
+    await assertFails(write(who.unauth, `batches/${BATCH_REF}/lines/new`, { a: 1 }));
   });
 });
 
@@ -151,12 +173,11 @@ describe("config/site, the only public read", () => {
 
 describe("see everything except Money", () => {
   const everyday = [
-    `batches/${BATCH_NO}`,
-    `batches/${BATCH_NO}/lines/l1`,
-    `batches/${BATCH_NO}/updates/${UPDATE_ID}`,
-    `batches/${BATCH_NO}/writeOffs/w1`,
+    `batches/${BATCH_REF}`,
+    `batches/${BATCH_REF}/lines/l1`,
+    `batches/${BATCH_REF}/updates/${UPDATE_ID}`,
+    `batches/${BATCH_REF}/writeOffs/w1`,
     `orders/${ORDER_ID}`,
-    `orders/${ORDER_ID}/events/e1`,
     `customers/${CUSTOMER_PHONE}`,
     `customers/${CUSTOMER_PHONE}/addresses/a1`,
     "products/prawns-and-dates",
@@ -247,18 +268,12 @@ describe("orders", () => {
       await assertFails(remove(ctx, `orders/${ORDER_ID}`));
     }
   });
-
-  it("take no client write on the event timeline either", async () => {
-    for (const [, ctx] of everyRole(who)) {
-      await assertFails(write(ctx, `orders/${ORDER_ID}/events/new-1`, { ...base }));
-    }
-  });
 });
 
 /* ── batches: the field lists ────────────────────────────────────────────── */
 
 describe("a batch, from the Kitchen", () => {
-  const path = `batches/${BATCH_NO}`;
+  const path = `batches/${BATCH_REF}`;
 
   it("takes a weight", async () => {
     await assertSucceeds(patch(who.kitchen, path, { weightRaw: 12.4 }));
@@ -306,8 +321,19 @@ describe("a batch, from the Kitchen", () => {
     await assertFails(patch(who.kitchen, path, { plannedJars: 40 }));
   });
 
+  // D40 and D44 open the prices and the per-person cap to the Owner. They are
+  // his, not the kitchen's: 17.12 gives "set prices" to the Owner alone.
+  // A price the rules would take from the Owner is still refused from the
+  // Kitchen. The number has to differ from the one on the seeded batch:
+  // `onlyChanged` compares the keys whose value actually moved, so rewriting
+  // ₹649 over ₹649 changes nothing and is rightly allowed.
+  it("cannot set a price the Owner could set, nor the per-person cap", async () => {
+    await assertFails(patch(who.kitchen, path, { priceInStock: 60_000 }));
+    await assertFails(patch(who.kitchen, path, { perPersonLimitOverride: 2 }));
+  });
+
   it("cannot create a batch: opening one is the Owner's", async () => {
-    await assertFails(write(who.kitchen, "batches/002", { ...base, productSlug: "x" }));
+    await assertFails(write(who.kitchen, "batches/b-000002", { ...base, productSlug: "x" }));
   });
 
   it("cannot delete a batch", async () => {
@@ -315,12 +341,81 @@ describe("a batch, from the Kitchen", () => {
   });
 });
 
+/* ── batches: `costs` is money, checked by value ─────────────────────────── */
+//
+// CLAUDE.md section 3: money is integers in paise, never floats. `costs` is
+// written straight from the Bottling section of the Batches screen, not
+// through a callable, so the rules are the only thing between a typed box and
+// the database. Checking which keys changed is not enough: the value itself
+// has to be a whole number of paise, zero or more.
+
+describe("a batch's costs, whoever is writing them", () => {
+  const path = `batches/${BATCH_REF}`;
+  const whole = { jarsLids: 0, boxInserts: 0, labelling: 0, gasPower: 0 };
+
+  for (const [name, actor] of [
+    ["the Owner", () => who.owner],
+    ["the Kitchen", () => who.kitchen],
+  ] as const) {
+    describe(name, () => {
+      it("takes zero", async () => {
+        await assertSucceeds(patch(actor(), path, { costs: { ...whole, jarsLids: 0 } }));
+      });
+
+      it("takes a normal amount", async () => {
+        await assertSucceeds(patch(actor(), path, { costs: { ...whole, jarsLids: 45_000 } }));
+      });
+
+      it("refuses a negative cost", async () => {
+        await assertFails(patch(actor(), path, { costs: { ...whole, jarsLids: -5000 } }));
+      });
+
+      it("refuses a fraction of a paisa", async () => {
+        await assertFails(patch(actor(), path, { costs: { ...whole, jarsLids: 1234.5 } }));
+      });
+
+      it("refuses a cost that is not a number", async () => {
+        await assertFails(patch(actor(), path, { costs: { ...whole, jarsLids: "450" } }));
+        await assertFails(patch(actor(), path, { costs: { ...whole, jarsLids: null } }));
+      });
+
+      it("refuses a cost that is not the four named lines", async () => {
+        await assertFails(patch(actor(), path, { costs: { ...whole, somethingElse: 1 } }));
+        await assertFails(patch(actor(), path, { costs: 45_000 }));
+      });
+
+      it("refuses a negative cost on any of the four lines", async () => {
+        for (const key of ["jarsLids", "boxInserts", "labelling", "gasPower"]) {
+          await assertFails(patch(actor(), path, { costs: { ...whole, [key]: -1 } }));
+        }
+      });
+    });
+  }
+
+  it("refuses a negative cost on a create too", async () => {
+    await assertFails(
+      write(who.owner, "batches/b-000010", {
+        ...base,
+        productSlug: "prawns-and-dates",
+        costs: { ...whole, jarsLids: -1 },
+      }),
+    );
+    await assertSucceeds(
+      write(who.owner, "batches/b-000011", {
+        ...base,
+        productSlug: "prawns-and-dates",
+        costs: { ...whole, jarsLids: 45_000 },
+      }),
+    );
+  });
+});
+
 describe("a batch, from the Owner", () => {
-  const path = `batches/${BATCH_NO}`;
+  const path = `batches/${BATCH_REF}`;
 
   it("is created without the counts and the computed fields", async () => {
     await assertSucceeds(
-      write(who.owner, "batches/002", {
+      write(who.owner, "batches/b-000002", {
         ...base,
         productSlug: "prawns-and-dates",
         recipeId: "rec-1",
@@ -333,14 +428,70 @@ describe("a batch, from the Owner", () => {
 
   it("is not created with a count or a state already on it", async () => {
     const body = { ...base, productSlug: "x", plannedJars: 22 };
-    await assertFails(write(who.owner, "batches/003", { ...body, paidCount: 0 }));
-    await assertFails(write(who.owner, "batches/004", { ...body, state: "draft" }));
-    await assertFails(write(who.owner, "batches/005", { ...body, bookableJars: 19 }));
-    await assertFails(write(who.owner, "batches/006", { ...body, heldJars: {} }));
+    await assertFails(write(who.owner, "batches/b-000003", { ...body, paidCount: 0 }));
+    await assertFails(write(who.owner, "batches/b-000004", { ...body, state: "draft" }));
+    await assertFails(write(who.owner, "batches/b-000005", { ...body, bookableJars: 19 }));
+    await assertFails(write(who.owner, "batches/b-000006", { ...body, heldJars: {} }));
+    // ...nor with a number it gave itself (D21c).
+    await assertFails(write(who.owner, "batches/b-000007", { ...body, batchNo: "001" }));
   });
 
   it("takes a price change", async () => {
     await assertSucceeds(patch(who.owner, path, { priceOpen: 59900, priceInStock: 64900 }));
+  });
+
+  /**
+   * D40, M2.16: the Owner edits a batch's two prices in place, on any batch,
+   * in any state, with no lock, and that write goes straight to Firestore with
+   * no callable in the way. So these rules are the last thing between a slip
+   * of the thumb and a price a customer could be charged, exactly as they are
+   * for a product's prices and a batch's costs. CLAUDE.md section 3: whole
+   * paise, and never above the ₹649 MRP printed on the jar.
+   */
+  it("refuses a batch price that is not money, even from the Owner", async () => {
+    for (const bad of [0, -1, 64_901, 649.5, 64_900.5, "649", null]) {
+      await assertFails(patch(who.owner, path, { priceInStock: bad }));
+      await assertFails(patch(who.owner, path, { priceOpen: bad }));
+    }
+  });
+
+  it("takes a batch price at exactly the MRP, and at one paise", async () => {
+    await assertSucceeds(patch(who.owner, path, { priceInStock: 64_900 }));
+    await assertSucceeds(patch(who.owner, path, { priceOpen: 64_900 }));
+    await assertSucceeds(patch(who.owner, path, { priceOpen: 1 }));
+  });
+
+  it("refuses a price over the MRP on a create too", async () => {
+    await assertFails(
+      write(who.owner, "batches/b-000021", {
+        ...base,
+        productSlug: "prawns-and-dates",
+        plannedJars: 22,
+        priceOpen: 59_900,
+        priceInStock: 65_000,
+      }),
+    );
+  });
+
+  /**
+   * D44: `perPersonLimit` stays protected and server computed; the Owner's own
+   * cap lives beside it in `perPersonLimitOverride`, which is his to type on
+   * any batch in any state. Null is "automatic", and a zero or a fraction is
+   * a cap nobody meant.
+   */
+  it("takes the Owner's per-person cap, and null to clear it", async () => {
+    await assertSucceeds(patch(who.owner, path, { perPersonLimitOverride: 2 }));
+    await assertSucceeds(patch(who.owner, path, { perPersonLimitOverride: null }));
+  });
+
+  it("refuses a per-person cap that is not a whole number of jars", async () => {
+    for (const bad of [0, -1, 2.5, "2", true]) {
+      await assertFails(patch(who.owner, path, { perPersonLimitOverride: bad }));
+    }
+  });
+
+  it("still refuses the computed quarter itself, from the Owner", async () => {
+    await assertFails(patch(who.owner, path, { perPersonLimit: 2 }));
   });
 
   it("takes the kitchen fields too: the Owner does the kitchen's job on a bad day", async () => {
@@ -354,6 +505,12 @@ describe("a batch, from the Owner", () => {
     await assertFails(patch(who.owner, path, { bookableJars: 22 }));
     await assertFails(patch(who.owner, path, { pnl: { revenue: 1 } }));
     await assertFails(patch(who.owner, path, { bestBefore: "2030-01-01" }));
+    // D21c: the printed number is the server's, allocated from counters/batch
+    // at bottling. A client that could write it could print two jars with one
+    // number. D23: `pausedFrom` is how resume knows where to return, so it is
+    // the lifecycle's, like `state`.
+    await assertFails(patch(who.owner, path, { batchNo: "001" }));
+    await assertFails(patch(who.owner, path, { pausedFrom: "open" }));
   });
 
   it("cannot delete a batch: numbers are never reused", async () => {
@@ -368,56 +525,147 @@ describe("a batch, from the Owner", () => {
   });
 });
 
+/* ── D42: the per-ingredient actuals, checked by value ───────────────────── */
+
+/**
+ * `qtyActual` and `costActual` are the two largest inputs to a batch's P&L,
+ * and until M2.20 the rules asked only who was writing them. These are the
+ * tests that the number itself is checked, so a seeding script or a signed-in
+ * staff account writing straight to Firestore cannot store what the screen
+ * would have refused.
+ */
+describe("a batch line's actuals, by value", () => {
+  const lines = `batches/${BATCH_REF}/lines`;
+  const line = (extra: object) => ({ ...base, ingredientId: "i1", ...extra });
+
+  for (const [name, actor] of [
+    ["from the Kitchen", () => who.kitchen],
+    ["from the Owner", () => who.owner],
+  ] as const) {
+    describe(name, () => {
+      it("takes the weight and cost the actuals screen writes", async () => {
+        await assertSucceeds(
+          write(actor(), `${lines}/new-ok`, line({ qtyActual: 2500, costActual: 1_250_000 })),
+        );
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { qtyActual: 3, costActual: 45_000 }));
+      });
+
+      it("takes a fractional weight, because a scale reads one", async () => {
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { qtyActual: 250.5 }));
+      });
+
+      it("takes exactly zero, on both", async () => {
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { qtyActual: 0, costActual: 0 }));
+      });
+
+      it("takes exactly one, on both", async () => {
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { qtyActual: 1, costActual: 1 }));
+      });
+
+      it("takes exactly the ceiling, on both", async () => {
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { qtyActual: 100_000 }));
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { costActual: 10_000_000 }));
+      });
+
+      it("refuses one past the ceiling, on both", async () => {
+        await assertFails(patch(actor(), `${lines}/l1`, { qtyActual: 100_001 }));
+        await assertFails(patch(actor(), `${lines}/l1`, { costActual: 10_000_001 }));
+      });
+
+      it("refuses a negative cost", async () => {
+        await assertFails(patch(actor(), `${lines}/l1`, { costActual: -1 }));
+        await assertFails(patch(actor(), `${lines}/l1`, { costActual: -5000 }));
+      });
+
+      it("refuses a fraction of a paisa", async () => {
+        await assertFails(patch(actor(), `${lines}/l1`, { costActual: 1234.5 }));
+        await assertFails(patch(actor(), `${lines}/l1`, { costActual: 0.5 }));
+      });
+
+      it("refuses a negative weight", async () => {
+        await assertFails(patch(actor(), `${lines}/l1`, { qtyActual: -1 }));
+      });
+
+      it("refuses either as a string, and a cost as rupees in a string", async () => {
+        await assertFails(patch(actor(), `${lines}/l1`, { qtyActual: "250" }));
+        await assertFails(patch(actor(), `${lines}/l1`, { costActual: "450" }));
+      });
+
+      it("takes null on both: nothing recorded yet, which is what undo restores", async () => {
+        await assertSucceeds(patch(actor(), `${lines}/l1`, { qtyActual: null, costActual: null }));
+      });
+
+      it("refuses the same bad numbers on a create, not only on an update", async () => {
+        await assertFails(write(actor(), `${lines}/new-neg`, line({ costActual: -1 })));
+        await assertFails(write(actor(), `${lines}/new-frac`, line({ costActual: 12.5 })));
+        await assertFails(write(actor(), `${lines}/new-big`, line({ costActual: 10_000_001 })));
+        await assertFails(write(actor(), `${lines}/new-negq`, line({ qtyActual: -0.5 })));
+        await assertFails(write(actor(), `${lines}/new-bigq`, line({ qtyActual: 100_001 })));
+      });
+
+      it("refuses a bad number carried alongside a change to something else", async () => {
+        // The check reads the merged post-state, so a write that leaves a bad
+        // number where it is cannot slip past by touching another field.
+        await assertFails(patch(actor(), `${lines}/l1`, { ingredientId: "i2", costActual: -1 }));
+      });
+    });
+  }
+
+  it("still refuses the Viewer, whatever the numbers are", async () => {
+    await assertFails(write(who.viewer, `${lines}/new-viewer`, line({ qtyActual: 1, costActual: 1 })));
+  });
+});
+
 describe("batch subcollections", () => {
   it("let both staff roles record ingredient actuals, and only the Owner remove one", async () => {
-    await assertSucceeds(write(who.kitchen, `batches/${BATCH_NO}/lines/new-1`, { ...base, qtyActual: 2 }));
-    await assertSucceeds(patch(who.kitchen, `batches/${BATCH_NO}/lines/l1`, { qtyActual: 3 }));
-    await assertFails(remove(who.kitchen, `batches/${BATCH_NO}/lines/l1`));
-    await assertSucceeds(remove(who.owner, `batches/${BATCH_NO}/lines/l1`));
-    await assertFails(write(who.viewer, `batches/${BATCH_NO}/lines/new-2`, { ...base }));
+    await assertSucceeds(write(who.kitchen, `batches/${BATCH_REF}/lines/new-1`, { ...base, qtyActual: 2 }));
+    await assertSucceeds(patch(who.kitchen, `batches/${BATCH_REF}/lines/l1`, { qtyActual: 3 }));
+    await assertFails(remove(who.kitchen, `batches/${BATCH_REF}/lines/l1`));
+    await assertSucceeds(remove(who.owner, `batches/${BATCH_REF}/lines/l1`));
+    await assertFails(write(who.viewer, `batches/${BATCH_REF}/lines/new-2`, { ...base }));
   });
 
   it("let the Kitchen post a photo update but not approve it", async () => {
     await assertSucceeds(
-      write(who.kitchen, `batches/${BATCH_NO}/updates/new-1`, {
+      write(who.kitchen, `batches/${BATCH_REF}/updates/new-1`, {
         ...base,
         createdBy: KITCHEN_UID,
-        photoPath: "batches/001/updates/new-1.jpg",
+        photoPath: `batches/${BATCH_REF}/updates/new-1.jpg`,
         kitchenLine: "In the pot.",
         approvedBy: null,
         sentAt: null,
       }),
     );
     await assertFails(
-      write(who.kitchen, `batches/${BATCH_NO}/updates/new-2`, {
+      write(who.kitchen, `batches/${BATCH_REF}/updates/new-2`, {
         ...base,
         createdBy: KITCHEN_UID,
         kitchenLine: "In the pot.",
         approvedBy: KITCHEN_UID,
       }),
     );
-    await assertSucceeds(patch(who.owner, `batches/${BATCH_NO}/updates/${UPDATE_ID}`, { approvedBy: OWNER_UID }));
-    await assertFails(patch(who.kitchen, `batches/${BATCH_NO}/updates/${UPDATE_ID}`, { approvedBy: KITCHEN_UID }));
+    await assertSucceeds(patch(who.owner, `batches/${BATCH_REF}/updates/${UPDATE_ID}`, { approvedBy: OWNER_UID }));
+    await assertFails(patch(who.kitchen, `batches/${BATCH_REF}/updates/${UPDATE_ID}`, { approvedBy: KITCHEN_UID }));
   });
 
   it("let the Kitchen fix their own unapproved update, and nobody else's, and not an approved one", async () => {
     await assertSucceeds(
-      patch(who.kitchen, `batches/${BATCH_NO}/updates/${UPDATE_ID}`, { kitchenLine: "Prawns are in, cleaned." }),
+      patch(who.kitchen, `batches/${BATCH_REF}/updates/${UPDATE_ID}`, { kitchenLine: "Prawns are in, cleaned." }),
     );
     await assertFails(
-      patch(who.kitchen, `batches/${BATCH_NO}/updates/approved-1`, { kitchenLine: "changed my mind" }),
+      patch(who.kitchen, `batches/${BATCH_REF}/updates/approved-1`, { kitchenLine: "changed my mind" }),
     );
     await assertFails(
-      patch(who.kitchen, `batches/${BATCH_NO}/updates/${UPDATE_ID}`, { messageText: "the whole message" }),
+      patch(who.kitchen, `batches/${BATCH_REF}/updates/${UPDATE_ID}`, { messageText: "the whole message" }),
     );
   });
 
   it("let both staff roles write off a jar, and nobody edit it away", async () => {
     await assertSucceeds(
-      write(who.kitchen, `batches/${BATCH_NO}/writeOffs/new-1`, { ...base, qty: 1, reason: "cracked" }),
+      write(who.kitchen, `batches/${BATCH_REF}/writeOffs/new-1`, { ...base, qty: 1, reason: "cracked" }),
     );
-    await assertFails(patch(who.owner, `batches/${BATCH_NO}/writeOffs/w1`, { qty: 0 }));
-    await assertFails(remove(who.owner, `batches/${BATCH_NO}/writeOffs/w1`));
+    await assertFails(patch(who.owner, `batches/${BATCH_REF}/writeOffs/w1`, { qty: 0 }));
+    await assertFails(remove(who.owner, `batches/${BATCH_REF}/writeOffs/w1`));
   });
 });
 
@@ -432,6 +680,45 @@ describe("the catalogue", () => {
 
   it("keeps products, and so prices, away from the Kitchen", async () => {
     await assertFails(patch(who.kitchen, "products/prawns-and-dates", { priceInStock: 1 }));
+  });
+
+  /**
+   * CLAUDE.md section 3: money is whole paise, and never above the ₹649 MRP
+   * printed on the jar. A product's prices are typed into a box and written
+   * straight to Firestore with no callable in the way, so this is the last
+   * thing between a slip of the thumb and a price a customer could be charged.
+   */
+  it("refuses a product price that is not money, even from the Owner", async () => {
+    for (const bad of [0, -1, 64_901, 649.5, "649", null]) {
+      await assertFails(patch(who.owner, "products/prawns-and-dates", { priceInStock: bad }));
+      await assertFails(patch(who.owner, "products/prawns-and-dates", { priceOpen: bad }));
+    }
+  });
+
+  it("takes a price at exactly the MRP, and at one paise", async () => {
+    await assertSucceeds(patch(who.owner, "products/prawns-and-dates", { priceOpen: 64_900 }));
+    await assertSucceeds(patch(who.owner, "products/prawns-and-dates", { priceOpen: 1 }));
+  });
+
+  it("holds a custom line's amount to the same ceiling, and lets it be free", async () => {
+    await assertSucceeds(
+      patch(who.owner, "products/prawns-and-dates", {
+        customLines: [{ description: "A small jar", amountPaise: 0 }],
+      }),
+    );
+    await assertFails(
+      patch(who.owner, "products/prawns-and-dates", {
+        customLines: [{ description: "A small jar", amountPaise: 64_901 }],
+      }),
+    );
+    await assertFails(
+      patch(who.owner, "products/prawns-and-dates", {
+        customLines: [
+          { description: "Fine", amountPaise: 100 },
+          { description: "Not fine", amountPaise: -1 },
+        ],
+      }),
+    );
   });
 });
 
@@ -616,6 +903,40 @@ describe("concerns and approvals", () => {
     await assertFails(write(who.owner, "approvals/new-1", { ...base, kind: "broadcast" }));
     await assertFails(remove(who.owner, "concerns/con-1"));
   });
+
+  /**
+   * `sentAt` is the record that a customer was actually messaged. A client
+   * that can write it can make Lailark believe a message went out that never
+   * did. Every callable leaves it alone on purpose; this is what makes that a
+   * fact rather than an intention (M2.5, and it matters from M5 on).
+   */
+  it("never let a client say a message was sent", async () => {
+    await assertFails(patch(who.owner, "approvals/app-1", { sentAt: new Date() }));
+    await assertFails(patch(who.kitchen, "approvals/app-1", { sentAt: new Date() }));
+    await assertFails(patch(who.viewer, "approvals/app-1", { sentAt: new Date() }));
+    // Not even alongside a legitimate answer.
+    await assertFails(
+      patch(who.owner, "approvals/app-1", { status: "approved", sentAt: new Date() }),
+    );
+  });
+
+  it("never let a client repoint an approval at another batch or change its clock", async () => {
+    await assertFails(patch(who.owner, "approvals/app-1", { batchRef: "b-000000" }));
+    await assertFails(patch(who.owner, "approvals/app-1", { kind: "broadcast" }));
+    await assertFails(patch(who.owner, "approvals/app-1", { dueAt: new Date() }));
+    await assertFails(patch(who.owner, "approvals/app-1", { updateId: "u-1" }));
+  });
+
+  it("still let the Owner record the answer itself", async () => {
+    await assertSucceeds(
+      patch(who.owner, "approvals/app-1", {
+        status: "notYet",
+        reason: "waiting on the boat",
+        draft: "Half the batch is paid for. We are arranging the prawns now.",
+        answeredBy: "owner-uid",
+      }),
+    );
+  });
 });
 
 describe("conversations", () => {
@@ -666,7 +987,7 @@ describe("a signed-in caller with no role claim", () => {
   it("reads their own users document and nothing else", async () => {
     await assertSucceeds(read(who.noRole, `users/${NO_ROLE_UID}`));
     for (const path of [
-      `batches/${BATCH_NO}`,
+      `batches/${BATCH_REF}`,
       `orders/${ORDER_ID}`,
       `customers/${CUSTOMER_PHONE}`,
       `documents/${DOCUMENT_ID}`,
@@ -684,14 +1005,14 @@ describe("a signed-in caller with no role claim", () => {
   });
 
   it("writes nothing", async () => {
-    await assertFails(patch(who.noRole, `batches/${BATCH_NO}`, { weightRaw: 1 }));
+    await assertFails(patch(who.noRole, `batches/${BATCH_REF}`, { weightRaw: 1 }));
     await assertFails(write(who.noRole, "audit/new-1", { ...base }));
   });
 });
 
 describe("the Viewer", () => {
   it("writes nothing, anywhere", async () => {
-    await assertFails(patch(who.viewer, `batches/${BATCH_NO}`, { weightRaw: 1 }));
+    await assertFails(patch(who.viewer, `batches/${BATCH_REF}`, { weightRaw: 1 }));
     await assertFails(patch(who.viewer, "products/prawns-and-dates", { name: "no" }));
     await assertFails(patch(who.viewer, `customers/${CUSTOMER_PHONE}`, { name: "no" }));
     await assertFails(patch(who.viewer, "shipments/sh-1", { packingCost: 1 }));
@@ -704,14 +1025,20 @@ describe("the Viewer", () => {
 describe("the audit log", () => {
   it("takes an entry from either staff role, stamped by the caller and the server clock", async () => {
     await assertSucceeds(
-      write(who.kitchen, "audit/new-1", {
-        object: `batches/${BATCH_NO}`,
-        action: "update",
-        before: { weightRaw: null },
-        after: { weightRaw: 12.4 },
-        by: KITCHEN_UID,
-        at: serverTimestamp(),
-      }),
+      writeAudited(
+        who.kitchen,
+        "new-1",
+        `batches/${BATCH_REF}`,
+        { weightRaw: 12.4 },
+        {
+          object: `batches/${BATCH_REF}`,
+          action: "update",
+          before: { weightRaw: null },
+          after: { weightRaw: 12.4 },
+          by: KITCHEN_UID,
+          at: serverTimestamp(),
+        },
+      ),
     );
   });
 
@@ -735,6 +1062,95 @@ describe("the audit log", () => {
   it("is append-only", async () => {
     await assertFails(patch(who.owner, "audit/aud-1", { action: "create" }));
     await assertFails(remove(who.owner, "audit/aud-1"));
+  });
+
+  /* ── M2.6: the full shape, and who the log is and is not for ──────────── */
+
+  it("takes the full M2.6 shape, from the Owner too: fields, undoes and source are unrestricted extras", async () => {
+    await assertSucceeds(
+      writeAudited(
+        who.owner,
+        "new-4",
+        `batches/${BATCH_REF}`,
+        { weightRaw: 9.1 },
+        {
+          object: `batches/${BATCH_REF}`,
+          action: "update",
+          fields: ["weightRaw"],
+          before: { weightRaw: 12.4 },
+          after: { weightRaw: 9.1 },
+          by: OWNER_UID,
+          at: serverTimestamp(),
+          undoes: "new-1",
+          source: "client",
+        },
+      ),
+    );
+  });
+
+  /**
+   * The trail answers "what happened", not "what did somebody type". An entry
+   * that arrives on its own describes a change nobody made, and a trail that
+   * accepts those is worth nothing when it matters.
+   */
+  it("refuses an entry for a change that is not happening", async () => {
+    for (const staff of [who.owner, who.kitchen] as const) {
+      const uid = staff === who.owner ? OWNER_UID : KITCHEN_UID;
+      // On its own, with no write beside it.
+      await assertFails(
+        write(staff, "audit/fake-1", {
+          object: `batches/${BATCH_REF}`,
+          action: "update",
+          fields: ["priceInStock"],
+          before: { priceInStock: 64_900 },
+          after: { priceInStock: 100 },
+          by: uid,
+          at: serverTimestamp(),
+        }),
+      );
+      // About a document that does not exist at all.
+      await assertFails(
+        write(staff, "audit/fake-2", {
+          object: "batches/b-nosuch",
+          action: "update",
+          by: uid,
+          at: serverTimestamp(),
+        }),
+      );
+      // Beside a real write, but pointing at a different document.
+      await assertFails(
+        writeAudited(staff, "fake-3", `batches/${BATCH_REF}`, { source: "Beypore" }, {
+          object: "products/prawns-and-dates",
+          action: "update",
+          by: uid,
+          at: serverTimestamp(),
+        }),
+      );
+    }
+  });
+
+  it("is readable by all three admin roles, so every timeline (batch, order, customer) reads the same way", async () => {
+    await assertSucceeds(read(who.owner, "audit/aud-1"));
+    await assertSucceeds(read(who.kitchen, "audit/aud-1"));
+    await assertSucceeds(read(who.viewer, "audit/aud-1"));
+  });
+
+  /**
+   * The trail is worthless if the person who made the mistake can erase it
+   * (M2.6 report): every role that can write an entry is checked above
+   * ("is append-only") to be unable to edit or remove one once it exists, the
+   * Owner included, and neither the Kitchen nor the Viewer gets a create at
+   * all beyond what "either staff role" already proves for the Kitchen.
+   */
+  it("refuses a create from the Viewer, who never writes anything", async () => {
+    await assertFails(
+      write(who.viewer, "audit/new-5", {
+        object: `batches/${BATCH_REF}`,
+        action: "update",
+        by: VIEWER_UID,
+        at: serverTimestamp(),
+      }),
+    );
   });
 });
 

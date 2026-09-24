@@ -102,9 +102,27 @@ describe("paise arithmetic", () => {
     expect(() => rupeesToPaise(Number.POSITIVE_INFINITY)).toThrow();
   });
 
-  it("rounds half away from zero", () => {
-    expect(rupeesToPaise(6.495)).toBe(650);
-    expect(rupeesToPaise(-6.495)).toBe(-650);
+  // D42: finer than a paisa is refused, not rounded. 12.345 is either 12.34
+  // or 12.35 and only the person typing it knows which, so the function says
+  // no rather than picking one and storing it as though it were given.
+  it("refuses anything finer than a paisa rather than rounding it", () => {
+    expect(() => rupeesToPaise(12.345)).toThrow(/whole paise/);
+    expect(() => rupeesToPaise(6.495)).toThrow(/whole paise/);
+    expect(() => rupeesToPaise(-6.495)).toThrow(/whole paise/);
+    expect(() => rupeesToPaise(0.005)).toThrow(/whole paise/);
+  });
+
+  // The refusal is a check on the decimals, not a float comparison that
+  // happens to work: 0.1 * 100 is 10.000000000000002 in binary floating
+  // point, and ten paise is ten paise.
+  it("still takes every amount that is a whole number of paise", () => {
+    expect(rupeesToPaise(0)).toBe(0);
+    expect(rupeesToPaise(0.01)).toBe(1);
+    expect(rupeesToPaise(0.1)).toBe(10);
+    expect(rupeesToPaise(12.34)).toBe(1234);
+    expect(rupeesToPaise(12.35)).toBe(1235);
+    expect(rupeesToPaise(1234567.89)).toBe(123456789);
+    expect(rupeesToPaise(-12.34)).toBe(-1234);
   });
 
   it("converts back only for display", () => {

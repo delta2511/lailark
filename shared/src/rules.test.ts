@@ -15,12 +15,16 @@ const ALL_BATCH_FIELDS = [
   "createdAt",
   "updatedAt",
   "createdBy",
+  "batchNo",
   "productSlug",
+  "productName",
   "recipeId",
+  "mainIngredientName",
   "state",
   "plannedJars",
   "bookableJars",
   "perPersonLimit",
+  "perPersonLimitOverride",
   "priceOpen",
   "priceInStock",
   "paidCount",
@@ -41,6 +45,7 @@ const ALL_BATCH_FIELDS = [
   "fullReachedAt",
   "fullApprovedAt",
   "pausedReason",
+  "pausedFrom",
   "costs",
   "pnl",
 ];
@@ -72,13 +77,17 @@ describe("the batch field lists", () => {
       expect(isProtectedBatchField(f)).toBe(true);
     }
     expect(isProtectedBatchField("priceOpen")).toBe(false);
+    // D44: the computed quarter stays protected; the Owner's own cap beside
+    // it is his to type, on any batch, in any state.
+    expect(isProtectedBatchField("perPersonLimit")).toBe(true);
+    expect(isProtectedBatchField("perPersonLimitOverride")).toBe(false);
   });
 
   it("let the kitchen at weights, dates and costs and nothing else", () => {
     for (const f of ["weightRaw", "weightCleaned", "weightCooked", "costs", "landedOn"]) {
       expect(isKitchenBatchField(f)).toBe(true);
     }
-    for (const f of ["priceOpen", "plannedJars", "recipeId", "state"]) {
+    for (const f of ["priceOpen", "plannedJars", "recipeId", "state", "perPersonLimitOverride"]) {
       expect(isKitchenBatchField(f)).toBe(false);
     }
   });
@@ -86,6 +95,7 @@ describe("the batch field lists", () => {
   it("tell each screen what it may offer", () => {
     const owner = writableBatchFields("owner", ALL_BATCH_FIELDS);
     expect(owner).toContain("priceOpen");
+    expect(owner).toContain("perPersonLimitOverride");
     expect(owner).not.toContain("paidCount");
     expect(owner).not.toContain("state");
 

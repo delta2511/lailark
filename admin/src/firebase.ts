@@ -15,6 +15,7 @@ import {
   type Firestore,
 } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions, type Functions } from "firebase/functions";
+import { connectStorageEmulator, getStorage, type FirebaseStorage } from "firebase/storage";
 
 import { production, staging } from "./firebase-config";
 
@@ -34,6 +35,7 @@ const EMULATOR_HOST = "127.0.0.1";
 const AUTH_EMULATOR_PORT = 9099;
 const FIRESTORE_EMULATOR_PORT = 8080;
 const FUNCTIONS_EMULATOR_PORT = 5001;
+const STORAGE_EMULATOR_PORT = 9199;
 
 export const useEmulators: boolean =
   import.meta.env.DEV || import.meta.env.VITE_USE_EMULATORS === "1";
@@ -58,10 +60,18 @@ export const db: Firestore = initializeFirestore(app, {
 
 export const functions: Functions = getFunctions(app, REGION);
 
+/**
+ * Product photos (M2.2, Q8). Cloud Storage has never been started on either
+ * Firebase project, so in a deployable build this client simply has nowhere
+ * to write; it is only ever exercised against the emulator below.
+ */
+export const storage: FirebaseStorage = getStorage(app);
+
 if (useEmulators) {
   connectAuthEmulator(auth, `http://${EMULATOR_HOST}:${AUTH_EMULATOR_PORT}`, {
     disableWarnings: true,
   });
   connectFirestoreEmulator(db, EMULATOR_HOST, FIRESTORE_EMULATOR_PORT);
   connectFunctionsEmulator(functions, EMULATOR_HOST, FUNCTIONS_EMULATOR_PORT);
+  connectStorageEmulator(storage, EMULATOR_HOST, STORAGE_EMULATOR_PORT);
 }

@@ -22,7 +22,7 @@ import type { PermissionsSettings } from "./types/system.js";
 type BatchField = keyof Batch;
 
 /**
- * Fields on `batches/{nnn}` that no client may write, ever, in any role.
+ * Fields on `batches/{ref}` that no client may write, ever, in any role.
  *
  * Two kinds of field are on this list:
  *
@@ -32,16 +32,23 @@ type BatchField = keyof Batch;
  *   `paid + live holds + requested <= bookable` first (CLAUDE.md section 3).
  *   A client write here would oversell a batch.
  * - **Server computed.** `bookableJars` and `perPersonLimit` are arithmetic on
- *   `plannedJars`; `bestBefore` and `saleStopOn` are arithmetic on `packedOn`;
- *   `pnl` is kept current by a trigger; `state` and the four `...At` stamps
- *   are the lifecycle, moved only by the `transitionBatch` callable (M2.3) so
- *   the transition table in brief section 8.2 is the only way through.
+ *   `plannedJars` (D44 leaves `perPersonLimit` exactly that, and puts the
+ *   Owner's own cap in `perPersonLimitOverride` beside it, which is his to
+ *   write and so is deliberately **not** on this list); `bestBefore` and
+ *   `saleStopOn` are arithmetic on `packedOn`;
+ *   `pnl` is kept current by a trigger; `state`, `pausedFrom` and the four
+ *   `...At` stamps are the lifecycle, moved only by the `transitionBatch`
+ *   callable (M2.3) so the transition table in brief section 8.2 is the only
+ *   way through; and `batchNo` is the printed number, which decision D21c
+ *   allocates from `counters/batch` at Cooking -> Bottled and nowhere else. A
+ *   client that could write `batchNo` could print two jars with one number.
  *
  * The Owner has every right in the product and still cannot write these. That
  * is deliberate: the restriction is not about trust, it is about there being
  * exactly one code path that can make a count wrong.
  */
 export const PROTECTED_BATCH_FIELDS = [
+  "batchNo",
   "bestBefore",
   "bookableJars",
   "bottledJars",
@@ -51,6 +58,7 @@ export const PROTECTED_BATCH_FIELDS = [
   "halfReachedAt",
   "heldJars",
   "paidCount",
+  "pausedFrom",
   "perPersonLimit",
   "pnl",
   "saleStopOn",
@@ -61,13 +69,14 @@ export const PROTECTED_BATCH_FIELDS = [
 export type ProtectedBatchField = (typeof PROTECTED_BATCH_FIELDS)[number];
 
 /**
- * The only fields on `batches/{nnn}` the Kitchen role may change.
+ * The only fields on `batches/{ref}` the Kitchen role may change.
  *
  * Brief section 17.12 gives Kitchen "Move a batch through Sourcing, Cooking,
  * Bottled" and "Weights, costs, photos, updates". The move is a callable, not
  * a field write, so what is left for the rules is the sourcing note, the three
  * dates, the three weights and the packaging costs. Prices, planned jars, the
- * recipe and the product are the Owner's.
+ * recipe and the product are the Owner's, `perPersonLimitOverride` (D44)
+ * included.
  *
  * `updatedAt` and `updatedBy` are on the list because the admin's write
  * wrapper stamps them on every save (M2.6). Without them every kitchen save

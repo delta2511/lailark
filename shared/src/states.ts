@@ -35,19 +35,48 @@ export const BATCH_STATES_OPEN_FOR_BOOKING = ["open", "halfReached", "sourcing"]
 /** The batch states in which a bottled jar can be bought in stock at Rs 649. */
 export const BATCH_STATES_IN_STOCK = ["bottled", "inStock"] as const;
 
-/** A paused batch can resume only to the state it was paused from. */
-export const BATCH_STATES_PAUSABLE = ["open", "halfReached", "sourcing", "cooking"] as const;
+/**
+ * Every state a batch can be paused from, and so every state it can resume to.
+ *
+ * **Decision D23**, answering Q13. The brief contradicted itself: §8.2's
+ * transition table has a row "Any → Paused", while §8.1's diagram says
+ * "Paused ← from Open, Half reached, Sourcing or Cooking". Shefin's answer is
+ * §8.2's: a batch is pausable from Open, Half reached, Sourcing, Cooking, In
+ * stock and Sold out. In stock is the one that mattered: without it there was
+ * no way to freeze sales on a jar that turns out to be bad.
+ *
+ * The two states that are not here, and why:
+ *
+ *  - **Draft** is not on sale. There is nothing to freeze: a draft is not
+ *    published, no jar can be held against it and no customer knows it exists.
+ *    The Owner simply leaves it as a draft.
+ *  - **Archived** is closed, with its P&L locked by the state itself (§8.2).
+ *    Pausing it would reopen a batch whose books are shut.
+ *
+ * Resuming returns a batch to the state it was paused from, which the batch
+ * remembers in `pausedFrom`: it is not the Owner's choice at resume time.
+ */
+export const BATCH_STATES_PAUSABLE = [
+  "open",
+  "halfReached",
+  "sourcing",
+  "cooking",
+  "inStock",
+  "soldOut",
+] as const;
 
-/** Brief section 8.1 and the transition table in 8.2. */
+/** Brief section 8.1 and the transition table in 8.2, with D23's pause rows. */
 export const BATCH_TRANSITIONS: Readonly<Record<BatchState, readonly BatchState[]>> = {
+  // D23: a draft is not on sale, so there is nothing to pause.
   draft: ["open"],
   open: ["halfReached", "paused"],
   halfReached: ["sourcing", "paused"],
   sourcing: ["cooking", "paused"],
   cooking: ["bottled", "paused"],
   bottled: ["inStock", "soldOut"],
-  inStock: ["soldOut"],
-  soldOut: ["archived"],
+  inStock: ["soldOut", "paused"],
+  soldOut: ["archived", "paused"],
+  // D23: archived is closed and its P&L is locked. Nothing comes back out.
   archived: [],
   paused: [...BATCH_STATES_PAUSABLE],
 };
@@ -233,5 +262,7 @@ export const SETTINGS_NAMES = [
   "discountCap",
   "pincodes",
   "permissions",
+  // D24: the three customer messages, the Owner's to edit. See messages.ts.
+  "messages",
 ] as const;
 export type SettingsName = (typeof SETTINGS_NAMES)[number];

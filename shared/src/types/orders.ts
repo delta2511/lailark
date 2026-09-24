@@ -1,4 +1,4 @@
-/** `orders` and its events. Brief sections 9 and 18.1. */
+/** `orders`. Brief sections 9 and 18.1. */
 
 import type { Paise } from "../money.js";
 import type {
@@ -21,8 +21,13 @@ export interface DeliveryContact {
 
 export interface OrderLine {
   readonly productSlug: string;
-  /** The batch number, `"001"`. Null on a counter line with no batch. */
-  readonly batchNo: string | null;
+  /**
+   * The batch's internal reference, `"b-7f3a2c"`. Null on a counter line with
+   * no batch. D21c: a line is written while the batch is still open and has no
+   * printed number, and it keeps pointing at the same batch once bottling
+   * stamps one, because the reference never changes.
+   */
+  readonly batchRef: string | null;
   readonly qty: number;
   readonly unitPrice: Paise;
   readonly customDescription: string | null;
@@ -65,6 +70,14 @@ export interface Order extends BaseDoc {
   readonly placeOfSupply: string;
   readonly state: OrderState;
   readonly lines: readonly OrderLine[];
+  /**
+   * Every batch reference this order touches, flat, because Firestore cannot
+   * filter on a field inside an array of maps. `array-contains` on this is how
+   * the server finds the orders in a batch. D21c: references, never printed
+   * numbers, so an order placed while the batch was open still resolves to the
+   * same batch after bottling.
+   */
+  readonly batchRefs: readonly string[];
   readonly shippingFee: Paise;
   readonly discount: OrderDiscount | null;
   readonly total: Paise;
@@ -76,14 +89,4 @@ export interface Order extends BaseDoc {
   readonly draft: boolean;
   readonly soldBy: ActorId | null;
   readonly holdExpiresAt: Timestamp | null;
-}
-
-/** `orders/{id}/events/{id}`: the timeline. */
-export interface OrderEvent extends BaseDoc {
-  readonly type: string;
-  readonly from: OrderState | null;
-  readonly to: OrderState | null;
-  readonly note: string | null;
-  readonly by: ActorId;
-  readonly at: Timestamp;
 }

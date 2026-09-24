@@ -10,6 +10,69 @@ import { type CalDate, type CalDateInput, toCalDate } from "./dates.js";
 import { DOCUMENT_KINDS, type DocumentKind } from "./states.js";
 
 /* -------------------------------------------------------------------------- */
+/* The internal batch reference, decision D21c                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A batch has two names, and this is the first one.
+ *
+ * **Decision D21c.** The internal reference is fixed for the batch's whole
+ * life, from draft through booking, sourcing and cooking and forever after.
+ * It is the `batches/{id}` document id and it never changes, so no order,
+ * concern, approval, audit entry or subcollection ever has to be re-pointed
+ * when the printed number is stamped at bottling.
+ *
+ * The **printed** number (`formatBatchNo` below) is the other name: a field,
+ * `batchNo`, absent until the jars are bottled. Anything that resolves a batch
+ * by its printed number goes through that field, never through the id.
+ *
+ * Shape: `b-` plus six lowercase base32 characters, for example `b-7f3a2c`.
+ * Six characters is about a billion references, which is more than a home
+ * kitchen will cook in any number of lifetimes, and short enough that Shefin
+ * can read one off a screen and say it on the phone.
+ */
+export const BATCH_REF_PREFIX = "b-";
+export const BATCH_REF_LENGTH = 6;
+
+/**
+ * Crockford's base32, lowercased: the digits and the letters, minus `i`, `l`,
+ * `o` and `u`. Dropping those four is what stops `b-7f3a2c` being read back as
+ * something else off a screen or over a phone, and `u` goes so that no
+ * six-character reference can spell an unfortunate word by accident.
+ */
+export const BATCH_REF_ALPHABET = "0123456789abcdefghjkmnpqrstvwxyz";
+
+const BATCH_REF = new RegExp(`^${BATCH_REF_PREFIX}[${BATCH_REF_ALPHABET}]{${BATCH_REF_LENGTH}}$`);
+
+/** True for a canonical internal reference, `"b-7f3a2c"`. Strict about case. */
+export function isBatchRef(text: string): boolean {
+  return typeof text === "string" && BATCH_REF.test(text);
+}
+
+/**
+ * Builds a reference from bytes, so the randomness is the caller's and this
+ * stays a pure function the tests can pin.
+ *
+ * Each byte picks one character by `byte % 32`. The alphabet is 32 long and a
+ * byte has 256 values, exactly 8 per character, so no character is more likely
+ * than another and there is no modulo bias to correct for.
+ */
+export function batchRefFromBytes(bytes: ArrayLike<number>): string {
+  if (bytes.length < BATCH_REF_LENGTH) {
+    throw new RangeError(`a batch reference needs ${BATCH_REF_LENGTH} bytes, got ${bytes.length}`);
+  }
+  let out = BATCH_REF_PREFIX;
+  for (let i = 0; i < BATCH_REF_LENGTH; i += 1) {
+    const byte = bytes[i];
+    if (!Number.isInteger(byte) || byte < 0 || byte > 255) {
+      throw new RangeError(`byte ${i} is not a byte: ${byte}`);
+    }
+    out += BATCH_REF_ALPHABET[byte % BATCH_REF_ALPHABET.length];
+  }
+  return out;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Batch numbers, brief section 8.3                                           */
 /* -------------------------------------------------------------------------- */
 
@@ -19,6 +82,9 @@ import { DOCUMENT_KINDS, type DocumentKind } from "./states.js";
  * rather than changing the padding of everything before it, so "001" stays
  * "001" forever and jar 1000 is "1000". Numbers are global across products,
  * sequential, and never reused.
+ *
+ * D21c: this number is allocated at Cooking -> Bottled, not at Draft, and it
+ * lives in the `batchNo` field rather than in the document id.
  */
 export const BATCH_NO_MIN_DIGITS = 3;
 
@@ -52,6 +118,39 @@ export function isBatchNo(text: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * How a batch is named in anything a person reads: the printed number once
+ * there is one, the internal reference before that.
+ *
+ * D21c: `/batch/<nnn>` exists only from bottling and is always a record, so
+ * "batch 001" means jars that exist. Before bottling there is no number to
+ * show and the admin shows the reference instead, with the state in front of
+ * it where there is one: "draft b-7f3a2c".
+ *
+ *     batchLabel(null, "b-7f3a2c", "draft")  -> "draft b-7f3a2c"
+ *     batchLabel(null, "b-7f3a2c")           -> "batch b-7f3a2c"
+ *     batchLabel("001", "b-7f3a2c")          -> "batch 001"
+ */
+export function batchLabel(
+  batchNo: string | null | undefined,
+  ref: string,
+  state?: string | null,
+): string {
+  if (typeof batchNo === "string" && batchNo !== "") return `batch ${batchNo}`;
+  if (state === "draft") return `draft ${ref}`;
+  return `batch ${ref}`;
+}
+
+/** {@link batchLabel} with the first letter capitalised, to open a sentence. */
+export function batchLabelCapitalised(
+  batchNo: string | null | undefined,
+  ref: string,
+  state?: string | null,
+): string {
+  const label = batchLabel(batchNo, ref, state);
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 /* -------------------------------------------------------------------------- */

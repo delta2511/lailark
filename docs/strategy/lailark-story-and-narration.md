@@ -116,5 +116,5 @@ stories.
 
 1. Whether "for decades" ever becomes a number, which only Sumayya can answer.
 2. When Engattil enters, which is a Table decision that Lailark then follows.
-3. The batch 001 percentage question from the label doc, which is separate from the story
-   but sits on the same pages.
+3. ~~The batch 001 percentage question from the label doc.~~ Settled 19 Sep 2026 (D28): the
+   batch 001 page shows no percentages; from batch 002 it does.

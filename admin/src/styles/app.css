@@ -253,7 +253,22 @@ button.quiet {
   font-weight: 600;
 }
 
+/* Sell is the one dark pill in the bar, so it is the one that has to beat
+   `.bottom-bar-item.active`, which sets `color: var(--ink)` for every other
+   tab's active state.
+
+   M2.22: it did not, and the reason is duller than a specificity fight. This
+   rule already ties `.bottom-bar-item.active` at two classes (0,2,0) and
+   already sits later in the file, so it wins every property it declares,
+   which is how `text-decoration` and `outline` are settled below. It simply
+   never declared `color`. So the only rule saying anything about the colour
+   of an active Sell label was `.bottom-bar-item.active`, which set ink, over
+   a background that stayed ink: contrast 1:1, exactly while Sell was the tab
+   you were on. One declaration closes it. No `!important`, and
+   `.bottom-bar-item.active` is untouched: it is correct for the other four
+   tabs, which are ink on paper. */
 .bottom-bar-item-sell.active {
+  color: var(--paper);
   text-decoration: none;
   outline: var(--focus-ring);
   outline-offset: 2px;
@@ -346,4 +361,754 @@ button.quiet {
   left: 0;
   width: 0;
   height: 0;
+}
+
+/* ---- Products: ingredients and recipes (M2.1) ---- */
+
+.products,
+.detail {
+  padding-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tab-row,
+.basis-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/*
+ * A chip is a quiet toggle: ink on paper, ink on ink when it is on. Never
+ * rust, which is a number colour only (Flow section 10).
+ */
+.chip {
+  width: auto;
+  flex: 0 1 auto;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+}
+
+.chip-on {
+  color: var(--paper);
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.field-help {
+  margin: 0 0 var(--space-2);
+  color: var(--grey);
+  font-size: var(--font-size-small);
+}
+
+.notice-line {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--ink);
+  background: var(--hairline);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-small);
+}
+
+.more-row-aside {
+  color: var(--grey);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+
+.section-heading {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: var(--font-size-heading-sm);
+  line-height: var(--line-height-heading);
+  margin: var(--space-4) 0 0;
+}
+
+.label-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.label-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label-text {
+  margin: 0;
+}
+
+/* Leaf only ever touches a claim (CLAUDE.md section 3). */
+.claim-text {
+  color: var(--leaf);
+}
+
+.percent-list,
+.line-list,
+.drift-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.percent-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.percent-name {
+  font-size: var(--font-size-small);
+}
+
+/* Rust is the number colour, and these are numbers. */
+.percent-value,
+.field-value.number {
+  color: var(--rust);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.drift-list li {
+  padding: var(--space-1) 0;
+  color: var(--grey);
+  font-size: var(--font-size-small);
+}
+
+.line-row {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  color: var(--ink);
+  font-size: var(--font-size-body);
+}
+
+.check-row input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+select,
+textarea {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0.7rem 0.85rem;
+  font-family: var(--font-body);
+  font-size: var(--font-size-body);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+
+textarea {
+  line-height: var(--line-height-body);
+  resize: vertical;
+}
+
+/* ---- Products: the products tab (M2.2) ---- */
+
+/* The undo toast, brief section 17.1: fixed to the bottom of the content
+   area so it never covers the bottom bar, and never rust (a toast is not a
+   number). */
+.undo-toast {
+  position: sticky;
+  bottom: var(--space-2);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  color: var(--paper);
+  background: var(--ink);
+  border-radius: var(--radius-md);
+}
+
+.undo-toast-message {
+  margin: 0;
+  font-size: var(--font-size-small);
+}
+
+/* The Undo button is the one button in the admin that sits on a dark
+   surface, so it is the one that has to beat `button.quiet`.
+
+   M2.21: it did not, and the label was invisible from M2.6 until now. The
+   markup is `class="quiet undo-toast-button"`, and `button.quiet` is an
+   element plus a class (0,1,1) against a bare class (0,1,0), so the quiet
+   rule won and the background stayed transparent: ink on the toast's own
+   ink, contrast 1:1, an empty rounded outline where the word should be. The
+   selector below carries the element too, which ties on specificity and sits
+   later in the file, so it wins the way this stylesheet settles every other
+   tie. No `!important`, and `button.quiet` is untouched: it is correct
+   everywhere else it is used, which is always on paper. */
+button.undo-toast-button {
+  width: auto;
+  min-height: 36px;
+  padding: var(--space-1) var(--space-3);
+  color: var(--ink);
+  background: var(--paper);
+  border-color: var(--paper);
+}
+
+/* The global focus ring is `2px solid var(--ink)` at a 2px offset, which puts
+   an ink ring on the ink toast: invisible for the same reason the label was.
+   On this one surface the ring is paper. */
+button.undo-toast-button:focus-visible {
+  outline: 2px solid var(--paper);
+}
+
+.photo-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.photo-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.photo-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: 96px;
+}
+
+.photo-thumb {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+.photo-note-tag {
+  font-size: var(--font-size-small);
+  color: var(--grey);
+}
+
+.photo-upload-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ---- Batches (M2.4, brief section 17.4) ---- */
+
+.batches {
+  padding-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.batch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.batch-card {
+  width: 100%;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+
+.batch-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.batch-card-label {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-heading-sm);
+}
+
+.batch-card-product {
+  margin: 0;
+  color: var(--grey);
+  font-size: var(--font-size-small);
+}
+
+.batch-card-bottom {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-6);
+}
+
+/* A state chip is a label, not a toggle: never rust, which is a number
+   colour only (Flow section 10). */
+.state-chip {
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  width: fit-content;
+  color: var(--ink);
+  background: var(--hairline);
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+}
+
+.approval-badge,
+.clock-pill {
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  width: fit-content;
+  color: var(--paper);
+  background: var(--ink);
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+}
+
+/* ---- The fill bar, brief 17.4: paid of bookable, half mark drawn ---- */
+
+.fill-bar {
+  width: 100%;
+  margin: var(--space-1) 0;
+}
+
+.fill-bar-track {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  background: var(--hairline);
+  border-radius: 999px;
+  overflow: visible;
+}
+
+/* Rust is the number colour (Flow section 10); this bar visualises a count
+   of jars, the same way a percentage figure does elsewhere on screen. */
+.fill-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  min-width: 0;
+  background: var(--rust);
+  border-radius: 999px;
+}
+
+.fill-bar-half-mark {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 16px;
+  background: var(--ink);
+  transform: translateX(-1px);
+}
+
+.fill-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.fill-numbers .settings-field {
+  min-width: 6rem;
+}
+
+/* ---- Batch detail ---- */
+
+.batch-detail-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.state-button-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.state-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* The one big state button, brief 17.4: taller and larger than a normal
+   button, so it reads as the primary action on the screen. Never rust,
+   which is a number colour only. */
+.state-button {
+  min-height: calc(var(--tap) + var(--space-3));
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.pause-form,
+.full-approval {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.drift-section {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.pnl-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.pnl-numbers .settings-field {
+  min-width: 8rem;
+}
+
+/* ---- Today (M2.5, brief section 17.2): Waiting on you, and the clocks ---- */
+
+.today {
+  padding-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.today-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.approval-list,
+.clock-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.approval-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+
+.approval-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.approval-batch {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-heading-sm);
+}
+
+.approval-ask {
+  margin: 0;
+}
+
+/* The message a customer would read, set apart from the admin's own words so
+   the two can never be mistaken for each other on a small screen. */
+.approval-message {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--hairline);
+  color: var(--ink);
+}
+
+.approval-answers,
+.approval-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.clock-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.clock-batch {
+  font-family: var(--font-heading);
+}
+
+.clock-kind {
+  color: var(--grey);
+  font-size: var(--font-size-small);
+}
+
+/* Rust is a number colour (Flow section 10), and days left is a number. */
+.clock-left {
+  margin-left: auto;
+  color: var(--rust);
+}
+
+.clock-row.overdue .clock-left {
+  font-weight: 600;
+}
+
+/* ── Timeline (M2.6) ────────────────────────────────────────────────────── */
+/*
+ * The history of one document. Read-only, and deliberately quiet: it sits
+ * under the working parts of a screen and is there when somebody asks "who
+ * changed that", not before. No Rust anywhere here, because nothing on a
+ * timeline is a number you act on.
+ */
+.timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timeline-entry {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.timeline-entry:first-child {
+  border-top: none;
+}
+
+.timeline-line {
+  margin: 0;
+  color: var(--ink);
+}
+
+.timeline-meta {
+  margin: var(--space-1) 0 0;
+  color: var(--grey);
+  font-size: var(--font-size-small);
+}
+
+/* ---- Sell: the New sale screen and today's counter sales (M2.8) ---- */
+
+.sell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+.new-sale,
+.sale-done {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/*
+ * One step of brief 7A.1, top to bottom. Each is its own block so the screen
+ * reads in the order the sale happens rather than as one long form.
+ */
+.sale-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sale-step .section-heading {
+  margin-top: 0;
+}
+
+.sale-address {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+/*
+ * "The total shows large" (7A.1 step 3). Rust, because it is a number, and a
+ * number is the only thing rust is ever allowed to be (CLAUDE.md section 3).
+ */
+.sale-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+.sale-total-value {
+  color: var(--rust);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--font-size-heading-lg);
+  line-height: var(--line-height-heading);
+}
+
+/* The numbers one typing slip away, offered rather than guessed at. */
+.near-misses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+
+.near-miss-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.near-miss-list li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-1) 0;
+}
+
+.todays-sales {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sale-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sale-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+
+.sale-row-top,
+.sale-row-bottom {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.sale-row-what {
+  font-size: var(--font-size-body);
+}
+
+/*
+ * M2.9: the bill's number and the one tap that opens it. The number is a
+ * number, so it takes the number colour; the button beside it is quiet, the
+ * way the Void button is, because neither is the thing this screen is for.
+ */
+.sale-row-bill {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.void-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--hairline);
+}
+
+/*
+ * Brief 7A.6, Owner only: the way past a per-person limit, offered only once
+ * the limit has actually refused a sale. Quiet, beside the refusal it
+ * overrules, never a standing switch.
+ */
+.override-limit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/*
+ * M2.15: what the save button is waiting on, named. Same border-left-on-
+ * hairline notice language as `.notice-line` (never rust, never a red
+ * alarm), so a busy counter reads it as information, not a warning.
+ */
+.outstanding {
+  border-left: 3px solid var(--ink);
+  background: var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.outstanding-list {
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/*
+ * A tap target the size of any other button on the screen (D-house rule:
+ * every button is thumb sized), just quiet, so a long list of outstanding
+ * items reads as a list of things to do, not a wall of alarms.
+ */
+.outstanding-item {
+  text-align: left;
+  font-size: var(--font-size-small);
 }

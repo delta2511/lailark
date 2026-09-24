@@ -46,7 +46,24 @@ export function isPaise(value: unknown): value is Paise {
 
 /**
  * For the one place rupees are legitimate: a number typed by a human into the
- * admin. Rounds half away from zero, so 6.495 becomes 650 paise, not 649.
+ * admin.
+ *
+ * Refuses anything finer than a paisa rather than rounding it (D42). It used
+ * to round half away from zero, so 12.345 was stored as 1235 and nobody was
+ * told: a third decimal in a money box is a slip or a paste, and a function
+ * that quietly picks one of the two neighbouring paise is a function that
+ * makes the number up. The caller decides what to do with the refusal;
+ * `parseRupeesToPaise` in the admin turns it into "that is not a cost yet"
+ * and the box says so.
+ *
+ * The comparison is not `Number.isInteger(rupees * PAISE_PER_RUPEE)`, because
+ * that is false for 0.1: binary floating point makes 0.1 * 100 exactly
+ * 10.000000000000002, and refusing ten paise would be absurd. So the scaled
+ * value is rounded first and the two are compared within a tolerance: wide
+ * enough to swallow the representation error, and capped at a thousandth of a
+ * paisa so it can never reach the half paisa that separates 12.34 from 12.35,
+ * however large the amount. Past that cap the error is the number itself
+ * being too big to hold exactly, and a refusal is the right answer anyway.
  */
 export function rupeesToPaise(rupees: number): Paise {
   if (!Number.isFinite(rupees)) {
@@ -54,6 +71,10 @@ export function rupeesToPaise(rupees: number): Paise {
   }
   const scaled = rupees * PAISE_PER_RUPEE;
   const rounded = scaled < 0 ? -Math.round(-scaled) : Math.round(scaled);
+  const tolerance = Math.min(1e-3, Math.max(1e-6, Math.abs(scaled) * 1e-12));
+  if (Math.abs(scaled - rounded) > tolerance) {
+    throw new RangeError(`rupees must be whole paise, got ${rupees}`);
+  }
   return assertPaise(rounded, "rupees");
 }
 

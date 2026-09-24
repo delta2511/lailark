@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   BATCH_NO_MIN_DIGITS,
+  BATCH_REF_ALPHABET,
+  BATCH_REF_LENGTH,
+  BATCH_REF_PREFIX,
+  batchLabel,
+  batchLabelCapitalised,
+  batchRefFromBytes,
   counterId,
   DEFAULT_DOCUMENT_PREFIXES,
   DOCUMENT_NO_MIN_DIGITS,
@@ -13,6 +19,7 @@ import {
   formatDocumentNumber,
   fromDocumentId,
   isBatchNo,
+  isBatchRef,
   isDocumentNumber,
   isFinancialYearLabel,
   parseBatchNo,
@@ -22,6 +29,75 @@ import {
 } from "./numbers.js";
 import { formatCalDate } from "./dates.js";
 import { DOCUMENT_KINDS } from "./states.js";
+
+describe("the internal batch reference, decision D21c", () => {
+  it("is `b-` plus six lowercase base32 characters", () => {
+    expect(BATCH_REF_PREFIX).toBe("b-");
+    expect(BATCH_REF_LENGTH).toBe(6);
+    expect(isBatchRef("b-7f3a2c")).toBe(true);
+    expect(isBatchRef("b-000000")).toBe(true);
+    expect(isBatchRef("b-zzzzzz")).toBe(true);
+  });
+
+  it("drops the four characters that are read back wrong", () => {
+    // Crockford's base32: no i, l, o or u.
+    for (const bad of ["i", "l", "o", "u"]) {
+      expect(BATCH_REF_ALPHABET).not.toContain(bad);
+      expect(isBatchRef(`b-aaaaa${bad}`)).toBe(false);
+    }
+    expect(BATCH_REF_ALPHABET.length).toBe(32);
+    expect(new Set(BATCH_REF_ALPHABET).size).toBe(32);
+  });
+
+  it("refuses anything that is not one, including a batch number", () => {
+    for (const bad of ["001", "b-7f3a2", "b-7f3a2cd", "B-7F3A2C", "7f3a2c", "b_7f3a2c", "", "b-"]) {
+      expect(isBatchRef(bad), bad).toBe(false);
+    }
+  });
+
+  it("builds one from bytes, uniformly, with no modulo bias", () => {
+    expect(batchRefFromBytes([0, 1, 2, 3, 4, 5])).toBe("b-012345");
+    // 256 is exactly eight times 32, so every byte value maps to a character
+    // and every character is hit the same number of times.
+    const counts = new Map<string, number>();
+    for (let byte = 0; byte < 256; byte += 1) {
+      const ch = batchRefFromBytes([byte, 0, 0, 0, 0, 0]).charAt(2);
+      counts.set(ch, (counts.get(ch) ?? 0) + 1);
+    }
+    expect(counts.size).toBe(32);
+    expect([...counts.values()]).toEqual(Array(32).fill(8));
+  });
+
+  it("only ever builds a reference that parses back", () => {
+    for (let i = 0; i < 64; i += 1) {
+      const bytes = Array.from({ length: 6 }, (_, k) => (i * 7 + k * 31) % 256);
+      expect(isBatchRef(batchRefFromBytes(bytes))).toBe(true);
+    }
+  });
+
+  it("refuses to build one from too few bytes, or from something that is not a byte", () => {
+    expect(() => batchRefFromBytes([1, 2, 3])).toThrow(/6 bytes/);
+    expect(() => batchRefFromBytes([1, 2, 3, 4, 5, 300])).toThrow(/not a byte/);
+    expect(() => batchRefFromBytes([1, 2, 3, 4, 5, -1])).toThrow(/not a byte/);
+  });
+});
+
+describe("how a batch is named for a person, decision D21c", () => {
+  it("shows the printed number once there is one", () => {
+    expect(batchLabel("001", "b-7f3a2c")).toBe("batch 001");
+    expect(batchLabel("001", "b-7f3a2c", "bottled")).toBe("batch 001");
+    expect(batchLabelCapitalised("001", "b-7f3a2c")).toBe("Batch 001");
+  });
+
+  it("shows the reference before bottling, with the state in front of a draft", () => {
+    expect(batchLabel(null, "b-7f3a2c", "draft")).toBe("draft b-7f3a2c");
+    expect(batchLabel(null, "b-7f3a2c", "open")).toBe("batch b-7f3a2c");
+    expect(batchLabel(null, "b-7f3a2c")).toBe("batch b-7f3a2c");
+    expect(batchLabel(undefined, "b-7f3a2c")).toBe("batch b-7f3a2c");
+    expect(batchLabel("", "b-7f3a2c")).toBe("batch b-7f3a2c");
+    expect(batchLabelCapitalised(null, "b-7f3a2c", "draft")).toBe("Draft b-7f3a2c");
+  });
+});
 
 describe("batch numbers, brief 8.3", () => {
   it("zero pads to three digits", () => {

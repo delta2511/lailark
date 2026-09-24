@@ -6,4 +6,14 @@
 import "./lib/options";
 
 export { api } from "./api";
+export { answerApproval } from "./approvals";
 export { setRole } from "./auth";
+export { createCounterSale, voidCounterSale } from "./orders";
+export { billForOrder, onDocumentIssued } from "./money";
+export {
+  approveBatchFull,
+  onBatchUpdateWritten,
+  onBatchWritten,
+  onOrderWritten,
+  transitionBatch,
+} from "./batches";

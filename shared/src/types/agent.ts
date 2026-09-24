@@ -40,7 +40,12 @@ export interface Concern extends BaseDoc {
   readonly type: ConcernType;
   readonly customerPhone: PhoneE164 | null;
   readonly orderId: string | null;
-  readonly batchNo: string | null;
+  /**
+   * The batch's internal reference, `"b-7f3a2c"`, or null. D21c: never the
+   * printed number, so a concern raised on an open batch still points at the
+   * same document after bottling stamps that batch's `batchNo`.
+   */
+  readonly batchRef: string | null;
   readonly summary: string;
   readonly proposal: string | null;
   readonly draftMessage: string | null;
@@ -57,11 +62,54 @@ export interface Concern extends BaseDoc {
 /** `approvals/{id}`: nothing goes to a customer without one. */
 export interface Approval extends BaseDoc {
   readonly kind: ApprovalKind;
-  readonly batchNo: string | null;
+  /**
+   * The batch's internal reference, `"b-7f3a2c"`, or null. D21c: an approval
+   * is raised long before the batch has a printed number, and is never
+   * re-pointed when it gets one.
+   */
+  readonly batchRef: string | null;
   readonly draft: string;
   readonly status: ApprovalStatus;
   readonly answeredBy: ActorId | null;
   readonly at: Timestamp | null;
+  /**
+   * Brief 7.3's second answer: "Not yet, with a reason". The reason the Owner
+   * typed, kept as the record of why nothing was sent. It stays on the
+   * document after a later yes, because "we waited a week for prawns" is the
+   * history of the batch, not a field that stops being true.
+   */
+  readonly reason: string | null;
+  /**
+   * When a deferred approval comes back to Today: brief 7.3's "the card comes
+   * back next morning". Null on an approval nobody has deferred, and cleared
+   * when it is finally answered.
+   */
+  readonly remindAt: Timestamp | null;
+  /**
+   * `batches/{batchRef}/updates/{updateId}` for a `photoUpdate` approval, and
+   * null for every other kind. Decision D5: the Kitchen writes the photo and
+   * the line, and the Owner's yes here is what stamps `approvedBy` on it.
+   */
+  readonly updateId: string | null;
+  /**
+   * The production clock this approval starts: five days at half reached,
+   * three days once the batch is full (brief 7.3 and 8.2). Null for an
+   * approval with no clock, such as a broadcast offer.
+   */
+  readonly dueAt: Timestamp | null;
+  /**
+   * The approval whose clock replaced this one's, or null. Brief §8.2: "3-day
+   * production clock replaces the 5-day" once the batch is full, so the half
+   * approval's `dueAt` is cleared and this says by what. Never more than one
+   * clock is live on a batch at a time.
+   */
+  readonly dueAtSupersededBy: string | null;
+  /**
+   * When the approved message actually went out. An approved approval with no
+   * `sentAt` is the "recorded as sent-pending" of M2.5: the Owner has said
+   * yes, and sending itself arrives in M5.
+   */
+  readonly sentAt: Timestamp | null;
 }
 
 /** `notify/{id}`: the notify-me list. */
