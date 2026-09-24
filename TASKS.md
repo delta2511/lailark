@@ -325,7 +325,7 @@ and the live webhook before the production deploy.
       header with the lark mark, footer with the legal line and the Orders link. Done
       when: a Storybook-free demo route renders every primitive and Playwright checks no
       external requests.
-- [x] M3.2 [opus] Home page. (copy review PASS on round 2; tester defect fixed; Lighthouse mobile 89) Order and copy from the story doc §5 and the flow doc,
+- [x] M3.2 [opus] Home page. (5c2394d; copy review PASS on round 2; tester defect fixed; Lighthouse mobile 89) Order and copy from the story doc §5 and the flow doc,
       video hero as in the video doc, the abroad line (brief §11.6) with a `wa.me` link,
       the "no stock, only leftovers" sentence. Copy written by the builder, reviewed by
       a second opus subagent against the story doc §3 (held-back list) and §4 (voice).
