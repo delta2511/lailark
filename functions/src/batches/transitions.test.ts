@@ -86,7 +86,7 @@ function context(over: Partial<TransitionContext> = {}): TransitionContext {
     batch: batchView(),
     siblings: [],
     paidOrders: [],
-    mainIngredientId: "prawns",
+    mainLines: [{ ingredientId: "prawns", lineId: "prawns" }],
     // Every bottling in these tests is handed the number its transaction took
     // from `counters/batch`, exactly as the callable hands it down (D21c).
     allocatedBatchNo: "001",
@@ -772,9 +772,131 @@ describe("sourcing -> cooking: the kitchen starts the pot", () => {
 
   it("falls back to a plain main line when the recipe has no main ingredient", () => {
     const value = ok(
-      plan({ ref: REF, to: "cooking", data: cookingInputs() }, { ...sourcing, mainIngredientId: null }),
+      plan({ ref: REF, to: "cooking", data: cookingInputs() }, { ...sourcing, mainLines: [] }),
     ).value;
     expect(value.lines[0]).toMatchObject({ id: "main", ingredientId: "main" });
+  });
+
+  /* ---- D41: one weight and one cost per main ingredient ----------------- */
+
+  /**
+   * M2.19. Brief 14.1 asks for "the main ingredient's" raw weight and price,
+   * which assumes one. Batch 001's recipe names two, prawns and dates, and
+   * the step recorded only the first: the dates bought for the batch were
+   * never costed here at all.
+   */
+  describe("a recipe with two main ingredients (batch 001's shape)", () => {
+    const twoMain = {
+      ...sourcing,
+      mainLines: [
+        { ingredientId: "prawns", lineId: "prawns" },
+        { ingredientId: "dates", lineId: "dates" },
+      ],
+    };
+
+    const bothMains = {
+      landedOn: "2026-09-01",
+      source: "Beypore harbour",
+      mains: [
+        { ingredientId: "prawns", weightRaw: 12000, costRaw: 480000 },
+        { ingredientId: "dates", weightRaw: 1000, costRaw: 30000 },
+      ],
+    };
+
+    it("writes a line for each of them, with its own weight and cost", () => {
+      const value = ok(plan({ ref: REF, to: "cooking", data: bothMains }, twoMain)).value;
+      expect(value.lines).toEqual([
+        { id: "prawns", ingredientId: "prawns", qtyActual: 12000, costActual: 480000 },
+        { id: "dates", ingredientId: "dates", qtyActual: 1000, costActual: 30000 },
+      ]);
+    });
+
+    it("puts the total raw weight and the total cost on the batch", () => {
+      const value = ok(plan({ ref: REF, to: "cooking", data: bothMains }, twoMain)).value;
+      expect(value.patch.weightRaw).toBe(13000);
+      expect(value.computed.costRaw).toBe(510000);
+    });
+
+    it("refuses the old flat pair, which is the shape that lost the dates", () => {
+      const refusal = refused(plan({ ref: REF, to: "cooking", data: cookingInputs() }, twoMain));
+      expect(refusal.message).toContain("prawns, dates");
+    });
+
+    it("refuses a list that names an ingredient the recipe does not, in that place", () => {
+      const swapped = {
+        ...bothMains,
+        mains: [bothMains.mains[1], bothMains.mains[0]],
+      };
+      expect(refused(plan({ ref: REF, to: "cooking", data: swapped }, twoMain)).ok).toBe(false);
+    });
+
+    it("refuses a list that leaves one of them out", () => {
+      const half = { ...bothMains, mains: [bothMains.mains[0]] };
+      expect(refused(plan({ ref: REF, to: "cooking", data: half }, twoMain)).message).toContain("2");
+    });
+
+    it("refuses rupees, a fraction of a paisa and a negative cost", () => {
+      for (const costRaw of [4800.5, -1, 300.25]) {
+        const data = {
+          ...bothMains,
+          mains: [bothMains.mains[0], { ingredientId: "dates", weightRaw: 1000, costRaw }],
+        };
+        expect(refused(plan({ ref: REF, to: "cooking", data }, twoMain)).ok).toBe(false);
+      }
+    });
+
+    it("refuses a weight of zero or less", () => {
+      for (const weightRaw of [0, -5]) {
+        const data = {
+          ...bothMains,
+          mains: [bothMains.mains[0], { ingredientId: "dates", weightRaw, costRaw: 30000 }],
+        };
+        expect(refused(plan({ ref: REF, to: "cooking", data }, twoMain)).ok).toBe(false);
+      }
+    });
+
+    it("refuses both shapes at once, so no figure is quietly dropped", () => {
+      const both = { ...bothMains, weightRaw: 12000, costRaw: 480000 };
+      expect(refused(plan({ ref: REF, to: "cooking", data: both }, twoMain)).ok).toBe(false);
+    });
+  });
+
+  /**
+   * The half of D41 most likely to break quietly: a one main recipe is what
+   * every batch before this one used, and it has to write exactly what it
+   * wrote before, from either shape.
+   */
+  describe("a recipe with one main ingredient", () => {
+    const named = {
+      landedOn: "2026-09-01",
+      source: "Beypore harbour",
+      mains: [{ ingredientId: "prawns", weightRaw: 12000, costRaw: 480000 }],
+    };
+
+    it("writes the same line and the same batch fields from either shape", () => {
+      const flat = ok(plan({ ref: REF, to: "cooking", data: cookingInputs() }, sourcing)).value;
+      const perMain = ok(plan({ ref: REF, to: "cooking", data: named }, sourcing)).value;
+      expect(perMain.lines).toEqual(flat.lines);
+      expect(perMain.patch).toEqual(flat.patch);
+      expect(perMain.computed).toEqual(flat.computed);
+      expect(flat.patch.weightRaw).toBe(12000);
+      expect(flat.computed.costRaw).toBe(480000);
+    });
+
+    it("still refuses a list naming an ingredient the recipe does not have", () => {
+      const wrong = { ...named, mains: [{ ingredientId: "squid", weightRaw: 1, costRaw: 1 }] };
+      expect(refused(plan({ ref: REF, to: "cooking", data: wrong }, sourcing)).ok).toBe(false);
+    });
+
+    it("refuses mains for a recipe that names no main ingredient (Q16 untouched)", () => {
+      const noMain = { ...sourcing, mainLines: [] };
+      expect(refused(plan({ ref: REF, to: "cooking", data: named }, noMain)).ok).toBe(false);
+      // And the flat pair still writes the placeholder line it always did.
+      const value = ok(plan({ ref: REF, to: "cooking", data: cookingInputs() }, noMain)).value;
+      expect(value.lines).toEqual([
+        { id: "main", ingredientId: "main", qtyActual: 12000, costActual: 480000 },
+      ]);
+    });
   });
 
   it("asks for the landed date, the source, the raw weight and the cost", () => {

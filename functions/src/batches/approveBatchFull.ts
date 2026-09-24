@@ -81,7 +81,7 @@ export const approveBatchFull = onCall(
         batch,
         siblings: [],
         paidOrders: [],
-        mainIngredientId: null,
+        mainLines: [],
         existingApprovalDraft,
         nowMillis: Date.now(),
       };

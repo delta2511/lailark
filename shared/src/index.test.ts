@@ -202,6 +202,9 @@ const EXPECTED_EXPORTS = [
   "verifyAgainstPrintedLabel",
   "INGREDIENT_ACTUAL_DRIFT_THRESHOLD_PERCENT",
   "ingredientActualDrift",
+  // batch lines (M2.13, D41): one id scheme for the screen and the server
+  "batchLineIds",
+  "mainBatchLines",
   // catalogue
   "isValidMonthDay",
   "isWithinSeasonWindow",

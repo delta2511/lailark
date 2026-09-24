@@ -696,3 +696,24 @@ break.
   have stopped matching on a single reworded comma and sent the script back to crying wolf
   about the one page that is printed on jars. Stripping percentages is what D28 actually
   says, so it keeps working for batch 002 on, where the percentages do appear. Status: open.
+- A134 (M2.19, 24 Sep): the batch's own `weightRaw` is the sum of the main ingredients'
+  raw weights. Brief §14.1 wrote one raw weight because it assumed one main ingredient;
+  with two, the figure that belongs beside the cleaned and cooked weights is the total
+  that went into the pot. A one-main recipe gets exactly the number it got before.
+  Status: open, and worth Shefin's eye at the M2 break.
+- A135 (M2.19, 24 Sep): the line-id scheme moved out of `admin/src/batches/lineIds.ts`
+  into `shared/src/batchLines.ts`, so the server derives the same ids the screen reads.
+  Two implementations of that rule would be the bug: an id the server writes and an id the
+  screen reads have to be the same string, or the money sits in a document nobody edits.
+  The screen keeps only what is screen-only, the legacy `lines/main` adoption and the
+  orphan report. Status: open.
+- A136 (M2.19, 24 Sep): the flat `weightRaw`/`costRaw` pair is still accepted for a recipe
+  with one main ingredient or none, and refused for two or more. That shape is exactly what
+  lost the dates, so it is refused where it would lose money and kept where it cannot.
+  Status: open.
+- A137 (M2.19, 24 Sep): the server checks the ingredient names the client sent against the
+  recipe it reads inside the transaction, and writes to ids it derives itself, so a stale
+  client cannot put a cost on the wrong ingredient. Status: open.
+- A138 (M2.19, 24 Sep): `recipeLoading` is threaded from `Batches.tsx` through
+  `BatchDetail.tsx`, because a recipe still loading is not the same as a recipe with no
+  main ingredient. The form waits rather than sending the wrong shape. Status: open.

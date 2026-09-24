@@ -53,6 +53,8 @@ const REF_MONEY = "b-m24mny";
 const REF_BLANK = "b-m24bnk";
 const REF_COSTS = "b-m24cst";
 const REF_TWO_MAIN = "b-m242mn";
+// M2.19 (D41): the Sourcing to Cooking step on a two main recipe.
+const REF_SOURCE_2MN = "b-m24s2m";
 const REF_LEGACY = "b-m24lgc";
 const REF_WINDOW = "b-m24wnd";
 const REF_ORPHAN = "b-m24orp";
@@ -74,6 +76,7 @@ const ALL_REFS = [
   REF_BLANK,
   REF_COSTS,
   REF_TWO_MAIN,
+  REF_SOURCE_2MN,
   REF_LEGACY,
   REF_WINDOW,
   REF_ORPHAN,
@@ -343,8 +346,11 @@ test("Kitchen walks a batch through Sourcing, Cooking and Bottled", async ({ pag
   // are recorded here, and become the prawns line's actual).
   await page.getByTestId("state-field-landedOn").fill("2026-09-01");
   await page.getByTestId("state-field-source").fill("Beypore harbour");
-  await page.getByTestId("state-field-weightRaw").fill("2000");
-  await page.getByTestId("state-field-costRaw").fill("800");
+  // D41: the boxes are asked once per main ingredient and name it. This
+  // recipe has one, so there is one pair, which is what the step always had.
+  await expect(page.getByTestId("state-form")).toContainText("M24 Prawns");
+  await page.getByTestId(`state-field-weightRaw-${PRAWNS}`).fill("2000");
+  await page.getByTestId(`state-field-costRaw-${PRAWNS}`).fill("800");
   await page.getByTestId("state-button").click();
 
   await expect(page.getByTestId("detail-state-chip")).toHaveText(BATCHES.stateLabel.cooking);
@@ -478,6 +484,73 @@ test("two main ingredients take two independent weights and costs", async ({ pag
   await expect
     .poll(async () => await readDocument(`batches/${REF_TWO_MAIN}/lines/${DATES}`))
     .toMatchObject({ ingredientId: DATES, qtyActual: 1100, costActual: 40_000 });
+});
+
+/* -------------------------------------------------------------------------- */
+/* D41: Sourcing to Cooking asks for every main ingredient, by name           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * M2.19. Brief 14.1 asks for "the main ingredient's" raw weight and price,
+ * which assumes one. Batch 001 has two, prawns and dates, and the step
+ * recorded only the first: one unnamed pair of boxes, one line document, and
+ * the dates bought for the batch never costed at this step at all. The form
+ * now asks once per main line and names the ingredient it is asking about.
+ */
+test("Sourcing to Cooking asks for prawns and for dates, and writes both lines", async ({
+  page,
+}) => {
+  await seedBatch(REF_SOURCE_2MN, {
+    productSlug: PRODUCT,
+    productName: "M24 Prawns Pickle",
+    recipeId: RECIPE_TWO_MAIN,
+    mainIngredientName: "M24 Prawns",
+    state: "sourcing",
+    plannedJars: 22,
+    bookableJars: 19,
+    perPersonLimit: 4,
+    paidCount: 10,
+  });
+
+  await signIn(page, KITCHEN_PHONE);
+  await openBatch(page, REF_SOURCE_2MN);
+
+  // Both ingredients are named on the form, not just the first one.
+  const form = page.getByTestId("state-form");
+  await expect(form).toContainText("M24 Prawns");
+  await expect(form).toContainText("M24 Dates");
+
+  await page.getByTestId("state-field-landedOn").fill("2026-09-01");
+  await page.getByTestId("state-field-source").fill("Beypore harbour");
+  await page.getByTestId(`state-field-weightRaw-${PRAWNS}`).fill("2000");
+  await page.getByTestId(`state-field-costRaw-${PRAWNS}`).fill("800");
+  await page.getByTestId(`state-field-weightRaw-${DATES}`).fill("1000");
+  await page.getByTestId(`state-field-costRaw-${DATES}`).fill("300");
+  await page.getByTestId("state-button").click();
+
+  await expect(page.getByTestId("detail-state-chip")).toHaveText(BATCHES.stateLabel.cooking);
+  await expect(page.getByTestId("transition-error")).toHaveCount(0);
+
+  // Two line documents, one per main ingredient, each with its own figures
+  // in paise. This is the assertion the old form could not have passed.
+  await expect
+    .poll(async () => await readDocument(`batches/${REF_SOURCE_2MN}/lines/${PRAWNS}`))
+    .toMatchObject({ ingredientId: PRAWNS, qtyActual: 2000, costActual: 80_000 });
+  await expect
+    .poll(async () => await readDocument(`batches/${REF_SOURCE_2MN}/lines/${DATES}`))
+    .toMatchObject({ ingredientId: DATES, qtyActual: 1000, costActual: 30_000 });
+  // Nothing under the old shared id.
+  expect(await readDocument(`batches/${REF_SOURCE_2MN}/lines/main`)).toBeNull();
+
+  // The batch carries the total raw weight of what was bought for it.
+  expect(await readDocument(`batches/${REF_SOURCE_2MN}`)).toMatchObject({ weightRaw: 3000 });
+
+  // And the actuals screen opens on those very documents, both filled.
+  await expect(page.getByTestId(`actual-weight-${PRAWNS}`)).toHaveValue("2000");
+  await expect(page.getByTestId(`actual-cost-${PRAWNS}`)).toHaveValue("800");
+  await expect(page.getByTestId(`actual-weight-${DATES}`)).toHaveValue("1000");
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("300");
+  await expect(page.getByTestId("orphan-lines")).toHaveCount(0);
 });
 
 /**
@@ -1019,8 +1092,8 @@ test("one batch, created on the form, walked by Owner and Kitchen to a number", 
       await expect(kitchen.getByTestId("state-button")).toHaveText(BATCHES.startCooking);
       await kitchen.getByTestId("state-field-landedOn").fill("2026-09-01");
       await kitchen.getByTestId("state-field-source").fill("Beypore harbour");
-      await kitchen.getByTestId("state-field-weightRaw").fill("1600");
-      await kitchen.getByTestId("state-field-costRaw").fill("800");
+      await kitchen.getByTestId(`state-field-weightRaw-${PRAWNS}`).fill("1600");
+      await kitchen.getByTestId(`state-field-costRaw-${PRAWNS}`).fill("800");
       await kitchen.getByTestId("state-button").click();
       await expect(kitchen.getByTestId("detail-state-chip")).toHaveText(BATCHES.stateLabel.cooking);
 

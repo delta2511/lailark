@@ -42,6 +42,18 @@ export interface TransitionRow {
   readonly callers: readonly Role[];
   readonly buttonLabel: string;
   readonly fields: readonly TransitionField[];
+  /**
+   * D41: fields asked once per main ingredient of the batch's recipe, each
+   * row naming the ingredient it is for. `label` here is the field's name on
+   * its own; `StateButton` puts the ingredient in front of it.
+   *
+   * Only Sourcing -> Cooking has any. A recipe with one main ingredient gets
+   * one row, which is what the step always asked for; a recipe with two gets
+   * two, which is what batch 001 needed and never had. A recipe that names
+   * no main ingredient at all keeps one unnamed row, and the server writes
+   * its placeholder line (Q16).
+   */
+  readonly perMainFields?: readonly TransitionField[];
 }
 
 /** The forward-moving rows only. Pause and resume are handled separately below. */
@@ -73,6 +85,8 @@ export const BATCH_TRANSITION_ROWS: readonly TransitionRow[] = [
     fields: [
       { key: "landedOn", label: BATCHES.landedOn, kind: "date", required: true },
       { key: "source", label: BATCHES.source, kind: "text", required: true },
+    ],
+    perMainFields: [
       { key: "weightRaw", label: BATCHES.weightRaw, kind: "positive", required: true },
       { key: "costRaw", label: BATCHES.costRaw, kind: "rupees", required: true },
     ],

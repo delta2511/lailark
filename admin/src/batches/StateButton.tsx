@@ -10,11 +10,12 @@
  * top of whichever state the batch is in, available in six of the ten states
  * at once, which is not "the next step" in the same sense.
  */
-import type { Role } from "@lailark/shared";
+import { indexIngredients, mainBatchLines, type Role } from "@lailark/shared";
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";
 
 import { BATCHES } from "../copy";
+import type { IngredientDoc, RecipeDoc } from "../products/data";
 import { isCostPaise, isSellablePaise, parseRupeesToPaise } from "../products/productMoney";
 import {
   callableErrorMessage,
@@ -33,9 +34,19 @@ import {
 interface Props {
   readonly batch: BatchDoc;
   readonly role: Role;
+  /**
+   * D41: the batch's recipe, for the row that asks once per main ingredient.
+   * `recipeLoading` is the recipes listener, not this batch: a null recipe
+   * that has not loaded yet is not the same thing as a recipe that names no
+   * main ingredient, and the difference decides what the form asks for. The
+   * boxes wait rather than guess.
+   */
+  readonly recipe: RecipeDoc | null;
+  readonly recipeLoading: boolean;
+  readonly ingredients: readonly IngredientDoc[];
 }
 
-export function StateButton({ batch, role }: Props): JSX.Element {
+export function StateButton({ batch, role, recipe, recipeLoading, ingredients }: Props): JSX.Element {
   const state = batch.state;
 
   if (state === "paused") {
@@ -49,7 +60,18 @@ export function StateButton({ batch, role }: Props): JSX.Element {
   return (
     <div class="state-button-area" data-testid="state-button-area">
       {row ? (
-        <TransitionForm key={`${row.from}->${row.to}`} batch={batch} row={row} />
+        row.perMainFields !== undefined && recipeLoading ? (
+          <p class="field-help" data-testid="state-recipe-loading">
+            {BATCHES.recipeLoading}
+          </p>
+        ) : (
+          <TransitionForm
+            key={`${row.from}->${row.to}`}
+            batch={batch}
+            row={row}
+            mains={mainRowsFor(row, recipe, ingredients)}
+          />
+        )
       ) : (
         <p class="notice-line" data-testid="state-waiting">
           {waitingLine(state, role)}
@@ -116,9 +138,63 @@ function parseField(field: TransitionField, raw: string): Parsed {
   }
 }
 
-function TransitionForm({ batch, row }: { readonly batch: BatchDoc; readonly row: TransitionRow }): JSX.Element {
+/**
+ * One block of per-main-ingredient boxes: which ingredient it is for, what
+ * the person sees it called, and the key its boxes are held under.
+ *
+ * `ingredientId` is null for the one unnamed block a recipe with no main
+ * ingredient still gets (Q16): the figures then go on the wire the way they
+ * always did, and the server writes its placeholder line.
+ */
+interface MainRow {
+  /** The `batches/{ref}/lines` document these figures will land in, or "". */
+  readonly key: string;
+  readonly ingredientId: string | null;
+  readonly label: string | null;
+}
+
+/**
+ * D41: one block per main line of the recipe, in the recipe's own order,
+ * keyed by the same line id the actuals screen uses (`batchLineIds` in
+ * `@lailark/shared`), so a figure typed here and the box that shows it later
+ * are the same document.
+ */
+function mainRowsFor(
+  row: TransitionRow,
+  recipe: RecipeDoc | null,
+  ingredients: readonly IngredientDoc[],
+): readonly MainRow[] {
+  if (row.perMainFields === undefined) return [];
+  const mains = recipe === null ? [] : mainBatchLines(recipe.lines);
+  if (mains.length === 0) return [{ key: "", ingredientId: null, label: null }];
+  const index = indexIngredients(ingredients.map((i) => ({ ...i, id: i.id })));
+  return mains.map((main) => ({
+    key: main.lineId,
+    ingredientId: main.ingredientId,
+    label: index[main.ingredientId]?.labelName ?? main.ingredientId,
+  }));
+}
+
+/** The box a per-main field is held under, and its element and test id. */
+function mainFieldKey(field: TransitionField, main: MainRow): string {
+  return main.key === "" ? field.key : `${field.key}-${main.key}`;
+}
+
+function TransitionForm({
+  batch,
+  row,
+  mains,
+}: {
+  readonly batch: BatchDoc;
+  readonly row: TransitionRow;
+  readonly mains: readonly MainRow[];
+}): JSX.Element {
+  const perMain = row.perMainFields ?? [];
   const [values, setValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(row.fields.map((f) => [f.key, ""])),
+    Object.fromEntries([
+      ...row.fields.map((f) => [f.key, ""]),
+      ...mains.flatMap((main) => perMain.map((f) => [mainFieldKey(f, main), ""])),
+    ]),
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,6 +212,35 @@ function TransitionForm({ batch, row }: { readonly batch: BatchDoc; readonly row
       }
       if (parsed.value !== undefined) data[field.key] = parsed.value;
     }
+
+    /**
+     * D41: one entry per main ingredient, in the recipe's own order, each
+     * naming the ingredient it is for. The server checks those names against
+     * the recipe it reads inside the transaction and derives the line ids
+     * itself, so a stale recipe on this screen is refused rather than
+     * written against the wrong ingredient.
+     *
+     * A recipe with no main ingredient sends the two flat keys instead,
+     * which is the shape the step has always used and the only one the
+     * server accepts for it.
+     */
+    const named: Record<string, unknown>[] = [];
+    for (const main of mains) {
+      const entry: Record<string, unknown> = {};
+      for (const field of perMain) {
+        const parsed = parseField(field, values[mainFieldKey(field, main)] ?? "");
+        if (!parsed.ok) {
+          setError(parsed.message);
+          return;
+        }
+        if (parsed.value !== undefined) {
+          if (main.ingredientId === null) data[field.key] = parsed.value;
+          else entry[field.key] = parsed.value;
+        }
+      }
+      if (main.ingredientId !== null) named.push({ ingredientId: main.ingredientId, ...entry });
+    }
+    if (named.length > 0) data.mains = named;
 
     setBusy(true);
     try {
@@ -161,6 +266,31 @@ function TransitionForm({ batch, row }: { readonly batch: BatchDoc; readonly row
         />
       ))}
 
+      {mains.length > 1 ? <p class="field-help">{BATCHES.mainsHelp}</p> : null}
+
+      {mains.map((main) =>
+        perMain.map((field) => {
+          const key = mainFieldKey(field, main);
+          return (
+            <FieldInput
+              key={key}
+              field={{
+                ...field,
+                label:
+                  main.label === null
+                    ? field.label
+                    : field.key === "costRaw"
+                      ? BATCHES.costRawFor(main.label)
+                      : BATCHES.weightRawFor(main.label),
+              }}
+              fieldId={key}
+              value={values[key] ?? ""}
+              onChange={(next) => setValues((current) => ({ ...current, [key]: next }))}
+            />
+          );
+        }),
+      )}
+
       {error ? (
         <p class="error" data-testid="transition-error">
           {error}
@@ -176,14 +306,17 @@ function TransitionForm({ batch, row }: { readonly batch: BatchDoc; readonly row
 
 function FieldInput({
   field,
+  fieldId,
   value,
   onChange,
 }: {
   readonly field: TransitionField;
+  /** D41: a per-main box is addressed by its line, not by the field alone. */
+  readonly fieldId?: string;
   readonly value: string;
   readonly onChange: (next: string) => void;
 }): JSX.Element {
-  const id = `state-field-${field.key}`;
+  const id = `state-field-${fieldId ?? field.key}`;
   if (field.kind === "textarea") {
     return (
       <>

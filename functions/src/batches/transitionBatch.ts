@@ -33,6 +33,7 @@ import {
   getFirestore,
 } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import type { MainBatchLine } from "@lailark/shared";
 
 import { writeAudit } from "../audit/write";
 import { getAdminApp } from "../lib/admin";
@@ -44,11 +45,11 @@ import {
   batchViewFrom,
   catalogueNamesFor,
   freeBatchRef,
-  mainIngredientOf,
   messagesSettings,
   nextBatchNo,
   ordersInBatch,
   readExisting,
+  recipeMainLines,
   siblingBatches,
   withStamps,
   writeApprovals,
@@ -109,7 +110,7 @@ export const transitionBatch = onCall(
         // Only the rows that need them pay for these reads.
         let siblings: SiblingBatch[] = [];
         let orders: { paid: PaidOrderView[]; open: number } = { paid: [], open: 0 };
-        let mainIngredientId: string | null = null;
+        let mainLines: readonly MainBatchLine[] = [];
         let productName: string | null = null;
         let mainIngredientName: string | null = null;
         let messages: Awaited<ReturnType<typeof messagesSettings>> = null;
@@ -123,7 +124,7 @@ export const transitionBatch = onCall(
             orders = await ordersInBatch(tx, db, batch.ref);
           }
           if (input.to === "cooking") {
-            mainIngredientId = await mainIngredientOf(tx, db, batch.recipeId);
+            mainLines = await recipeMainLines(tx, db, batch.recipeId);
           }
           // D24: only the two rows that draft a customer message read the
           // Owner's wording. Everything else never looks at it.
@@ -185,7 +186,7 @@ export const transitionBatch = onCall(
           batch,
           siblings,
           paidOrders: orders.paid,
-          mainIngredientId,
+          mainLines,
           productName,
           mainIngredientName,
           messages,

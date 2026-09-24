@@ -22,6 +22,8 @@ import {
 import {
   batchRefFromBytes,
   formatBatchNo,
+  mainBatchLines,
+  type MainBatchLine,
   type MessagesSettings,
   ORDER_STATES_TERMINAL,
 } from "@lailark/shared";
@@ -339,18 +341,44 @@ function jarsInBatch(doc: DocumentSnapshot, batchRef: string): number {
   return total;
 }
 
-/** The recipe's main ingredient, for the sourcing cost line (brief 14.1). */
+/**
+ * Every main line of the recipe, in the recipe's own order, each with the
+ * document in `batches/{ref}/lines` its actuals belong in.
+ *
+ * D41: Sourcing -> Cooking asks for a weight and a cost per main ingredient,
+ * so this reads all of them, not just the first. Brief 14.1 says "the main
+ * ingredient's", which assumes one; batch 001 has two, prawns and dates, and
+ * the step used to record only the first, so the dates bought for the batch
+ * were never costed here.
+ *
+ * The ids come from `batchLineIds` in `@lailark/shared`, which is also what
+ * the actuals screen resolves against (`admin/src/batches/lineIds.ts`), so
+ * the document this writes is the document that screen edits. A line with no
+ * usable `ingredientId` is skipped rather than written under a blank id.
+ */
+export async function recipeMainLines(
+  tx: Transaction,
+  db: Firestore,
+  recipeId: string,
+): Promise<readonly MainBatchLine[]> {
+  if (recipeId === "") return [];
+  const snap = await tx.get(db.collection(RECIPES).doc(recipeId));
+  const lines = snap.get("lines");
+  if (!Array.isArray(lines)) return [];
+  const refs = (lines as Array<Record<string, unknown>>)
+    .filter((line) => typeof line?.ingredientId === "string" && line.ingredientId !== "")
+    .map((line) => ({ ingredientId: line.ingredientId as string, isMain: line?.isMain === true }));
+  return mainBatchLines(refs);
+}
+
+/** The recipe's first main ingredient, for the name a message prints (D24). */
 export async function mainIngredientOf(
   tx: Transaction,
   db: Firestore,
   recipeId: string,
 ): Promise<string | null> {
-  if (recipeId === "") return null;
-  const snap = await tx.get(db.collection(RECIPES).doc(recipeId));
-  const lines = snap.get("lines");
-  if (!Array.isArray(lines)) return null;
-  const main = (lines as Array<Record<string, unknown>>).find((line) => line?.isMain === true);
-  return typeof main?.ingredientId === "string" ? main.ingredientId : null;
+  const mains = await recipeMainLines(tx, db, recipeId);
+  return mains[0]?.ingredientId ?? null;
 }
 
 /**

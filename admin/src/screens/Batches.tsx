@@ -80,6 +80,7 @@ export function Batches({ session }: Props): JSX.Element {
           uid={session.uid}
           product={product}
           recipe={recipe}
+          recipeLoading={recipes.loading}
           ingredients={ingredients.items}
           onClose={() => setView({ kind: "list" })}
         />

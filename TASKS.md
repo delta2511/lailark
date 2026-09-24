@@ -240,7 +240,7 @@ CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
       owed: that is exactly what it said at the M2 break, where the only difference was
       D28's ingredient line. Print the differing lines and name which side carries each.
       Done when: running it today says the repo is ahead and names D28's line.
-- [ ] M2.19 [opus] Sourcing to Cooking asks for every main ingredient (D41). Brief §14.1
+- [x] M2.19 [opus] Sourcing to Cooking asks for every main ingredient (D41). Brief §14.1
       assumes one main ingredient; batch 001 has two and only the first was recorded, so
       the dates were never costed at that step. One row per main line, each naming its
       ingredient, weights and costs in paise, written to the same per-ingredient line

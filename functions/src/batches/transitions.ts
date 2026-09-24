@@ -35,6 +35,7 @@ import {
   checkCustomerText,
   isPaise,
   isProtectedBatchField,
+  type MainBatchLine,
   MRP_PAISE,
   type MessagesSettings,
   parseCalDate,
@@ -178,8 +179,14 @@ export const BATCH_TRANSITION_TABLE: readonly TransitionRow[] = [
     from: "sourcing",
     to: "cooking",
     callers: ["kitchen", "owner"],
-    requires: ["landedOn", "source", "weightRaw", "costRaw"],
-    optional: ["cookedOn"],
+    // D41: the money is asked for once per main ingredient, so the two flat
+    // keys are no longer what the row insists on. `planStartCooking` requires
+    // one of the two shapes and says which: `mains`, one entry per main line
+    // of the recipe, or the flat pair, which only a recipe with no more than
+    // one main ingredient may use. Leaving both in `requires` would mean a
+    // two-main recipe had to send a figure that belongs to neither line.
+    requires: ["landedOn", "source"],
+    optional: ["cookedOn", "weightRaw", "costRaw", "mains"],
     // No `bookingClosed` field: booking closes by state alone. `cooking` is
     // not in BATCH_STATES_OPEN_FOR_BOOKING, so the card and the hold
     // transaction stop offering Rs 599 the moment this row is written, and a
@@ -374,8 +381,14 @@ export interface TransitionContext {
   readonly siblings: readonly SiblingBatch[];
   /** Paid orders in this batch, if the collection is there to read. */
   readonly paidOrders: readonly PaidOrderView[];
-  /** The main ingredient of the batch's recipe, when it could be read. */
-  readonly mainIngredientId: string | null;
+  /**
+   * Every main line of the batch's recipe, in the recipe's own order, each
+   * with the `batches/{ref}/lines` document its actuals belong in. Read only
+   * for Sourcing -> Cooking, which asks for a weight and a cost against each
+   * of them (D41). Empty for a recipe that names no main ingredient, and for
+   * every other row.
+   */
+  readonly mainLines: readonly MainBatchLine[];
   /**
    * The product's name and the main ingredient's label name, read once when
    * the batch is created and then kept on the batch document. Only the create
@@ -1270,10 +1283,9 @@ function planStartCooking(
   if (isFailure(landedOn)) return landedOn;
   const source = text(d.source, "source", MAX_SOURCE);
   if (isFailure(source)) return source;
-  const weightRaw = positiveNumber(d.weightRaw, "weightRaw");
-  if (isFailure(weightRaw)) return weightRaw;
-  const costRaw = paise(d.costRaw, "costRaw");
-  if (isFailure(costRaw)) return costRaw;
+
+  const mains = mainIngredientActuals(d, context.mainLines);
+  if (isFailure(mains)) return mains;
 
   let cookedOn: string | null = null;
   if (d.cookedOn !== undefined && d.cookedOn !== null) {
@@ -1282,33 +1294,21 @@ function planStartCooking(
     cookedOn = parsed;
   }
 
-  // Brief 14.1: the main ingredient's raw weight and price are recorded
-  // against the batch between Sourcing and Cooking.
-  //
-  // M2.13: keyed by the ingredient, not by the literal id "main". The
-  // actuals screen keys every line by its ingredient (`admin/src/batches/
-  // lineIds.ts`), because a recipe may flag two lines `isMain` (batch 001
-  // does: prawns and dates are both named in the product name) and one id
-  // for both made them one document. This line is the same document that
-  // screen's main row edits, so it moves with it.
-  //
-  // A recipe with no main ingredient at all keeps the old id, and its
-  // `ingredientId` is then the same placeholder string rather than a real
-  // ingredient: nobody's `isMain` line can claim it, so the actuals screen
-  // shows it as a figure recorded against no ingredient in the recipe
-  // (`OrphanLines`) instead of hiding it. `costRaw` has no other home on the
-  // batch, so not writing it would lose it outright. Whether this transition
-  // should be refused for a recipe that names no main ingredient is a
-  // lifecycle question for Shefin, not something this task decides.
-  const mainId = context.mainIngredientId ?? "main";
-  const lines: PlannedLine[] = [
-    {
-      id: mainId,
-      ingredientId: mainId,
-      qtyActual: weightRaw,
-      costActual: costRaw,
-    },
-  ];
+  const lines: PlannedLine[] = mains.map((main) => ({
+    id: main.lineId,
+    ingredientId: main.ingredientId,
+    qtyActual: main.weightRaw,
+    costActual: main.costRaw,
+  }));
+
+  // ASSUMED (M2.19): the batch's own `weightRaw` is the sum of what was
+  // bought for it. Brief 14.1 wrote one raw weight because it assumed one
+  // main ingredient; with two, the figure that belongs on the batch is what
+  // went into the pot in total, which is what the cleaned and cooked weights
+  // beside it are compared against. A recipe with one main ingredient gets
+  // exactly the number it got before, because the sum of one is itself.
+  const weightRaw = mains.reduce((total, main) => total + main.weightRaw, 0);
+  const costRaw = mains.reduce((total, main) => total + main.costRaw, 0);
 
   return {
     ok: true,
@@ -1327,6 +1327,105 @@ function planStartCooking(
       computed: { weightRaw, costRaw, landedOn },
     },
   };
+}
+
+/** One main ingredient's raw weight and cost, and the line it is written to. */
+interface MainActual extends MainBatchLine {
+  readonly weightRaw: number;
+  readonly costRaw: number;
+}
+
+/**
+ * What Sourcing -> Cooking recorded, one entry per main ingredient (D41).
+ *
+ * Brief 14.1 asks for "the main ingredient's" raw weight and price, which
+ * assumes there is one. Batch 001 has two, prawns and dates, and the step
+ * recorded only the first, so the dates bought for the batch were never
+ * costed here. The request now carries `mains`: one entry per main line of
+ * the recipe, in the recipe's own order, each naming the ingredient it is
+ * for. The server does not take the client's word for which document a
+ * figure belongs in; it checks the names against the recipe it just read and
+ * writes to the ids it derived itself.
+ *
+ * The flat `weightRaw`/`costRaw` pair is still accepted, and is the whole of
+ * what a recipe with one main ingredient (or none) needs, so that path is
+ * byte for byte what it was before this task. It is refused for a recipe
+ * with two or more main lines, because that is exactly the shape that lost
+ * the dates: one pair of figures and nothing to say which ingredient they
+ * were for.
+ *
+ * A recipe that names no main ingredient at all keeps the placeholder line
+ * `lines/main` (Q16 is open on whether the transition should be refused
+ * instead; that is not this task's to decide). `costRaw` has no other home
+ * on the batch, so not writing it would lose it outright, and the actuals
+ * screen shows the line as a figure recorded against no ingredient in the
+ * recipe rather than hiding it.
+ */
+function mainIngredientActuals(
+  d: Readonly<Record<string, unknown>>,
+  mainLines: readonly MainBatchLine[],
+): readonly MainActual[] | Failure {
+  const flat = d.weightRaw !== undefined || d.costRaw !== undefined;
+
+  if (d.mains !== undefined) {
+    if (flat) {
+      return invalid("Send mains, one entry per main ingredient, or weightRaw and costRaw, not both.");
+    }
+    if (mainLines.length === 0) {
+      return invalid("This recipe names no main ingredient, so send weightRaw and costRaw instead of mains.");
+    }
+    if (!Array.isArray(d.mains) || d.mains.length !== mainLines.length) {
+      return invalid(
+        `mains needs one entry for each of the ${mainLines.length} main ingredients, in the recipe's order.`,
+      );
+    }
+    const given = d.mains as unknown[];
+    const parsed: MainActual[] = [];
+    for (const [i, main] of mainLines.entries()) {
+      const entry = given[i];
+      if (typeof entry !== "object" || entry === null) {
+        return invalid(`mains entry ${i + 1} must name an ingredient with its weight and cost.`);
+      }
+      const item = entry as Record<string, unknown>;
+      if (item.ingredientId !== main.ingredientId) {
+        return invalid(
+          `mains entry ${i + 1} is for ${String(item.ingredientId)}; the recipe's is ${main.ingredientId}.`,
+        );
+      }
+      const weightRaw = positiveNumber(item.weightRaw, `${main.ingredientId} weightRaw`);
+      if (isFailure(weightRaw)) return weightRaw;
+      const costRaw = paise(item.costRaw, `${main.ingredientId} costRaw`);
+      if (isFailure(costRaw)) return costRaw;
+      const unexpected = Object.keys(item).filter(
+        (key) => !["ingredientId", "weightRaw", "costRaw"].includes(key),
+      );
+      if (unexpected.length > 0) {
+        return invalid(
+          `mains entry ${i + 1} asks for ingredientId, weightRaw, costRaw, not ${unexpected.sort().join(", ")}.`,
+        );
+      }
+      parsed.push({ ...main, weightRaw, costRaw });
+    }
+    return parsed;
+  }
+
+  if (mainLines.length > 1) {
+    return invalid(
+      `This recipe has ${mainLines.length} main ingredients (${mainLines
+        .map((main) => main.ingredientId)
+        .join(", ")}), so each one needs its own weight and cost.`,
+    );
+  }
+  if (!flat) {
+    return invalid("Sourcing to Cooking asks for weightRaw, costRaw.");
+  }
+  const weightRaw = positiveNumber(d.weightRaw, "weightRaw");
+  if (isFailure(weightRaw)) return weightRaw;
+  const costRaw = paise(d.costRaw, "costRaw");
+  if (isFailure(costRaw)) return costRaw;
+
+  const only = mainLines[0] ?? { ingredientId: "main", lineId: "main" };
+  return [{ ...only, weightRaw, costRaw }];
 }
 
 function planBottle(

@@ -17,7 +17,9 @@
  *   flips `isMain` on or off: an actual already typed can never be orphaned
  *   by a flag that has nothing to do with which ingredient went in the pot.
  * - **A repeated ingredient is suffixed, and the suffix is checked against
- *   every other id in play** (`salt`, `salt~2`), because ingredient ids are
+ *   every other id in play** (`salt`, `salt~2`; `batchLineIds` in
+ *   `@lailark/shared`, which the server derives the same ids from), because
+ *   ingredient ids are
  *   not all opaque: batch 001's are hand-written slugs, so an ingredient
  *   genuinely called `salt~2` is possible and two rows must never land on
  *   one document again. `RecipeDetail` now refuses to save two lines of one
@@ -28,6 +30,7 @@
  * - **A document no line claims is an orphan, and the screen says so.** It
  *   is never reassigned to another ingredient and never hidden.
  */
+import { batchLineIds, type BatchLineRef } from "@lailark/shared";
 
 /**
  * The id `sourcing -> cooking` used to write the main ingredient's raw
@@ -52,10 +55,14 @@
  */
 export const LEGACY_MAIN_ID = "main";
 
-export interface RecipeLineRef {
-  readonly ingredientId: string;
-  readonly isMain?: boolean;
-}
+/**
+ * D41 (M2.19): the ingredient-keyed part of this scheme moved to
+ * `@lailark/shared` (`batchLineIds`), because Sourcing -> Cooking now writes
+ * one line document per main ingredient and the server has to derive the
+ * same ids this screen reads. What stays here is what only the screen needs:
+ * the legacy `lines/main` adoption and the orphan report.
+ */
+export type RecipeLineRef = BatchLineRef;
 
 export interface ExistingLineRef {
   readonly id: string;
@@ -84,32 +91,6 @@ export interface OrphanLine<T extends ExistingLineRef = ExistingLineRef> {
 }
 
 /**
- * The ingredient-keyed id of each line, before any legacy adoption.
- *
- * A repeat is suffixed with the lowest `~n` that no other line's ingredient
- * id and no id already handed out is using, so the result is unique whatever
- * the ingredient ids happen to look like.
- */
-function baseIds(lines: readonly RecipeLineRef[]): string[] {
-  const taken = new Set(lines.map((line) => line.ingredientId));
-  const used = new Set<string>();
-  return lines.map((line) => {
-    if (!used.has(line.ingredientId)) {
-      used.add(line.ingredientId);
-      return line.ingredientId;
-    }
-    let n = 2;
-    let candidate = `${line.ingredientId}~${n}`;
-    while (taken.has(candidate) || used.has(candidate)) {
-      n += 1;
-      candidate = `${line.ingredientId}~${n}`;
-    }
-    used.add(candidate);
-    return candidate;
-  });
-}
-
-/**
  * One resolved line per recipe line, in the recipe's own order, plus every
  * loaded document no line claims.
  *
@@ -122,7 +103,7 @@ export function resolveActuals<T extends ExistingLineRef>(
   lines: readonly RecipeLineRef[],
   existing: readonly T[],
 ): { readonly rows: readonly ResolvedLine[]; readonly orphans: readonly OrphanLine<T>[] } {
-  const keys = baseIds(lines);
+  const keys = batchLineIds(lines);
   const ids = resolveLineIds(lines, existing);
   const claimed = new Set(ids);
   return {
@@ -144,7 +125,7 @@ export function resolveLineIds(
   lines: readonly RecipeLineRef[],
   existing: readonly ExistingLineRef[],
 ): readonly string[] {
-  const ids = baseIds(lines);
+  const ids = batchLineIds(lines);
   const legacy = existing.find((doc) => doc.id === LEGACY_MAIN_ID);
   if (legacy === undefined) return ids;
   // An ingredient genuinely called "main" owns the id; nothing to adopt.

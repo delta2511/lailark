@@ -18,5 +18,6 @@ export * from "./approvals.js";
 export * from "./rules.js";
 export * from "./recipe.js";
 export * from "./catalogue.js";
+export * from "./batchLines.js";
 export * from "./counterSale.js";
 export * from "./types/index.js";

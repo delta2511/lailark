@@ -341,6 +341,13 @@ export const BATCHES = {
   landedOn: "Landed on",
   weightRaw: "Raw weight, g",
   costRaw: "Price paid",
+  /* D41: Sourcing to Cooking asks once per main ingredient, and each row says
+     which one it is asking about. Batch 001 has two, prawns and dates, and
+     one unnamed pair of boxes recorded only the prawns. */
+  weightRawFor: (ingredient: string) => `${ingredient}: raw weight, g`,
+  costRawFor: (ingredient: string) => `${ingredient}: price paid`,
+  mainsHelp: "One weight and one price for each main ingredient.",
+  recipeLoading: "Reading the recipe.",
 
   /* ---- Cooking ---- */
   cookingHeading: "Cooking",

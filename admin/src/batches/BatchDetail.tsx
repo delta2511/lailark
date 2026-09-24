@@ -85,6 +85,12 @@ interface Props {
   readonly uid: string;
   readonly product: ProductDoc | null;
   readonly recipe: RecipeDoc | null;
+  /**
+   * D41: whether the recipes listener has answered yet. `StateButton` asks
+   * once per main ingredient, so it has to tell a recipe still loading from
+   * a recipe that names none.
+   */
+  readonly recipeLoading: boolean;
   readonly ingredients: readonly IngredientDoc[];
   readonly onClose: () => void;
 }
@@ -95,7 +101,16 @@ const SOURCING_ON = new Set(["sourcing", "cooking", "bottled", "inStock", "soldO
 const COOKING_ON = new Set(["cooking", "bottled", "inStock", "soldOut", "archived"]);
 const BOTTLED_ON = new Set(["bottled", "inStock", "soldOut", "archived"]);
 
-export function BatchDetail({ batch, role, uid, product, recipe, ingredients, onClose }: Props): JSX.Element {
+export function BatchDetail({
+  batch,
+  role,
+  uid,
+  product,
+  recipe,
+  recipeLoading,
+  ingredients,
+  onClose,
+}: Props): JSX.Element {
   const approvals = useApprovalsForBatch(batch.id);
   const canEditKitchenFields = role === "owner" || role === "kitchen";
 
@@ -243,7 +258,13 @@ export function BatchDetail({ batch, role, uid, product, recipe, ingredients, on
           </p>
         ) : null}
 
-        <StateButton batch={batch} role={role} />
+        <StateButton
+          batch={batch}
+          role={role}
+          recipe={recipe}
+          recipeLoading={recipeLoading}
+          ingredients={ingredients}
+        />
       </div>
 
       {/* ---- Fill, brief 17.4. `plannedJars` stays read only: see the header ---- */}
