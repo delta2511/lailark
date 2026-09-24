@@ -78,6 +78,7 @@ confirm or replace at the next milestone break.
 | D42 | **The per-ingredient actuals are value checked in `firestore.rules`, not only on the screen** | Asked and answered 23 Sep 2026, surfaced by the M2.14 tester. `batches/{ref}/lines/{lineId}` allows create and update on `isStaff()` alone and never looks at the number, so `qtyActual` and `costActual` are guarded by the screen only: anything writing outside it (a seeding script, a function with a bug, a signed-in staff account talking to Firestore directly) can put a negative, a fractional paise or an absurd cost straight in. A84 already checks the batch's own costs and a product's two prices this way; the line documents were missed. Shefin was told the risk is low today, since every write does go through the screen, and chose to close it now rather than at launch: these are the two numbers that most move a batch P&L. Also fixes `rupeesToPaise` silently rounding, so `12.345` is refused rather than saved as `1235`. Built in M2.20 |
 | D43 | **One undo toast for the whole Cooking actuals section, not one per ingredient row** | Asked and answered 23 Sep 2026, confirming A112 from M2.14. A second cost typed inside the 8 seconds replaces the first toast, so only the second edit stays undoable. Shefin was shown the alternative (a toast and its own 8 seconds per row) and kept the single toast: nothing is lost either way, both edits are in the timeline and the old number can be retyped, and several stacked bars at the bottom of a phone at a busy counter is worse than the thing it fixes |
 | D44 | **The limit per person is an editable field with the computed quarter as its placeholder and its default** | Asked and answered 23 Sep 2026 during M2.16, following D40. `perPersonLimit` was a protected, server-computed field (a quarter of the bookable jars, minimum 1). It is now a number the Owner may type on any batch in any state. Left blank it falls back to the computed quarter, which is what the box shows as its placeholder, so a batch nobody has touched behaves exactly as it does today and a planned-jar change still moves the limit. Once the Owner types a number it stands, through later planned-jar changes, until it is cleared back to blank. Reason: Shefin wanted the freedom without losing the automatic number underneath it |
+| D45 | **The Orders page is `/orders`. The four other policy pages nest under `/policies/`** | Asked and answered 24 Sep 2026 during M3.1. `/orders` (D2, brief §10.4), `/policies/shipping`, `/policies/terms`, `/policies/privacy`, `/policies/contact`. Customer-site URL paths are permanent and were on the never-assume list, and no doc named one. Shefin chose the mixed shape deliberately: the Orders page is the one a customer is actually sent to, so it gets the short path beside `/pickles/<slug>` and `/batch/<nnn>`, while the four pages that exist for Razorpay's activation review and the E-Commerce Rules group together out of the root namespace. The footer carries the `/orders` link from M3.1; M5.7 writes all five pages |
 
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
@@ -752,6 +753,34 @@ break.
   person reading it knows whether it was the prawns or the dates and by how much. Where a
   recipe names no main line at all, the existing placeholder id is used, as it already is
   everywhere else on that path. Status: open.
+
+- A146 (M3.1, 24 Sep): the new design system has **no dark mode**. Flow §10 gives one
+  light palette on paper and never mentions a dark one, so everything under
+  `site/app/ds/` renders the same whatever the phone is set to. The v0 home page keeps
+  its own dark variant until M3.2 retires it. Shown to Shefin at the M3.1 check and not
+  overruled. Status: open.
+- A147 (M3.1, 24 Sep): the jar marks are drawn in **ink, with the remainder in
+  hairline**, not in rust. Rust's stated job in Flow §10 is "numbers that count", and the
+  marks are explicitly the alternative to a written number, so rust stays for actual
+  numerals. Shown to Shefin at the M3.1 check and not overruled. Status: open.
+- A148 (M3.1, 24 Sep): the demo route is `/internal/design-system`, `noindex` plus a
+  `robots.txt` disallow. This reserves `/internal/` so it can never become a customer
+  path. Customer URLs are never-assume, but this one is deliberately not a customer URL.
+  Status: open.
+- A149 (M3.1, 24 Sep): all design-system tokens are prefixed `--ds-` at `:root`, so they
+  cannot collide with the v0 home page's own `--bg`/`--fg`/`--accent`, which moved out of
+  the global layer into `site/app/page.js` scoped under `.v0`. The v0 page is unchanged in
+  behaviour and appearance; only where its CSS lives moved. Status: open.
+- A150 (M3.1, 24 Sep): "once per session" for the settle motion is a `sessionStorage`
+  flag, not server state. Nothing here costs money or messages anyone. Status: open.
+- A151 (M3.1, 24 Sep): `JarMarks` with no `total` draws exactly `count` marks, and a count
+  of zero draws one empty mark so the reading has something to point at. The accessible
+  label only says "of N" when the caller actually passed a total. It reads "1 jar" in the
+  singular: that string is read aloud to a customer on a screen reader, so it is customer
+  copy. Status: open.
+- A152 (M3.1, 24 Sep): a second `.claude/launch.json` entry, `lailark-site-static`, serves
+  the built static export on port 4300 so the site can be opened in a browser without the
+  Firebase hosting emulator. Tooling only, nothing deployed. Status: open.
 
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 

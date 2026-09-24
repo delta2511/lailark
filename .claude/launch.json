@@ -4,8 +4,22 @@
     {
       "name": "lailark-site",
       "runtimeExecutable": "firebase",
-      "runtimeArgs": ["emulators:start", "--only", "hosting", "--project", "lailark"],
+      "runtimeArgs": [
+        "emulators:start",
+        "--only",
+        "hosting",
+        "--project",
+        "lailark"
+      ],
       "port": 5010
+    },
+    {
+      "name": "lailark-site-static",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "site/scripts/serve-out.mjs"
+      ],
+      "port": 4300
     }
   ]
 }

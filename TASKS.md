@@ -320,7 +320,7 @@ recipient, and the Owner or Kitchen ticks it sent. Nothing is sent by the system
 the exact commands), Razorpay webhook URL registered in the test dashboard. Live keys
 and the live webhook before the production deploy.
 
-- [ ] M3.1 [sonnet] (Shefin checks) Site design system in Next.js. Tokens from Flow §10, the three
+- [x] M3.1 [sonnet] (Shefin checks) Site design system in Next.js. (2bda073; D45 asked and answered during the task; Shefin checked 24 Sep) Tokens from Flow §10, the three
       motions with `prefers-reduced-motion`, the jar-count marks component, layout,
       header with the lark mark, footer with the legal line and the Orders link. Done
       when: a Storybook-free demo route renders every primitive and Playwright checks no

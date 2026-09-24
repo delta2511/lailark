@@ -1,3 +1,67 @@
+// v0 home page styles, moved out of the global layout (M3.1) and
+// scoped under .v0 so they cannot leak onto any other route, including
+// the new design-system primitives in app/ds/ and its demo route. This
+// page itself is unchanged in behaviour or appearance: only where its
+// CSS lives has moved. It is replaced, not styled further, in M3.2.
+//
+// ASSUMED: dark mode. This block keeps the v0 palette's own dark
+// variant exactly as it was. The new design system (Flow §10) defines
+// only one, light, palette and does not mention a dark mode at all, so
+// app/ds/ does not attempt one; everything built on the design system
+// (including the /internal/design-system demo route) renders the same
+// regardless of the visitor's OS colour scheme, until Shefin says
+// otherwise.
+const v0Css = `
+.v0{
+  --bg:#faf6ef; --fg:#191510; --muted:#635a4e; --accent:#9a4620; --rule:#ddd3c4;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme:dark){
+  .v0{ --bg:#15120f; --fg:#ece4d8; --muted:#9d9488; --accent:#d78551; --rule:#332c25; }
+}
+.v0{
+  margin:0; color:var(--fg);
+  font-family:var(--sans); font-size:17px; line-height:1.65;
+  padding:2.5rem 1.35rem 3rem;
+}
+.v0 main{max-width:33rem; margin:0 auto}
+.v0 .mark{display:flex; align-items:center; gap:.55rem; margin-bottom:2.4rem}
+.v0 .mark svg{width:38px; height:auto; display:block; color:var(--fg); flex:none}
+.v0 h1{
+  font-size:1.05rem; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  margin:0; line-height:1;
+}
+.v0 p{margin:0 0 1.35rem}
+.v0 .lede{font-family:var(--mono); font-size:1.0rem; line-height:1.75; max-width:31rem}
+.v0 .note{color:var(--muted); font-family:var(--mono); font-size:.95rem; line-height:1.75}
+.v0 figure{margin:2.6rem 0 0}
+.v0 figure img{display:block; width:100%; height:auto; background:var(--rule); border-radius:2px}
+.v0 figcaption{margin-top:.8rem; font-family:var(--mono); font-size:.85rem; line-height:1.7; color:var(--muted)}
+.v0 .cta-p{margin:1.9rem 0 2.1rem}
+.v0 .cta{
+  display:inline; font-weight:600; font-size:1.05rem; color:var(--fg);
+  text-decoration:underline; text-decoration-color:var(--accent);
+  text-decoration-thickness:2px; text-underline-offset:.28em;
+}
+.v0 .cta .arrow{color:var(--accent); padding:0 .1em}
+.v0 .cta .wa{color:var(--accent)}
+.v0 .cta:hover{color:var(--accent)}
+.v0 a{color:var(--fg); text-underline-offset:.18em}
+.v0 footer{
+  margin-top:3rem; padding-top:1.3rem; border-top:1px solid var(--rule);
+  font-family:var(--mono); font-size:.8rem; line-height:1.8; color:var(--muted);
+}
+.v0 footer a{color:var(--muted)}
+@media (min-width:40rem){ .v0{padding:4.5rem 2rem 4rem} }
+
+.v0 .bg{position:fixed; inset:0; z-index:-2; background:var(--bg) url(/assets/jars-loop.jpg) center/cover no-repeat}
+.v0 .bg video{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block}
+@media (prefers-reduced-motion:reduce){ .v0 .bg video{display:none} }
+.v0 .bg::after{content:""; position:fixed; inset:0; z-index:-1; background:rgba(250,246,239,.84)}
+@media (prefers-color-scheme:dark){ .v0 .bg::after{background:rgba(21,18,15,.82)} }
+`;
+
 // The "tell me when a batch opens" link is switched from Firestore:
 // config/site.notifyCtaVisible. Fail-open by design: see the inline script below.
 const ctaFlagScript = `
@@ -20,6 +84,8 @@ const ctaFlagScript = `
 export default function HomePage() {
   return (
     <>
+      <style dangerouslySetInnerHTML={{ __html: v0Css }} />
+      <div className="v0">
       <main>
         <div className="mark">
           <svg
@@ -99,6 +165,7 @@ export default function HomePage() {
         <video autoPlay muted loop playsInline poster="/assets/jars-loop.jpg">
           <source src="/assets/jars-loop.mp4" type="video/mp4" />
         </video>
+      </div>
       </div>
 
       <script dangerouslySetInnerHTML={{ __html: ctaFlagScript }} />
