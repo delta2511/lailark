@@ -1,0 +1,45 @@
+{
+  "_note": "M3.4. One JSON per batch, source of the /batch/<nnn> record page (D47). Facts, ingredients, allergens, claims and storage are copied from the printed label character for character (CLAUDE.md section 3); nothing here is paraphrased. Batch 001's ingredients carry no percent field per D28: the record page shows none until batch 002. story is an array of paragraphs (D49); batch 001 carries the one Chaliyam sentence already drafted, no new copy. photos is an array that renders nothing when empty (D50); batch 001 has one photo, alt text only, no caption.",
+  "number": "001",
+  "name": "Prawns and dates",
+  "facts": [
+    "Prawns from Chaliyam, landed 31 August 2026.",
+    "Cooked 1 September 2026.",
+    "Bottled 4 September 2026.",
+    "22 jars, 200 g each."
+  ],
+  "story": [
+    "Almost all our prawns come in at Chaliyam, where the Chaliyar meets the sea, a short drive from the kitchen. These ones were cooked the morning after they landed."
+  ],
+  "yourJar": "The jar number is written by hand on the label. Jar 9 of 22 means yours was the ninth out of this pot.",
+  "ingredients": [
+    { "name": "Prawns" },
+    { "name": "dates" },
+    { "name": "vinegar" },
+    { "name": "gingelly (sesame) oil" },
+    { "name": "garlic" },
+    { "name": "green chilli" },
+    { "name": "ginger" },
+    { "name": "salt" },
+    { "name": "Kashmiri chilli powder" },
+    { "name": "red chilli powder" },
+    { "name": "sugar" },
+    { "name": "compounded asafoetida (gum arabic, wheat flour, asafoetida)" },
+    { "name": "mustard" },
+    { "name": "curry leaves" },
+    { "name": "fenugreek" },
+    { "name": "turmeric" }
+  ],
+  "allergens": "Contains crustacean (prawns), sesame, wheat (gluten) and mustard.",
+  "claims": "No added preservatives. Prepared by traditional method.",
+  "storage": "A cool, dry place away from sunlight. Always a clean dry spoon, and keep the prawns covered in oil.",
+  "bestBefore": "Best before six months from packing, so until 4 March 2027.",
+  "photos": [
+    {
+      "src": "/assets/jar-001.jpg",
+      "alt": "A jar of batch 001, held in a hand.",
+      "width": 1008,
+      "height": 1344
+    }
+  ]
+}

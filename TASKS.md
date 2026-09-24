@@ -339,13 +339,16 @@ and the live webhook before the production deploy.
       pages render with counts from the emulator and degrade to "count unavailable"
       when the API is down.
 - [ ] M3.4 [sonnet] (Shefin checks) Batch pages. **D47 adds two things Shefin asked for on 24 Sep: the batch's own story, which is what makes the record page worth scanning a QR for, and a space for that batch's photos.** The Legal Metrology block stays on `/pickles/<slug>`, which is the sales page; this is the add-on story page the printed QR points at. **D21c changes this task**: `/batch/<nnn>` exists only from bottling and is always a record, so there is no open-batch view here. An open batch is booked and watched on its product page (M3.3), which carries the live counts, the promise from brief §7.4 and the share link. `/batch/[nnn]` from `site/content/batches/<nnn>.json`
-      (the record) with the v0 batch 001 page as the template for the record view, and
-      an open-batch view (bookable, paid, to half, ₹599, the promise from brief §7.4,
-      no cancellation line). `001.json` seeded from the handoff. Done when: the built
-      `/batch/001` HTML is equivalent to v0 (same copy and facts, passes the v0
-      acceptance checklist, and its ingredient line carries no percentages: D28) and
-      `/batch/002` renders an open batch. Record pages show ingredient percentages from
-      batch 002 on (D28).
+      (the record) with the v0 batch 001 page as the template for the record view.
+      `001.json` seeded from the handoff. The two lines that once asked for an
+      open-batch view here, and for `/batch/002` to render one, are struck out by D21c.
+      D48 replaces the page's closing block with one button to `/`; D49 makes the story
+      an array of paragraphs; D50 puts the jar photo on 001 with no caption. Done when:
+      the built `/batch/001` HTML is equivalent to v0 (same copy and facts, passes the
+      v0 acceptance checklist, and its ingredient line carries no percentages: D28,
+      plus D48's closing button) and the template is proven generic, percentages and
+      all, by a fixture batch rather than a published `/batch/002` URL (A172). Record
+      pages show ingredient percentages from batch 002 on (D28).
 - [ ] M3.5 [opus] Checkout. Callable `createCheckout`: validates lines against the
       per-person limit across the customer's orders in the batch, pincode against the
       serviceable list and the product's shipping rule, takes a 15-minute hold in a
