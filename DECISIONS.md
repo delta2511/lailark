@@ -661,3 +661,10 @@ break.
 - A126 (M2.21, 24 Sep): the focus test forces `:focus-visible` over CDP. A programmatic
   `.focus()` does not match it in Chromium, and `outlineColor` then reports `currentColor`,
   so the test would measure a ring that is never drawn. Status: open.
+- A127 (M2.22, 24 Sep): "all four tab states" in the done-when is built as the superset,
+  every one of the five tabs active in turn with all five bottom-bar labels checked each
+  time. That is what actually proves the fix, and it matches how M2.21's sweep works.
+  Status: open.
+- A128 (M2.22, 24 Sep): the element measured is the `<span>` inside each bottom-bar
+  button, not the button itself. The span is the surface the words are painted on, which
+  is the thing the bug was about. Status: open.

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { COPY } from "../src/copy";
+import { expectReadable } from "./contrast";
 import { KITCHEN_PHONE, OTP, OWNER_PHONE, acceptFixedOtp } from "./emulator";
 
 test.beforeEach(async ({ page }) => {
@@ -166,5 +167,37 @@ test("every bottom-bar item is at least 48px tall, and Sell is bigger than the r
   for (const id of others) {
     expect(boxes["tab-sell"].height, "sell taller than " + id).toBeGreaterThan(boxes[id].height);
     expect(boxes["tab-sell"].width, "sell wider than " + id).toBeGreaterThan(boxes[id].width);
+  }
+});
+
+/**
+ * Every bottom-bar label stays readable no matter which tab is active
+ * (M2.22).
+ *
+ * The Sell button was invisible exactly while Sell itself was the active
+ * tab: `.bottom-bar-item-sell` painted paper on ink, `.bottom-bar-item.active`
+ * then overrode the colour back to ink, and the word "Sell" sat on its own
+ * background, 1:1, only in that one state. Every other tab's active state
+ * was, and still is, ink on paper and fine. A test that checked the bar on a
+ * single screen (as `every bottom-bar item is at least 48px tall` above
+ * does, and as every screen spec that clicks a tab does) cannot see that:
+ * it has to actually make each tab the active one in turn and check the
+ * whole row each time, Sell's own label included.
+ */
+test("every bottom-bar label is readable, on every tab, including Sell's own", async ({
+  page,
+}) => {
+  await signIn(page, OWNER_PHONE);
+
+  const testIds = ["tab-today", "tab-sell", "tab-batches", "tab-orders", "tab-more"];
+
+  for (const activeTestId of testIds) {
+    await page.getByTestId(activeTestId).click();
+    await expect(page.getByTestId(activeTestId)).toHaveAttribute("aria-current", "page");
+
+    for (const testId of testIds) {
+      const label = page.getByTestId(testId).locator("span");
+      await expectReadable(label, `${testId} label while ${activeTestId} is active`);
+    }
   }
 });

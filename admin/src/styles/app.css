@@ -253,7 +253,22 @@ button.quiet {
   font-weight: 600;
 }
 
+/* Sell is the one dark pill in the bar, so it is the one that has to beat
+   `.bottom-bar-item.active`, which sets `color: var(--ink)` for every other
+   tab's active state.
+
+   M2.22: it did not, and the reason is duller than a specificity fight. This
+   rule already ties `.bottom-bar-item.active` at two classes (0,2,0) and
+   already sits later in the file, so it wins every property it declares,
+   which is how `text-decoration` and `outline` are settled below. It simply
+   never declared `color`. So the only rule saying anything about the colour
+   of an active Sell label was `.bottom-bar-item.active`, which set ink, over
+   a background that stayed ink: contrast 1:1, exactly while Sell was the tab
+   you were on. One declaration closes it. No `!important`, and
+   `.bottom-bar-item.active` is untouched: it is correct for the other four
+   tabs, which are ink on paper. */
 .bottom-bar-item-sell.active {
+  color: var(--paper);
   text-decoration: none;
   outline: var(--focus-ring);
   outline-offset: 2px;

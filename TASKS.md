@@ -258,7 +258,7 @@ CLAUDE.md §4.2 step 3. These are built before the merge to `main`.
       toast, the fix does not reach for `!important`, and a test fails if the button's
       colour ever matches its background again.
 
-- [ ] M2.22 [sonnet] The Sell button's label is invisible while you are on the Sell tab.
+- [x] M2.22 [sonnet] The Sell button's label is invisible while you are on the Sell tab.
       Found by M2.21's sweep on 24 Sep, with the contrast helper that task built, and
       confirmed by reading the rules. `.bottom-bar-item-sell` (`app.css:247`, one class)
       sets `color: var(--paper)` on `background: var(--ink)`; `.bottom-bar-item.active`
