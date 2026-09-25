@@ -357,6 +357,31 @@ and the live webhook before the production deploy.
       address, pincode, email optional, consent ticks per brief §5), Razorpay Checkout
       script loaded only here. Done when: race test (two checkouts, one jar) and the
       hold expiry sweep pass; a test payment completes on staging.
+      Shefin checked and approved all of the page's customer copy on 24 Sep (D53) and the
+      two round 4 sentences on 25 Sep (D55). Four fix rounds: the cap was waived once by
+      Shefin for round 4 (D54) because a fresh tester found a real overcharge. Round 4
+      verdict PASS on all eight items: the overcharge is dead, the release is safe under
+      racing, a phone mismatch leaks nothing, the paid gate holds across all 17 order
+      states plus junk, and D53's sentence is byte-identical at fifteen minutes. Build
+      and lint exit 0, 1391 tests green. Shefin still owes the test payment on staging,
+      which needs Razorpay test keys in Secret Manager and is walked together with M3.6.
+- [ ] M3.5a [opus] Checkout resume keeps the first attempt's address. Found by the M3.5
+      round 4 tester, outside that round's scope, logged rather than fixed at the 25 Sep
+      break. `checkResumableCheckout` (`functions/src/orders/checkout.ts:520-523`)
+      compares only `productSlug`, `qty`, `totalPaise` and `customerPhone`; the rest of
+      the request is discarded and the stored order handed back. So a customer who
+      dismisses the Razorpay window, corrects a typo in their address and taps Pay again
+      gets no error and the jar ships to the FIRST address. The email is dropped the same
+      way. A marketing tick added on the second attempt is not recorded, which is the safe
+      direction. The total cannot catch any of it: `shippingFeeFor`
+      (`shared/src/checkout.ts:99-110`) never takes a pincode, so the address is unguarded
+      under every shipping setting. Same shape as the overcharge round 4 fixed, different
+      field. Tester's probe: same `clientRef`, same jars, same price, same phone, address
+      changed to `99 New Street, Kannur, 670001` and name to `Asha Menon`, and the stored
+      `deliveryContact` (written at `checkout.ts:778`) stayed `12 Mill Road, Kozhikode,
+      673571`. Done when: a changed delivery contact is either carried onto the order or
+      refused like a changed quantity, whichever reads better to the customer, and a test
+      ships the probe above to the corrected address.
 - [ ] M3.6 [opus] Razorpay webhook and reconciliation, trimmed for launch (D29). HTTP
       function verifying the signature, `webhookEvents` dedupe, `payment.captured` → hold
       becomes Paid, bill or receipt issued (M2.9), order events written;

@@ -168,6 +168,38 @@ function isoDateOrNull(value) {
   return typeof value === "string" && ISO_DATE.test(value) ? value : null;
 }
 
+/**
+ * The most jars one person may take from this batch (M3.5). Dropped rather
+ * than coerced, like every other field here: a bad value would leave the
+ * checkout offering a quantity the server is about to refuse, and the
+ * fallback the page then uses is the tighter one.
+ *
+ * Zero is a real answer, not a bad value. D52 makes the number the Owner
+ * typed the authority in both directions, and the server's own resolver has
+ * no floor of one, so a batch that resolves to no jars per person has to
+ * arrive here as 0 and offer nothing. Treating it as missing would send the
+ * page back to the two-jar fallback and offer a jar the server refuses.
+ */
+function limitOrNull(value) {
+  return Number.isInteger(value) && value >= 0 && value <= MAX_MARKS ? value : null;
+}
+
+/**
+ * Jars actually takeable right now: capacity less paid less every live
+ * hold. On an open batch `count` is the paid marks, so this is the only
+ * field that knows a jar is being paid for by somebody else.
+ */
+function availableOrNull(value, total) {
+  return Number.isInteger(value) && value >= 0 && value <= total ? value : null;
+}
+
+const SHIPPING_RULES = ["free", "flatFee", "freeOnTwo"];
+
+/** The product's own fee rule as the server enforces it, or null. */
+function shippingRuleOrNull(value) {
+  return SHIPPING_RULES.includes(value) ? value : null;
+}
+
 /** A positive integer paise price at or under the printed MRP, or null. */
 function paiseOrNull(value) {
   if (!Number.isInteger(value) || value <= 0) return null;
@@ -188,18 +220,29 @@ export function readProductDetail(payload, slug) {
   if (base.mode === "none") return base;
 
   const entry = payload?.products?.[slug] ?? {};
+  // The product's own shipping rule, which `createCheckout` enforces. The
+  // page has to compute the same total the server is about to charge, so
+  // this is read, never assumed: brief 4.2, no surprise charges at payment.
+  const shippingRule = shippingRuleOrNull(entry.shippingRule);
   if (base.mode === "inStock") {
     return {
       ...base,
+      // In stock, the count already is the free figure.
+      available: availableOrNull(entry.available, base.total) ?? base.count,
       priceInStockPaise: paiseOrNull(entry.priceInStockPaise),
       packedOn: isoDateOrNull(entry.packedOn),
       bestBefore: isoDateOrNull(entry.bestBefore),
       saleStopOn: isoDateOrNull(entry.saleStopOn),
+      perPersonLimit: limitOrNull(entry.perPersonLimit),
+      shippingRule,
     };
   }
   return {
     ...base,
+    available: availableOrNull(entry.available, base.total),
     priceOpenPaise: paiseOrNull(entry.priceOpenPaise),
+    perPersonLimit: limitOrNull(entry.perPersonLimit),
+    shippingRule,
   };
 }
 
@@ -215,8 +258,6 @@ export function useProductDetail(slug) {
   const entry = readProductDetail(state.payload, slug);
   return entry ? { status: "ready", entry } : { status: "unavailable" };
 }
-
-const SHIPPING_RULES = ["free", "flatFee", "freeOnTwo"];
 
 /**
  * The shipping line's own data, brief section 4.2 and D12: free at launch,
@@ -234,7 +275,13 @@ export function readShipping(payload) {
     Number.isInteger(shipping?.flatFeePaise) && shipping.flatFeePaise >= 0
       ? shipping.flatFeePaise
       : 6000;
-  return { rule, flatFeePaise };
+  // M3.5: the jar count at which `freeOnTwo` stops charging (brief 4.2).
+  // Read, never assumed, so the page's total and the server's agree.
+  const freeFromJars =
+    Number.isInteger(shipping?.freeFromJars) && shipping.freeFromJars >= 2
+      ? shipping.freeFromJars
+      : 2;
+  return { rule, flatFeePaise, freeFromJars };
 }
 
 /** `null` while the payload has not landed; the shipping line otherwise. */

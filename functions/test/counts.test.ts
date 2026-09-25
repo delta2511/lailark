@@ -8,6 +8,7 @@
  * `stripLeadingApiSegment`, the real `products`/`batches` collections, and
  * the CDN cache header, end to end.
  */
+import { Timestamp } from "firebase-admin/firestore";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { clearFirestore, db, FUNCTIONS_HOST, PROJECT } from "./emulator";
@@ -94,14 +95,21 @@ describe("/api/counts, against the emulator", () => {
   it("200s with an empty catalogue, and shipping falls back to free", async () => {
     const { status, body, headers } = await getCounts();
     expect(status).toBe(200);
-    expect(body).toEqual({ products: {}, shipping: { rule: "free", flatFeePaise: 6_000 } });
+    expect(body).toEqual({
+      products: {},
+      shipping: { rule: "free", flatFeePaise: 6_000, freeFromJars: 2 },
+    });
     expect(headers.get("cache-control")).toBe("public, max-age=15, s-maxage=15");
   });
 
   it("reads the shipping switch from settings/shipping", async () => {
     await db().collection("settings").doc("shipping").set({ rule: "flatFee", flatFee: 6_000 });
     const { body } = await getCounts();
-    expect((body as { shipping: unknown }).shipping).toEqual({ rule: "flatFee", flatFeePaise: 6_000 });
+    expect((body as { shipping: unknown }).shipping).toEqual({
+      rule: "flatFee",
+      flatFeePaise: 6_000,
+      freeFromJars: 2,
+    });
   });
 
   it("reports an active product with no live batch as mode none", async () => {
@@ -129,10 +137,16 @@ describe("/api/counts, against the emulator", () => {
       mode: "inStock",
       count: 19,
       total: 22,
+      available: 19,
       priceInStockPaise: 64_900,
       packedOn: "2026-09-04",
       bestBefore: "2027-03-04",
       saleStopOn: "2027-01-02",
+      // M3.5, brief 4.1: two jars per person online on an in-stock batch.
+      perPersonLimit: 2,
+      // M3.5: the product's own fee rule, which `createCheckout` enforces.
+      // The checkout page has to compute the same total the server charges.
+      shippingRule: "free",
     });
   });
 
@@ -147,7 +161,54 @@ describe("/api/counts, against the emulator", () => {
 
     const { body } = await getCounts();
     const entry = (body as { products: Record<string, unknown> }).products["squid-and-dates"];
-    expect(entry).toEqual({ mode: "open", count: 5, total: 13, priceOpenPaise: 59_900 });
+    // M3.5: `seedBatch` stamps perPersonLimit 4, which is what the checkout
+    // offers as the jar picker's ceiling on this batch (D44).
+    expect(entry).toEqual({
+      mode: "open",
+      count: 5,
+      total: 13,
+      // D3: the marks are 5 paid of 13 bookable, so the free figure has to
+      // be carried on its own or the jar picker offers jars that are gone.
+      available: 8,
+      priceOpenPaise: 59_900,
+      perPersonLimit: 4,
+      shippingRule: "free",
+    });
+  });
+
+  it("publishes each product's own shipping rule, the one the checkout enforces", async () => {
+    await seedProduct("beef-and-dates");
+    await db().collection("products").doc("beef-and-dates").update({ shippingRule: "flatFee" });
+    await seedBatch("b-beef01", {
+      productSlug: "beef-and-dates",
+      state: "inStock",
+      bottledJars: 10,
+      packedOn: "2026-09-04",
+      saleStopOn: "2099-01-01",
+    });
+
+    const { body } = await getCounts();
+    const entry = (body as { products: Record<string, { shippingRule?: string }> }).products[
+      "beef-and-dates"
+    ];
+    expect(entry.shippingRule).toBe("flatFee");
+  });
+
+  it("a live hold is out of the available figure, on the open batch too", async () => {
+    await seedProduct("squid-and-dates");
+    await seedBatch("b-open02", {
+      productSlug: "squid-and-dates",
+      state: "open",
+      bookableJars: 19,
+      paidCount: 17,
+      heldJars: { "o-1": { qty: 1, expiresAt: Timestamp.fromMillis(Date.now() + 60_000) } },
+    });
+
+    const { body } = await getCounts();
+    const entry = (body as { products: Record<string, Record<string, unknown>> }).products[
+      "squid-and-dates"
+    ];
+    expect(entry).toMatchObject({ count: 17, total: 19, available: 1 });
   });
 
   it("never leaks an inactive (pipeline) product", async () => {

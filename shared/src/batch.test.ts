@@ -17,6 +17,7 @@ import {
   minRemainingDaysOnArrival,
   perPersonLimit,
   remainingPerPersonAllowance,
+  resolvePerPersonLimit,
   saleStopOn,
   saleStopWarnOn,
   shelfLife,
@@ -382,5 +383,75 @@ describe("inStockAvailability, brief 6.2", () => {
   it("defaults writtenOff to zero", () => {
     const view = inStockAvailability({ bottledJars: 22, paidCount: 19, now: NOW });
     expect(view.available).toBe(3);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* D52: the typed limit governs the web too, in both directions               */
+/* -------------------------------------------------------------------------- */
+
+describe("resolvePerPersonLimit, decision D52", () => {
+  /** A 22 jar batch: 19 bookable, computed quarter 4. */
+  const batch = { perPersonLimit: 4 };
+  const WEB_IN_STOCK_FALLBACK = 2;
+
+  it("lets the Owner's typed number stand when it is higher than the fallback", () => {
+    // The bug D52 was written against: a web buyer was told "limited to 2"
+    // on a batch where the Owner had typed 5.
+    expect(resolvePerPersonLimit({ ...batch, perPersonLimitOverride: 5 }, WEB_IN_STOCK_FALLBACK))
+      .toBe(5);
+  });
+
+  it("lets it stand when it is lower than the fallback", () => {
+    expect(resolvePerPersonLimit({ ...batch, perPersonLimitOverride: 1 }, WEB_IN_STOCK_FALLBACK))
+      .toBe(1);
+  });
+
+  it("lets it stand when it is exactly the fallback", () => {
+    expect(resolvePerPersonLimit({ ...batch, perPersonLimitOverride: 2 }, WEB_IN_STOCK_FALLBACK))
+      .toBe(2);
+  });
+
+  it("lets it stand above the computed quarter as well", () => {
+    expect(resolvePerPersonLimit({ ...batch, perPersonLimitOverride: 9 })).toBe(9);
+  });
+
+  it("falls back to two on a blank in-stock batch", () => {
+    expect(resolvePerPersonLimit(batch, WEB_IN_STOCK_FALLBACK)).toBe(2);
+    expect(resolvePerPersonLimit({ ...batch, perPersonLimitOverride: null }, WEB_IN_STOCK_FALLBACK))
+      .toBe(2);
+  });
+
+  it("falls back to the computed quarter on a blank open batch, where no fallback is named", () => {
+    expect(resolvePerPersonLimit(batch)).toBe(4);
+    expect(resolvePerPersonLimit(batch, null)).toBe(4);
+  });
+
+  it("treats junk in the override box as blank, never as a cap", () => {
+    for (const junk of [null, undefined, 0, -5, 1.5, "lots", true, {}]) {
+      expect(
+        resolvePerPersonLimit(
+          { ...batch, perPersonLimitOverride: junk as number | null },
+          WEB_IN_STOCK_FALLBACK,
+        ),
+        `override ${JSON.stringify(junk)}`,
+      ).toBe(2);
+    }
+  });
+
+  it("treats junk in the fallback as no fallback, never as a cap", () => {
+    for (const junk of [0, -5, 1.5, "lots"]) {
+      expect(
+        resolvePerPersonLimit(batch, junk as number),
+        `fallback ${JSON.stringify(junk)}`,
+      ).toBe(4);
+    }
+  });
+
+  it("agrees with effectivePerPersonLimit whenever no fallback is named", () => {
+    for (const override of [null, 1, 3, 7]) {
+      const value = { ...batch, perPersonLimitOverride: override };
+      expect(resolvePerPersonLimit(value)).toBe(effectivePerPersonLimit(value));
+    }
   });
 });

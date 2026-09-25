@@ -94,6 +94,45 @@ export function isPerPersonLimitOverride(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 1;
 }
 
+/**
+ * The cap, with a fallback for the caller whose default is not the computed
+ * quarter. **Decision D52.**
+ *
+ * D44 made `perPersonLimitOverride` the Owner's typed cap. D52 says that
+ * typed number governs the website too, **in both directions**: typing 5
+ * lets a web buyer take 5, typing 1 lets them take 1. Only when the box is
+ * blank does a fallback apply, and the web's fallback for an in-stock batch
+ * is brief §4.1's two jars rather than the open-batch quarter.
+ *
+ * So there are exactly three answers, in this order:
+ *
+ *  1. the Owner typed a number: that number, whatever it is;
+ *  2. the box is blank and the caller named a fallback: the fallback;
+ *  3. the box is blank and nobody named one: the computed quarter, which is
+ *     what {@link effectivePerPersonLimit} answers and what the counter uses.
+ *
+ * A fallback can never widen the Owner's typed limit, because a typed limit
+ * is answered before a fallback is even looked at. It is a default, not a
+ * cap on a cap, which is the shape M3.5 first reached for and D52 replaced.
+ *
+ * Anything that is not a whole number of jars, one or more, is not a
+ * fallback: `null`, `0`, `-5`, `1.5` and `"lots"` all fall through to the
+ * computed quarter rather than becoming a cap nobody meant.
+ */
+export function resolvePerPersonLimit(
+  batch: {
+    readonly perPersonLimit?: number | null;
+    readonly perPersonLimitOverride?: number | null;
+  },
+  fallback?: number | null,
+): number {
+  if (isPerPersonLimitOverride(batch.perPersonLimitOverride)) {
+    return batch.perPersonLimitOverride;
+  }
+  if (isPerPersonLimitOverride(fallback)) return fallback;
+  return effectivePerPersonLimit(batch);
+}
+
 export interface BatchMaths {
   readonly plannedJars: number;
   readonly bookableJars: number;

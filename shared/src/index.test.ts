@@ -89,6 +89,7 @@ const EXPECTED_EXPORTS = [
   "perPersonLimit",
   "effectivePerPersonLimit",
   "isPerPersonLimitOverride",
+  "resolvePerPersonLimit",
   "batchMaths",
   "surplusJars",
   "withinPerPersonLimit",
@@ -225,6 +226,17 @@ const EXPECTED_EXPORTS = [
   "discountRights",
   "checkDiscount",
   "isSellablePrice",
+  // web checkout (M3.5): brief 4.2, 6.1, 9.3, 11.5
+  "DEFAULT_SHIPPING_SWITCH",
+  "shippingFeeFor",
+  "effectiveShippingSwitch",
+  "isPincode",
+  "DEFAULT_PINCODE_LIST",
+  "checkDeliverable",
+  "normaliseShippingSwitch",
+  "normaliseState",
+  "WEB_HOLD_MINUTES",
+  "MAX_WEB_JARS",
 ] as const;
 
 describe("the barrel", () => {

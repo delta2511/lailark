@@ -30,6 +30,13 @@
       ],
       "rewrites": [
         {
+          "source": "/api/checkout",
+          "function": {
+            "functionId": "createCheckout",
+            "region": "asia-south1"
+          }
+        },
+        {
           "source": "/api/**",
           "function": {
             "functionId": "api",

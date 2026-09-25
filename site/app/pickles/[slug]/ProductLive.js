@@ -96,9 +96,14 @@ export function ProductBuyBlock({ slug }) {
       {inStock && !buy ? (
         <p className="product-live__note">{SALE_STOPPED}</p>
       ) : (
-        <button type="button" className="product-buy">
+        // M3.5: a link, not a button. The checkout is its own page
+        // (`/checkout?p=<slug>&q=<jars>`), so this navigates rather than
+        // opening anything in place, and it still works with JavaScript
+        // half loaded. The class is unchanged, so the control looks and
+        // tests exactly as it did.
+        <a className="product-buy" href={`/checkout?p=${encodeURIComponent(slug)}&q=1`}>
           {inStock ? BUY_LABEL : `Pay ${priceFor(entry)} to book a jar`}
-        </button>
+        </a>
       )}
       {!inStock ? <p className="product-live__promise">{OPEN_BATCH_PROMISE}</p> : null}
     </div>

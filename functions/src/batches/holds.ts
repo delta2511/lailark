@@ -50,9 +50,9 @@ import {
   BATCH_STATES_IN_STOCK,
   BATCH_STATES_OPEN_FOR_BOOKING,
   canHold,
-  effectivePerPersonLimit,
   inStockAvailability,
   remainingPerPersonAllowance,
+  resolvePerPersonLimit,
   withinPerPersonLimit,
 } from "@lailark/shared";
 
@@ -130,6 +130,26 @@ export interface StockClaimRequest {
    * this module only records that it was set. It is never read off a request.
    */
   readonly overrideLimit?: boolean;
+  /**
+   * The per-person cap to use **when the Owner has typed none on the batch**.
+   *
+   * **Decision D52.** The number typed in the admin governs the website too,
+   * in both directions, so it is never narrowed by anything a caller passes:
+   * typing 5 lets a web buyer take 5 and typing 1 lets them take 1. Only a
+   * blank box falls through to this, and the web's fallback for an in-stock
+   * batch is brief 4.1's two jars rather than the open-batch quarter.
+   *
+   * The counter passes nothing at all and keeps the quarter (4.1's next
+   * column), which is exactly what it did before M3.5.
+   *
+   * M3.5 first built this as `maxJarsForCustomer`, a cap that only ever
+   * narrowed. D52 replaced that shape: a cap on a cap cannot express "typing
+   * 5 means 5", and it told a customer "limited to 2" when the Owner had
+   * typed 5. `resolvePerPersonLimit` in `@lailark/shared` is the one place
+   * the three-way answer lives, so this module and `/api/counts` cannot
+   * drift apart about what the picker on the site may offer.
+   */
+  readonly perPersonLimitFallback?: number;
 }
 
 /**
@@ -258,9 +278,10 @@ export async function readStockClaim(
     customerJars += order.jars;
   }
 
-  // D44: the Owner's own cap when he has typed one, the computed quarter
-  // otherwise. Never `batch.perPersonLimit` on its own.
-  const limit = effectivePerPersonLimit(batch);
+  // D44 and D52: the Owner's typed cap when there is one, whatever it is;
+  // then the caller's fallback, for the web's two jars in stock; then the
+  // computed quarter. Never `batch.perPersonLimit` on its own.
+  const limit = resolvePerPersonLimit(batch, request.perPersonLimitFallback);
   const limitOverridden = request.overrideLimit === true;
   if (!limitOverridden && !withinPerPersonLimit(customerJars, qty, limit)) {
     const remaining = remainingPerPersonAllowance(customerJars, limit);
@@ -452,22 +473,29 @@ export async function readStockRelease(
   };
 }
 
-/** The write half of {@link readStockRelease}. */
+/**
+ * The write half of {@link readStockRelease}.
+ *
+ * **`update`, not `set({ merge: true })`, and that is the whole point.**
+ * Firestore merges a map field leaf by leaf, so a `heldJars` key this
+ * release deliberately left out would be merged straight back in and the
+ * hold would never go. `update` replaces the field as a whole, which is safe
+ * because {@link readStockRelease} read the map inside this same
+ * transaction, so nothing can have changed under it. `writeStockClaim`
+ * stays a merging `set` because it omits no key: it copies every existing
+ * hold and adds one.
+ */
 export function writeStockRelease(
   tx: Transaction,
   db: Firestore,
   release: StockRelease,
   actor: string,
 ): void {
-  tx.set(
-    db.collection(BATCHES).doc(release.batchRef),
-    {
-      ...release.auditPatch,
-      updatedAt: FieldValue.serverTimestamp(),
-      updatedBy: actor,
-    },
-    { merge: true },
-  );
+  tx.update(db.collection(BATCHES).doc(release.batchRef), {
+    ...release.auditPatch,
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: actor,
+  });
 }
 
 /* -------------------------------------------------------------------------- */

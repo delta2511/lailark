@@ -28,11 +28,18 @@ import {
   BATCH_STATES_OPEN_FOR_BOOKING,
   batchAvailability,
   type CustomLine,
+  normaliseShippingSwitch,
   inStockAvailability,
   nearMissNumbers,
+  type PincodeList,
+  type ProductShippingRestriction,
+  type ShippingRule,
+  SHIPPING_RULES,
+  type ShippingSwitch,
 } from "@lailark/shared";
 
 import { BATCHES, heldJarsFrom, SETTINGS } from "../batches/store";
+import type { CheckoutBatchCandidate } from "./checkout";
 import type {
   BatchCandidate,
   SaleBatchView,
@@ -49,6 +56,10 @@ export const DISCOUNT_CAP_SETTINGS_ID = "discountCap";
 export const HOLDS_SETTINGS_ID = "holds";
 /** `settings/gst`, for the place of supply carried from day one. */
 export const GST_SETTINGS_ID = "gst";
+/** `settings/shipping`, brief 4.2 and D12. */
+export const SHIPPING_SETTINGS_ID = "shipping";
+/** `settings/pincodes`, brief 11.5: the serviceable list. */
+export const PINCODES_SETTINGS_ID = "pincodes";
 
 /** Kerala. The place of supply when nothing is being shipped anywhere. */
 export const DEFAULT_HOME_STATE = "KL";
@@ -264,7 +275,118 @@ export async function candidateBatchesFor(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Choosing the batch on the web, M3.5                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The same query as {@link candidateBatchesFor}, with the shelf-life stop
+ * carried along: brief 6.2 takes the jar off the website 120 days after
+ * packing, and the web chooser has to know that before it suggests a batch
+ * the checkout would then refuse. A separate function rather than a wider
+ * `BatchCandidate` so the counter's own chooser is untouched.
+ */
+export async function webCandidateBatchesFor(
+  tx: Transaction,
+  db: Firestore,
+  productSlug: string,
+  nowMillis: number,
+): Promise<CheckoutBatchCandidate[]> {
+  const base = await candidateBatchesFor(tx, db, productSlug, nowMillis);
+  if (base.length === 0) return [];
+  const found = await tx.get(db.collection(BATCHES).where("productSlug", "==", productSlug));
+  const saleStopByRef = new Map<string, string | null>();
+  for (const doc of found.docs) {
+    const stop = doc.get("saleStopOn");
+    saleStopByRef.set(doc.id, typeof stop === "string" && stop !== "" ? stop : null);
+  }
+  return base.map((candidate) => ({
+    ref: candidate.ref,
+    batchNo: candidate.batchNo,
+    state: candidate.state,
+    packedOn: candidate.packedOn,
+    saleStopOn: saleStopByRef.get(candidate.ref) ?? null,
+    createdAtMillis: candidate.createdAtMillis,
+    available: candidate.available,
+  }));
+}
+
+/* -------------------------------------------------------------------------- */
 /* Settings                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `settings/shipping`, brief 4.2 and D12. Missing reads as free at launch.
+ *
+ * Clamped by `normaliseShippingSwitch`, the same function `/api/counts`
+ * reads the document with. Nothing constrains these fields where they are
+ * written, so a fractional `freeFromJars` or `flatFee` used to give the page
+ * one total and this one another, and the order was refused at the Pay
+ * button for a difference the customer could do nothing about.
+ */
+export async function shippingSwitch(tx: Transaction, db: Firestore): Promise<ShippingSwitch> {
+  const snap = await tx.get(db.collection(SETTINGS).doc(SHIPPING_SETTINGS_ID));
+  return normaliseShippingSwitch({
+    rule: snap.get("rule"),
+    flatFee: snap.get("flatFee"),
+    freeFromJars: snap.get("freeFromJars"),
+  });
+}
+
+/**
+ * `settings/pincodes`, brief 11.5. The list only refuses anything once the
+ * Owner sets `enforce` to a literal `true`: see `checkDeliverable`'s own note
+ * on why a Shiprocket coverage map is not a wall (India Post covers the rest).
+ */
+export async function pincodeList(tx: Transaction, db: Firestore): Promise<PincodeList> {
+  const snap = await tx.get(db.collection(SETTINGS).doc(PINCODES_SETTINGS_ID));
+  const raw = snap.get("serviceable");
+  const serviceable = Array.isArray(raw) ? raw.filter((p): p is string => typeof p === "string") : [];
+  return { serviceable, enforce: snap.get("enforce") === true };
+}
+
+/** `settings/holds.webHoldMinutes`: brief 9.3's fifteen minutes. */
+export async function webHoldMinutes(
+  tx: Transaction,
+  db: Firestore,
+  fallback: number,
+): Promise<number> {
+  const snap = await tx.get(db.collection(SETTINGS).doc(HOLDS_SETTINGS_ID));
+  const minutes = snap.get("webHoldMinutes");
+  return typeof minutes === "number" && Number.isInteger(minutes) && minutes > 0 ? minutes : fallback;
+}
+
+/**
+ * The `products/{slug}` fields only the web checkout needs: the fee rule and
+ * the shipping restriction of brief 11.5.
+ *
+ * ASSUMED (M3.5): `allowedStates` and `excludedPincodes` are the two field
+ * names. Neither is on any seeded product, and absent means no restriction,
+ * which is 11.5's "built, switched off".
+ */
+export function productShippingFrom(snap: DocumentSnapshot): {
+  readonly shippingRule: ShippingRule | null;
+  readonly restriction: ProductShippingRestriction;
+} {
+  const rule = snap.get("shippingRule");
+  const states = snap.get("allowedStates");
+  const excluded = snap.get("excludedPincodes");
+  return {
+    shippingRule: (SHIPPING_RULES as readonly string[]).includes(String(rule))
+      ? (rule as ShippingRule)
+      : null,
+    restriction: {
+      allowedStates: Array.isArray(states)
+        ? states.filter((s): s is string => typeof s === "string").map((s) => s.trim().toUpperCase())
+        : null,
+      excludedPincodes: Array.isArray(excluded)
+        ? excluded.filter((p): p is string => typeof p === "string")
+        : null,
+    },
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Settings, the counter's own                                                */
 /* -------------------------------------------------------------------------- */
 
 /**

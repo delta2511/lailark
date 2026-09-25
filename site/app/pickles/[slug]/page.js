@@ -77,6 +77,9 @@ const productCss = `
   padding:var(--ds-space-3) var(--ds-space-5);
   background:var(--ds-ink); color:var(--ds-paper); border:none; border-radius:4px;
   font-family:var(--ds-font-body); font-size:1rem; font-weight:600; cursor:pointer;
+  /* M3.5 made it a link to /checkout, so it takes the button's own colour
+     rather than the page's link colour, and carries no underline. */
+  text-decoration:none;
 }
 
 .product-shipping{

@@ -25,12 +25,16 @@
  *         "priceOpenPaise": <int>,      // this batch's own price (D40), open only
  *         "packedOn": "YYYY-MM-DD"|null,   // inStock only
  *         "bestBefore": "YYYY-MM-DD"|null, // inStock only
- *         "saleStopOn": "YYYY-MM-DD"|null  // inStock only: the Buy cut-off, brief §6.2
+ *         "saleStopOn": "YYYY-MM-DD"|null, // inStock only: the Buy cut-off, brief §6.2
+ *         "perPersonLimit": <int>,      // most jars one person may take (M3.5)
+ *         "available": <int>,           // jars actually takeable right now (M3.5)
+ *         "shippingRule": "free"|"flatFee"|"freeOnTwo"|null // the product's own (M3.5)
  *       }
  *     },
  *     "shipping": {
  *       "rule": "free" | "flatFee" | "freeOnTwo",
- *       "flatFeePaise": <int>   // D12: 60 rupees, editable, only meaningful off "free"
+ *       "flatFeePaise": <int>,  // D12: 60 rupees, editable, only meaningful off "free"
+ *       "freeFromJars": <int>   // brief 4.2: where "freeOnTwo" stops charging
  *     }
  *   }
  *
@@ -50,9 +54,15 @@ import {
   BATCH_STATES_IN_STOCK,
   BATCH_STATES_OPEN_FOR_BOOKING,
   batchAvailability,
+  IN_STOCK_PER_PERSON_LIMIT,
   inStockAvailability,
   type HeldJars,
+  normaliseShippingSwitch,
+  resolvePerPersonLimit,
+  type ShippingRule,
 } from "@lailark/shared";
+
+import { chooseWebBatch, type CheckoutBatchCandidate } from "../orders/checkout";
 
 export type CountsMode = "inStock" | "open" | "none";
 
@@ -65,11 +75,51 @@ export interface CountsProductEntry {
   readonly packedOn?: string | null;
   readonly bestBefore?: string | null;
   readonly saleStopOn?: string | null;
+  /**
+   * The most jars one person may take from this batch, so the checkout's
+   * jar picker offers exactly what the server will allow (M3.5).
+   *
+   * **D52:** the number the Owner typed on the batch governs the web in
+   * both directions, above two as well as below it. Only a blank box falls
+   * back, and the fallback is brief 4.1's two jars in stock and the
+   * computed quarter on an open batch. This and `readStockClaim` both go
+   * through `resolvePerPersonLimit`, so the picker and the transaction
+   * cannot disagree about the same batch.
+   */
+  readonly perPersonLimit?: number;
+  /**
+   * Jars a customer may actually take right now: capacity less paid less
+   * every live hold. On an in-stock batch this is the same number as
+   * `count`; on an open batch `count` is the **paid** marks (D3), so the
+   * free figure has to be carried on its own or the checkout's jar picker
+   * offers jars somebody else is already paying for (M3.5).
+   */
+  readonly available?: number;
+  /**
+   * `products/{slug}.shippingRule`, the product's own fee rule, or null
+   * when it carries none.
+   *
+   * It is published because `createCheckout` enforces it
+   * (`effectiveShippingSwitch(global, product.shippingRule)`) and refuses
+   * any order whose total differs from the figure the page printed. A page
+   * that could not see this field computed the global rule for every
+   * product, so the moment the global switch left "free" a product with a
+   * rule of its own was refused at the Pay button. Brief §4.2 and
+   * CLAUDE.md §3: the fee is never first revealed at payment.
+   */
+  readonly shippingRule?: ShippingRule | null;
 }
 
 export interface CountsShipping {
   readonly rule: "free" | "flatFee" | "freeOnTwo";
   readonly flatFeePaise: number;
+  /**
+   * The jar count at which `freeOnTwo` stops charging. Brief 4.2 says two,
+   * and it is a setting, so the checkout page (M3.5) reads it rather than
+   * assuming it: a page that computed a different total from the server's
+   * would be the surprise charge 4.2 forbids.
+   */
+  readonly freeFromJars: number;
 }
 
 export interface CountsPayload {
@@ -77,17 +127,28 @@ export interface CountsPayload {
   readonly shipping: CountsShipping;
 }
 
-/** D12: the flat fee if the switch is ever used, editable via settings. */
-const DEFAULT_FLAT_FEE_PAISE = 6_000;
 const SHIPPING_RULES = ["free", "flatFee", "freeOnTwo"] as const;
 
+/**
+ * The shipping switch, through the **same** clamp the server's own reader
+ * uses (`normaliseShippingSwitch`, and `orders/store.ts` calls it too).
+ *
+ * It was clamped here alone once, and that was worse than not clamping at
+ * all: a `freeFromJars` of 3.5 in Settings came down to the page as 3 and
+ * stayed 3.5 on the server, where `shippingFeeFor` quietly read it as 2, so
+ * the page's total and the charge parted company and every two-jar order was
+ * refused. One clamp, in `@lailark/shared`, read by both.
+ */
 async function readShipping(db: Firestore): Promise<CountsShipping> {
   const snap = await db.collection("settings").doc("shipping").get();
-  const rawRule = snap.get("rule");
-  const rule = (SHIPPING_RULES as readonly string[]).includes(String(rawRule))
-    ? (rawRule as CountsShipping["rule"])
-    : "free";
-  return { rule, flatFeePaise: numberOr(snap.get("flatFee"), DEFAULT_FLAT_FEE_PAISE) };
+  const ship = normaliseShippingSwitch({
+    rule: snap.get("rule"),
+    flatFee: snap.get("flatFee"),
+    freeFromJars: snap.get("freeFromJars"),
+  });
+  // `flatFeePaise` on the wire, `flatFee` in the document: everything this
+  // endpoint sends is named in paise.
+  return { rule: ship.rule, flatFeePaise: ship.flatFee, freeFromJars: ship.freeFromJars };
 }
 
 const IN_STOCK_STATES: readonly string[] = BATCH_STATES_IN_STOCK;
@@ -95,6 +156,17 @@ const OPEN_STATES: readonly string[] = BATCH_STATES_OPEN_FOR_BOOKING;
 
 function numberOr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+/**
+ * `perPersonLimitOverride` as written, untouched. Anything that is not a
+ * whole number of jars is handed on as-is and refused by
+ * `isPerPersonLimitOverride` inside `resolvePerPersonLimit`, so a `0`, a
+ * `-5`, a `1.5` or a `"lots"` all fall through to the fallback rather than
+ * becoming a cap nobody meant.
+ */
+function overrideOf(data: DocumentData): number | null {
+  return typeof data.perPersonLimitOverride === "number" ? data.perPersonLimitOverride : null;
 }
 
 function isoDateOr(value: unknown): string | null {
@@ -106,6 +178,7 @@ interface Best {
   /** 0 = in stock, ranks ahead of 1 = open for booking. */
   readonly tier: 0 | 1;
   readonly available: number;
+  readonly candidate: CheckoutBatchCandidate;
 }
 
 function availabilityFor(data: DocumentData, tier: 0 | 1, nowMillis: number): number {
@@ -127,8 +200,25 @@ function availabilityFor(data: DocumentData, tier: 0 | 1, nowMillis: number): nu
   }).available;
 }
 
-function entryFor(best: Best): CountsProductEntry {
+/** A Firestore `Timestamp`, a plain millis number, or nothing at all. */
+function millisOr(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const stamp = value as { toMillis?: () => number } | null | undefined;
+  if (stamp && typeof stamp.toMillis === "function") return stamp.toMillis();
+  return fallback;
+}
+
+/** The product's own fee rule, or null for a product that carries none. */
+function shippingRuleOf(data: DocumentData): ShippingRule | null {
+  const rule = data.shippingRule;
+  return (SHIPPING_RULES as readonly string[]).includes(String(rule))
+    ? (rule as ShippingRule)
+    : null;
+}
+
+function entryFor(best: Best, product: DocumentData): CountsProductEntry {
   const { data, tier } = best;
+  const shippingRule = shippingRuleOf(product);
   if (tier === 0) {
     return {
       mode: "inStock",
@@ -136,10 +226,19 @@ function entryFor(best: Best): CountsProductEntry {
       // "Jars in the batch" (A153): what this batch actually bottled, not
       // a moving ceiling, so the marks total never shrinks as jars sell.
       total: Math.max(1, numberOr(data.bottledJars, 1)),
+      available: best.available,
       priceInStockPaise: numberOr(data.priceInStock, 0),
       packedOn: isoDateOr(data.packedOn),
       bestBefore: isoDateOr(data.bestBefore),
       saleStopOn: isoDateOr(data.saleStopOn),
+      perPersonLimit: resolvePerPersonLimit(
+        {
+          perPersonLimit: numberOr(data.perPersonLimit, 0),
+          perPersonLimitOverride: overrideOf(data),
+        },
+        IN_STOCK_PER_PERSON_LIMIT,
+      ),
+      shippingRule,
     };
   }
   return {
@@ -147,8 +246,56 @@ function entryFor(best: Best): CountsProductEntry {
     count: numberOr(data.paidCount, 0),
     // D3: bookable jars is the number the card shows.
     total: Math.max(1, numberOr(data.bookableJars, 1)),
+    available: best.available,
     priceOpenPaise: numberOr(data.priceOpen, 0),
+    // No floor of one. `readStockClaim` puts none here either, and a floor
+    // only on this side promised a jar the transaction was about to refuse:
+    // D52 says the typed number is the authority in both directions, so a
+    // batch capped at nothing has to read as nothing here too.
+    perPersonLimit: resolvePerPersonLimit({
+      perPersonLimit: numberOr(data.perPersonLimit, 0),
+      perPersonLimitOverride: overrideOf(data),
+    }),
+    shippingRule,
   };
+}
+
+/**
+ * The batch a customer looking at this slug is being shown, and the one
+ * `createCheckout` will take the hold from.
+ *
+ * It is `chooseWebBatch`, the checkout's own chooser, rather than a second
+ * ordering written here: two orderings eventually pick two different
+ * batches, and then the count on the page belongs to one batch and the jar
+ * to another (its price, its best before, its per-person limit).
+ *
+ * `chooseWebBatch` refuses when every in-stock batch is past its
+ * shelf-life stop (brief §6.2) and there is no open batch behind it. The
+ * page still has to draw that batch: its count, its dates and the sentence
+ * that it is no longer sold online are all read off it, and `canBuyToday`
+ * is what hides the Buy control. So a refusal falls back to the same
+ * in-stock-first, most-free ordering this endpoint has always used, and the
+ * only batch the two can disagree about is one that cannot be bought
+ * anyway.
+ */
+function pickBatch(list: readonly Best[], productName: string, todayIso: string): Best {
+  const chosen = chooseWebBatch(
+    list.map((b) => b.candidate),
+    productName,
+    todayIso,
+  );
+  if (chosen.ok) {
+    const match = list.find((b) => b.candidate.ref === chosen.ref);
+    if (match) return match;
+  }
+  return [...list].sort(
+    (a, b) => a.tier - b.tier || b.available - a.available,
+  )[0] as Best;
+}
+
+/** `"YYYY-MM-DD"` in Asia/Kolkata, the only calendar this shop has. */
+function kolkataToday(nowMillis: number): string {
+  return new Date(nowMillis + 330 * 60_000).toISOString().slice(0, 10);
 }
 
 /**
@@ -170,8 +317,9 @@ export async function computeCounts(db: Firestore): Promise<CountsPayload> {
 
   const visibleStates = [...IN_STOCK_STATES, ...OPEN_STATES];
   const batchesSnap = await db.collection("batches").where("state", "in", visibleStates).get();
+  const todayIso = kolkataToday(nowMillis);
 
-  const bestBySlug = new Map<string, Best>();
+  const bySlug = new Map<string, Best[]>();
   for (const doc of batchesSnap.docs) {
     const data = doc.data();
     const slug = data.productSlug;
@@ -179,17 +327,37 @@ export async function computeCounts(db: Firestore): Promise<CountsPayload> {
 
     const tier: 0 | 1 = IN_STOCK_STATES.includes(String(data.state)) ? 0 : 1;
     const available = availabilityFor(data, tier, nowMillis);
-    const existing = bestBySlug.get(slug);
-    if (!existing || tier < existing.tier || (tier === existing.tier && available > existing.available)) {
-      bestBySlug.set(slug, { data, tier, available });
-    }
+    const list = bySlug.get(slug);
+    const best: Best = {
+      data,
+      tier,
+      available,
+      candidate: {
+        ref: doc.id,
+        batchNo: typeof data.batchNo === "string" ? data.batchNo : null,
+        state: String(data.state),
+        packedOn: isoDateOr(data.packedOn),
+        saleStopOn: isoDateOr(data.saleStopOn),
+        createdAtMillis: millisOr(data.createdAt, 0),
+        available,
+      },
+    };
+    if (list) list.push(best);
+    else bySlug.set(slug, [best]);
   }
 
   const products: Record<string, CountsProductEntry> = {};
   for (const productDoc of productsSnap.docs) {
     const slug = productDoc.id;
-    const best = bestBySlug.get(slug);
-    products[slug] = best ? entryFor(best) : { mode: "none" };
+    const data = productDoc.data();
+    const list = bySlug.get(slug);
+    products[slug] =
+      list && list.length > 0
+        ? entryFor(
+            pickBatch(list, typeof data.name === "string" ? data.name : slug, todayIso),
+            data,
+          )
+        : { mode: "none" };
   }
 
   return { products, shipping };

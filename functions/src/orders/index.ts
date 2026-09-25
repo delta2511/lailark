@@ -7,3 +7,10 @@
  */
 export { createCounterSale } from "./createCounterSale";
 export { voidCounterSale } from "./voidCounterSale";
+
+/**
+ * The web checkout (brief 6 and 7), M3.5. `createCheckout` takes the hold
+ * and creates the Razorpay order; `sweepHolds` tidies the ones nobody paid.
+ */
+export { createCheckout } from "./createCheckout";
+export { sweepHolds } from "./sweepHolds";
