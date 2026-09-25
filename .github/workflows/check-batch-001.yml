@@ -1,0 +1,72 @@
+name: Live /batch/001
+
+# CLAUDE.md §3: /batch/001 must keep resolving, with the same content, forever. It is
+# printed on 22 jars. The rule says every deploy verifies it with curl, which a cloud
+# Claude Code session cannot do: lailark.in is not on that container's egress
+# allowlist (docs/cloud-sessions.md). A GitHub runner can reach it, so the live half
+# of the check runs here instead of by hand.
+#
+# Exit codes from scripts/check-batch-001.mjs:
+#   0  live page matches the built record
+#   1  the D28 ingredient-line difference only, which means a deploy is owed. Noted,
+#      not failed: it is a true state of the world between a content change and its
+#      deploy, and a permanently red workflow is a workflow nobody reads.
+#   2  any other drift, or a redirect that stopped working. Fails.
+
+on:
+  schedule:
+    # 03:30 IST, daily.
+    - cron: "0 22 * * *"
+  workflow_dispatch:
+    inputs:
+      project:
+        description: production (lailark.in) or staging
+        type: choice
+        default: production
+        options: [production, staging]
+
+concurrency:
+  group: check-batch-001
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the site
+        # The record the live page is diffed against is site/out/batch/001.html,
+        # generated from site/content/batches/001.json (D48).
+        run: npm run build --workspace site
+
+      - name: Check the live page
+        run: |
+          set +e
+          if [ "${{ inputs.project }}" = "staging" ]; then
+            npm run check:batch-001 -- --project staging
+          else
+            npm run check:batch-001
+          fi
+          code=$?
+          set -e
+          if [ "$code" = "1" ]; then
+            echo "::warning title=Deploy owed::/batch/001 differs from the repo by the D28 ingredient line only. Deploy the customer site."
+            exit 0
+          fi
+          exit "$code"

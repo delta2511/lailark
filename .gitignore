@@ -44,3 +44,7 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# next dev writes these into site/ on every run; they are not ours to commit
+site/CLAUDE.md
+site/AGENTS.md

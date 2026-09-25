@@ -45,13 +45,15 @@ jobs:
         run: npm run build
 
       - name: Install firebase-tools
-        run: npm install -g firebase-tools@15.30.1
+        # Pinned in .firebase-tools-version so the cloud setup script and CI cannot
+        # drift apart. scripts/test/firebase-tools-pin.test.mjs asserts they match.
+        run: npm install -g "firebase-tools@$(cat .firebase-tools-version)"
 
       - name: Cache emulator jars
         uses: actions/cache@v4
         with:
           path: ~/.cache/firebase/emulators
-          key: firebase-emulators-${{ hashFiles('.github/workflows/ci.yml') }}
+          key: firebase-emulators-${{ hashFiles('.firebase-tools-version') }}
           restore-keys: |
             firebase-emulators-
 

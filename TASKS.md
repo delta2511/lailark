@@ -365,6 +365,20 @@ and the live webhook before the production deploy.
       states plus junk, and D53's sentence is byte-identical at fifteen minutes. Build
       and lint exit 0, 1391 tests green. Shefin still owes the test payment on staging,
       which needs Razorpay test keys in Secret Manager and is walked together with M3.6.
+- [x] M3.11 [orchestrator] Cloud sessions made cheap. (PENDING) Added by the orchestrator on
+      25 Sep 2026 from the cloud readiness run, and written by the orchestrator itself:
+      repo tooling and docs, no feature code. `npm run cloud:setup`
+      (`scripts/cloud-setup.sh`) does the five steps a fresh container needs, with the
+      firebase-tools version pinned once in `.firebase-tools-version` that CI now reads
+      too. `npm run test:cloud` is `npm test` with the proxy variables unset, which
+      firebase-tools needs because it proxies its own `127.0.0.1` calls.
+      `docs/cloud-sessions.md` records what works there and what cannot. CLAUDE.md §3's
+      curl rule now names both halves and §7's `npm run dev` row says what the script
+      actually does. `.github/workflows/check-batch-001.yml` runs the live check daily on
+      a GitHub runner, warning on the D28 deploy-owed exit and failing on real drift.
+      `site/CLAUDE.md` and `site/AGENTS.md`, which `next dev` writes, are gitignored.
+      D56. Done when: build, lint and `npm test` are green on the Mac and the pin test
+      fails on drift.
 - [ ] M3.5a [opus] Checkout resume keeps the first attempt's address. Found by the M3.5
       round 4 tester, outside that round's scope, logged rather than fixed at the 25 Sep
       break. `checkResumableCheckout` (`functions/src/orders/checkout.ts:520-523`)

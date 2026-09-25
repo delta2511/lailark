@@ -16,6 +16,7 @@
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present && npm run test:scripts",
     "test:scripts": "node --test \"scripts/test/**/*.test.mjs\"",
+    "test:cloud": "env -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy npm test",
     "lint": "npm run lint --workspaces --if-present",
     "dev": "npm run dev --workspace site",
     "emulators": "firebase emulators:start",
@@ -23,6 +24,7 @@
     "pack:shared": "node scripts/pack-shared.mjs",
     "pack:shared:restore": "node scripts/pack-shared.mjs --restore",
     "check:batch-001": "node scripts/check-batch-001.mjs",
+    "cloud:setup": "bash scripts/cloud-setup.sh",
     "seed:users": "node functions/scripts/seed-users.mjs",
     "seed:products": "node functions/scripts/seed-products.mjs",
     "emulators:hosting": "firebase emulators:start --only hosting,auth,functions"

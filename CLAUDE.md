@@ -42,7 +42,12 @@ If the answer is in none of these, see section 5 (assumptions and questions).
 - **Never run `firebase init`.** It overwrites files. All config is hand-written.
 - **`/batch/001` must keep resolving, with the same content**, on every deploy of the
   customer site, forever. It is printed on 22 jars. Every deploy task verifies it with
-  curl before finishing. `/batch/1` and `/batch/01` 301 to it. The one deliberate
+  curl before finishing: `npm run check:batch-001` against the deployed site from a Mac
+  session, or, from a cloud session where `lailark.in` is not reachable, `npm run
+  check:batch-001 -- --url http://127.0.0.1:5010` against the hosting emulator, which
+  proves the built page still matches the jar. The live check then runs on a GitHub
+  runner (`.github/workflows/check-batch-001.yml`, daily and on demand). See
+  `docs/cloud-sessions.md` §4. `/batch/1` and `/batch/01` 301 to it. The one deliberate
   difference from the printed jar: its ingredient line shows no percentages (D28). From
   batch 002 the record pages show them.
 - **Money is written only by functions.** Client apps never write `orders.payment`,
@@ -218,17 +223,26 @@ Root `package.json` has workspaces for `site`, `admin`, `functions`, `shared`.
 | Command | Does |
 |---|---|
 | `npm install` | Everything |
-| `npm run dev` | Emulators + site dev + admin dev, one terminal |
+| `npm run dev` | Site dev server only (`npm run dev --workspace site`). Run `npm run emulators` and the admin dev server in their own terminals |
 | `npm run emulators` | Firebase emulator suite only (Firestore, Auth, Functions, Hosting, Storage) |
 | `npm run build` | Builds site, admin, functions |
 | `npm test` | Unit tests, rules tests, e2e against the emulator |
+| `npm run test:cloud` | The same suite with the proxy variables unset. **Use this, not `npm test`, in a cloud session** |
+| `npm run cloud:setup` | Prepares a fresh cloud container: firebase-tools, emulator JARs, the Chromium shim, the CA seeding. Idempotent, needed once per session |
 | `npm run deploy` | Interactive: asks customer / admin / both, then staging / production, then live / preview |
 | `npm run deploy -- --target both --project staging --preview` | Same, non-interactive |
-| `npm run check:batch-001` | Curls `/batch/001` on the deployed site and diffs it against the record |
+| `npm run check:batch-001` | Curls `/batch/001` on the deployed site and diffs it against the built record. Takes `--project staging` or `--url <base>` |
 
 Firebase project aliases in `.firebaserc`: `default` → `lailark` (production),
 `staging` → `lailark-staging`. Deploys go to staging unless `--project production` is
 passed or the interactive prompt is answered "production".
+
+**In a cloud session** (D56): run `npm run cloud:setup` first, then `npm run test:cloud`
+rather than `npm test`, because firebase-tools proxies its own `127.0.0.1` calls and the
+proxy refuses them. Two things cannot be done there: verifying the live site (see the
+`/batch/001` rule in section 3) and showing Shefin a screen, because the dev server has
+no ingress, so the `(Shefin checks)` tasks need a staging deploy from his Mac. Deploys
+need his credential and are his to run. `docs/cloud-sessions.md` has the whole picture.
 
 ## 8. Testing expectations
 
