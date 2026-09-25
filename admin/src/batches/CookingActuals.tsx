@@ -37,7 +37,7 @@ import {
   type Role,
 } from "@lailark/shared";
 import type { JSX } from "preact";
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 
 import { BATCHES } from "../copy";
 import { isCostPaise, parseRupeesToPaise } from "../products/productMoney";
@@ -159,13 +159,21 @@ export function CookingActuals({ batchRef, recipe, ingredients, canEdit, uid, ro
           const existing = byId.get(id) ?? null;
           return (
             <ActualRow
-              // Remounts once the actual arrives (or changes elsewhere), the
-              // same way every other edit-in-place field in this admin keys
-              // on its committed value (`ProductDetail`'s price and jar-size
-              // inputs): `useState`'s initial value only runs once, so
-              // without this the box would keep showing the recipe's own
-              // fallback forever after the real actual loads in.
-              key={`${id}-${existing?.qtyActual ?? "u"}-${existing?.costActual ?? "u"}`}
+              // M2.13a: the row's identity is the row, not its figures.
+              // Until then this key carried the committed values
+              // (`${id}-${qtyActual}-${costActual}`), so every snapshot for
+              // the line unmounted and rebuilt the row. Rebuilt while
+              // somebody was typing, the input became a new DOM node that
+              // had never been focused, the blur that followed fired no
+              // `change` event, and the typed figure was gone with no error
+              // and nothing written: Sumayya typing a weight, moving to the
+              // cost box, and losing the cost when the weight's snapshot
+              // landed, on a field the batch P&L reads. What the remount was
+              // there for (a box adopting an actual that arrives from the
+              // server, since `useState`'s initial value only runs once) is
+              // now done inside the row, per box, and only while nobody is
+              // standing in that box.
+              key={rowKey}
               batchRef={batchRef}
               lineId={id}
               rowKey={rowKey}
@@ -288,6 +296,79 @@ function ActualRow({
   const [keptCost, setKeptCost] = useState(openingCost);
   const [error, setError] = useState<string | null>(null);
 
+  const qtyBox = useRef<HTMLInputElement | null>(null);
+  const costBox = useRef<HTMLInputElement | null>(null);
+  // What the box held when the caret entered it, so leaving it can tell
+  // "she typed something, and the `change` that just fired committed it"
+  // from "she only looked" (see `leave` below).
+  const qtyAtFocus = useRef("");
+  const costAtFocus = useRef("");
+
+  /**
+   * M2.13a. A box nobody is standing in adopts whatever the document now
+   * says: the weight the `Sourcing -> Cooking` transition writes server side
+   * (`planStartCooking`), an undo restoring a field (`undoBatchLineWrite`),
+   * or the other admin's figure arriving from her phone. A box somebody IS
+   * standing in keeps what is being typed into it, because the person is the
+   * newer source and the blur that follows is about to commit it. This is
+   * what the row's key used to do by remounting, which threw the half-typed
+   * text away along with the DOM node that held it.
+   *
+   * Focus, not "has it been touched", is the test: nothing here can leave a
+   * box dirty and unfocused, since every way out of a box (blur, Enter, tab)
+   * fires `change` and commits. Skipping the adoption while focused cannot
+   * strand a stale figure either: the commit that follows writes the typed
+   * value, that write comes back as another snapshot, and the effect runs
+   * again on it.
+   *
+   * **`kept` follows the document whether or not the box is focused**, and
+   * only the text is held back. `kept` is what an empty box falls back to
+   * ("an empty box is not given", below), so it has to mean "what is stored
+   * now", not "what was stored the last time nobody was standing here".
+   * Round 2 of M2.13a: with the caret resting in the cost box, a figure
+   * arriving from the other phone was skipped by both halves, so wiping the
+   * box put the figure from before that write back on the screen and left it
+   * there, unfocused, disagreeing with the document about money until a
+   * reload. Holding the text back is right; holding the fallback back was
+   * not. It stays optimistic where it should: after a local commit whose
+   * snapshot has not come back yet, `kept` is the figure just typed (set in
+   * `commitQty`/`commitCost`), so clearing the box puts that back rather
+   * than flashing the value from before it.
+   */
+  useEffect(() => {
+    setKeptQty(openingQty);
+    if (isFocused(qtyBox)) return;
+    setQtyText(openingQty);
+  }, [openingQty]);
+
+  useEffect(() => {
+    setKeptCost(openingCost);
+    if (isFocused(costBox)) return;
+    setCostText(openingCost);
+  }, [openingCost]);
+
+  /**
+   * The one case the effects above cannot catch on their own: a figure
+   * arrives from the server while the caret is in the box, and the person
+   * then leaves the box without typing anything. No `change` fires, so
+   * nothing commits, and the effect for that snapshot has already run and
+   * skipped, so it will not run again. Without this the box would sit there
+   * showing a figure the document no longer holds. If she did type, the
+   * `change` that fires just before this has already committed her figure,
+   * and its own snapshot is what the box adopts: what she typed stands.
+   */
+  function leave(
+    event: Event,
+    atFocus: { current: string },
+    opening: string,
+    setText: (text: string) => void,
+    setKept: (text: string) => void,
+  ): void {
+    if ((event.target as HTMLInputElement).value !== atFocus.current) return;
+    setText(opening);
+    setKept(opening);
+  }
+
   const qtyNum = Number(qtyText);
   const drift =
     Number.isFinite(qtyNum) && qtyNum >= 0
@@ -396,10 +477,13 @@ function ActualRow({
           <label for={`actual-weight-${rowKey}`}>{BATCHES.actualWeight}</label>
           <input
             id={`actual-weight-${rowKey}`}
+            ref={qtyBox}
             type="text"
             inputMode="decimal"
             value={qtyText}
             data-testid={`actual-weight-${rowKey}`}
+            onFocus={(event) => (qtyAtFocus.current = (event.target as HTMLInputElement).value)}
+            onBlur={(event) => leave(event, qtyAtFocus, openingQty, setQtyText, setKeptQty)}
             onInput={(event) => setQtyText((event.target as HTMLInputElement).value)}
             onChange={(event) => commitQty((event.target as HTMLInputElement).value)}
           />
@@ -407,10 +491,13 @@ function ActualRow({
           <label for={`actual-cost-${rowKey}`}>{BATCHES.actualCost}</label>
           <input
             id={`actual-cost-${rowKey}`}
+            ref={costBox}
             type="text"
             inputMode="decimal"
             value={costText}
             data-testid={`actual-cost-${rowKey}`}
+            onFocus={(event) => (costAtFocus.current = (event.target as HTMLInputElement).value)}
+            onBlur={(event) => leave(event, costAtFocus, openingCost, setCostText, setKeptCost)}
             onInput={(event) => setCostText((event.target as HTMLInputElement).value)}
             onChange={(event) => commitCost((event.target as HTMLInputElement).value)}
           />
@@ -439,4 +526,9 @@ function ActualRow({
       ) : null}
     </li>
   );
+}
+
+/** Whether the person is standing in this box right now (M2.13a). */
+function isFocused(box: { readonly current: HTMLInputElement | null }): boolean {
+  return box.current !== null && typeof document !== "undefined" && document.activeElement === box.current;
 }

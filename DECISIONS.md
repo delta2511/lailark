@@ -938,6 +938,31 @@ break.
   `rzp_test_emulator`, so the throw is unreachable there by construction; covering it
   would mean injecting the key lookup. The classification it depends on is unit-tested.
   Status: open.
+- A185 (M2.13a, 25 Sep): "a box nobody is editing" means "not focused", tested against
+  `document.activeElement`, rather than a dirty flag. Every way out of a box (blur,
+  Enter, tab) fires `change` and commits, so nothing on this screen can leave a box
+  dirty and unfocused. A dirty flag would also need a reset path, and a box typed into
+  but never committed would refuse the server's figures forever. Status: open.
+- A186 (M2.13a, 25 Sep): a box left without typing, after a figure arrived from the
+  server while the caret was in it, adopts that figure on blur rather than keeping what
+  it was showing. The alternative is a box that quietly disagrees with the stored
+  document about money, which is the failure mode M2.13a exists to end. Status: open.
+- A187 (M2.13a, 25 Sep): moving the two document polls in "two main ingredients" to
+  before `page.reload()`, while keeping them after it as well, strengthens that test
+  rather than changing what it asserts. The reload is only a fair test of the documents
+  once the writes have landed; a commit still in flight went down with the page about
+  one run in twelve under load, which looked exactly like the M2.13a defect without
+  being it. Status: open.
+- A189 (M2.13a, 25 Sep): the fallback an emptied box drops back to is "what is stored
+  now, unless this box has typed something newer that has not come back from the server
+  yet". `kept` follows the document whether or not the box is focused; only the text is
+  held back while somebody is standing in the box. Round 1 held both back, which left a
+  box showing a figure the document did not hold, unfocused, until a reload. Status:
+  open.
+- A190 (M2.13a, 25 Sep): test name and the `REF_RESTING = "b-m24rst"` batch ref, added
+  to `ALL_REFS` so the existing teardown cleans it up. Status: open.
+- A188 (M2.13a, 25 Sep): test names, ids, and the `REF_TYPING = "b-m24typ"` batch ref,
+  added to `ALL_REFS` so the existing teardown cleans it up. Status: open.
 - A180 (M3.5, 24 Sep): the scheduled `sweepHolds` wrapper is tested by calling its
   handler against the emulator, plus assertions on region, `maxInstances`, schedule,
   time zone and `retryCount`. Cloud Scheduler actually firing it is not covered; the

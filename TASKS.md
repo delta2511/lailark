@@ -379,6 +379,46 @@ and the live webhook before the production deploy.
       `site/CLAUDE.md` and `site/AGENTS.md`, which `next dev` writes, are gitignored.
       D56. Done when: build, lint and `npm test` are green on the Mac and the pin test
       fails on drift.
+- [x] M2.13a [opus] The actuals row throws away what is being typed when a snapshot
+      lands. A Milestone 2 defect (`CookingActuals.tsx`, M2.4/M2.13 work) found by the
+      Milestone 3 CI triage on 25 Sep, filed here because it is the screen M3.6 and the
+      batch P&L build on. CI run 36086615761 failed
+      `admin/tests/batches.spec.ts:431` at line 467 on the pre-reload assertion
+      (`actual-cost-m24-dates` expected "400", received ""). It is not a flake and not a
+      test racing the save. `ActualRow`'s `key`
+      (`admin/src/batches/CookingActuals.tsx:168`) embeds the committed values
+      (`${id}-${qtyActual}-${costActual}`), so **every** snapshot for the line unmounts
+      and rebuilds the row. Rebuilt mid-edit, the input is a new DOM node that was never
+      focused, so the blur that follows fires no `change` event, `commitCost` never runs,
+      and the typed figure is gone with no error and nothing written. Reproduced 1 in 12
+      under CPU load with six busy cores: on the failing run the box read `""` **and**
+      `batches/b-m242mn/lines/m24-dates` had no `costActual` key at all, with
+      `createdAt == updatedAt`, so only the weight's write ever touched the document.
+      In the kitchen that is Sumayya typing a weight, moving to the cost, and losing the
+      cost when the weight's snapshot lands, on a field the batch P&L reads. The remount
+      exists for a real reason, named in the comment above the key: `useState`'s initial
+      value runs once, so without it a box keeps showing the recipe fallback after the
+      real actual loads in. Keep that behaviour, drop the remount. Done when: a box being
+      edited keeps its text across a snapshot for its own line (including one written by
+      the other admin on another phone), a box nobody is editing still adopts a value that
+      arrives from the server, the two-main test passes 30 consecutive runs under the same
+      six-core load that reproduced it, and a regression test drives the losing order
+      directly rather than waiting on a race.
+      Done in two rounds (b773a6d). Round 1 replaced the key with the row id and
+      moved adoption into two per-box effects gated on focus; a fresh tester found one
+      real regression and it was fixed in round 2: `kept`, what an emptied box falls
+      back to, now follows the document whether or not the box is focused, so a figure
+      arriving while the caret rested in a box can no longer be wiped back to a stale
+      one. Two regression tests, both proven to fail against the code they fix. The
+      triage also found a SECOND cause behind the same red CI line, which was the test:
+      `page.reload()` tore the page down with a commit still in flight, about one run in
+      twelve under load, and it looked exactly like the component defect. The document
+      polls now run before the reload as well as after it (A187). 90 consecutive runs
+      under six-core load, build, lint and `test:cloud` all exit 0. A185 to A190.
+      Latent, logged not fixed: an outside write landing while a box is focused, then
+      invalid text typed and blurred, leaves the rejected text on screen and never
+      adopts the arrived figure. An error line is showing, so it is visibly rather than
+      silently wrong, and clearing the box now recovers it.
 - [ ] M3.5a [opus] Checkout resume keeps the first attempt's address. Found by the M3.5
       round 4 tester, outside that round's scope, logged rather than fixed at the 25 Sep
       break. `checkResumableCheckout` (`functions/src/orders/checkout.ts:520-523`)

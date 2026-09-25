@@ -53,6 +53,10 @@ const REF_MONEY = "b-m24mny";
 const REF_BLANK = "b-m24bnk";
 const REF_COSTS = "b-m24cst";
 const REF_TWO_MAIN = "b-m242mn";
+// M2.13a: a snapshot landing on the line whose box is being typed into.
+const REF_TYPING = "b-m24typ";
+// M2.13a round 2: a figure arriving while the caret only rests in a box.
+const REF_RESTING = "b-m24rst";
 // M2.19 (D41): the Sourcing to Cooking step on a two main recipe.
 const REF_SOURCE_2MN = "b-m24s2m";
 const REF_LEGACY = "b-m24lgc";
@@ -76,6 +80,8 @@ const ALL_REFS = [
   REF_BLANK,
   REF_COSTS,
   REF_TWO_MAIN,
+  REF_TYPING,
+  REF_RESTING,
   REF_SOURCE_2MN,
   REF_LEGACY,
   REF_WINDOW,
@@ -466,6 +472,20 @@ test("two main ingredients take two independent weights and costs", async ({ pag
   await expect(page.getByTestId(`actual-weight-${DATES}`)).toHaveValue("1100");
   await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("400");
 
+  // The boxes are one thing, the documents another, and the reload below is
+  // only a fair test of the documents once the writes have actually landed.
+  // `page.reload()` tears the page down, and a commit still in flight goes
+  // with it: under six busy cores that was about one run in twelve, and it
+  // looked exactly like the M2.13a defect (a cost box empty after the
+  // reload) without being it. Waiting on the documents here is also the
+  // stronger assertion, in paise, on the two ids the P&L reads.
+  await expect
+    .poll(async () => await readDocument(`batches/${REF_TWO_MAIN}/lines/${PRAWNS}`))
+    .toMatchObject({ ingredientId: PRAWNS, qtyActual: 1600, costActual: 90_000 });
+  await expect
+    .poll(async () => await readDocument(`batches/${REF_TWO_MAIN}/lines/${DATES}`))
+    .toMatchObject({ ingredientId: DATES, qtyActual: 1100, costActual: 40_000 });
+
   // A reload is what proves the figures are in Firestore and not in
   // component state: the boxes come back filled from the documents alone.
   // The open batch is not in the URL, so a reload lands on Today and the
@@ -513,6 +533,202 @@ test("two main ingredients take two independent weights and costs", async ({ pag
   await expect
     .poll(async () => await readDocument(`batches/${REF_TWO_MAIN}/lines/${PRAWNS}`))
     .toMatchObject({ costActual: 90_055 });
+});
+
+/* -------------------------------------------------------------------------- */
+/* M2.13a: a snapshot mid-edit must not take the half-typed figure with it    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * M2.13a. The row's key used to carry the committed figures, so every
+ * snapshot for the line unmounted and rebuilt the row; rebuilt while
+ * somebody was typing, the input became a DOM node that had never been
+ * focused, the blur fired no `change`, and the typed cost was gone with
+ * nothing written. "two main ingredients" lost that race about one run in
+ * twelve under load. This test does not race anything: it types into the
+ * cost box, leaves the caret there, and writes to that same line document
+ * from outside, which is exactly the losing order.
+ *
+ * It asserts both halves of what the row must do with an arriving snapshot:
+ * the box being typed into keeps its text and still commits on blur, and the
+ * box beside it, which nobody is standing in, adopts the figure the document
+ * now carries. That second half is the `Sourcing -> Cooking` server write and
+ * an undo restoring a field, which is why the outside write here is a weight
+ * on a row whose weight box is sitting on the recipe's own fallback.
+ */
+test("a snapshot arriving mid-edit leaves the box being typed into alone", async ({ page }) => {
+  await seedBatch(REF_TYPING, {
+    productSlug: PRODUCT,
+    productName: "M24 Prawns Pickle",
+    recipeId: RECIPE_TWO_MAIN,
+    mainIngredientName: "M24 Prawns",
+    state: "cooking",
+    plannedJars: 22,
+    bookableJars: 19,
+    perPersonLimit: 4,
+    paidCount: 10,
+    landedOn: "2026-09-01",
+    source: "Beypore harbour",
+    weightRaw: 2000,
+  });
+
+  await signIn(page, KITCHEN_PHONE);
+  await openBatch(page, REF_TYPING);
+
+  // The dates row opens on the recipe's own 1000 g and an empty cost.
+  await expect(page.getByTestId(`actual-weight-${DATES}`)).toHaveValue("1000");
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("");
+
+  // Sumayya is standing in the cost box, half way through the figure and not
+  // yet committed. Typed key by key, not `fill`: `fill` dispatches `change`
+  // as well as `input`, so it commits on the spot and leaves no half-typed
+  // box to lose, which is not the state the kitchen is ever in between two
+  // boxes.
+  await page.getByTestId(`actual-cost-${DATES}`).click();
+  await page.keyboard.type("400");
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("400");
+  // Nothing is written yet: the figure exists only in the box.
+  expect(await readDocument(`batches/${REF_TYPING}/lines/${DATES}`)).toBeNull();
+
+  // A write to that very line document from outside: the other admin's phone,
+  // the Sourcing -> Cooking transition, or an undo restoring a field.
+  await patchDocument(`batches/${REF_TYPING}/lines/${DATES}`, {
+    ingredientId: DATES,
+    qtyActual: 1700,
+  });
+
+  // The snapshot landed: the weight box, which nobody is in, adopted it.
+  await expect(page.getByTestId(`actual-weight-${DATES}`)).toHaveValue("1700");
+
+  // The caret is still in the cost box, so the rest of the figure lands in
+  // it. Against the old code the snapshot rebuilt the row, the input became a
+  // DOM node that had never been focused, and every key struck after it went
+  // nowhere: ₹4005.50 stored as ₹400, or, when the rebuild came a moment
+  // later, the blur firing no `change` at all and nothing written.
+  expect(await page.evaluate(() => document.activeElement?.getAttribute("data-testid"))).toBe(
+    `actual-cost-${DATES}`,
+  );
+  await page.keyboard.type("5.50");
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("4005.50");
+
+  // Blurring still commits it, to the paisa, without disturbing the weight
+  // that arrived while she was typing.
+  await page.getByTestId(`actual-cost-${DATES}`).blur();
+  await expect(page.getByTestId(`actual-error-${DATES}`)).toHaveCount(0);
+  await expect
+    .poll(async () => await readDocument(`batches/${REF_TYPING}/lines/${DATES}`))
+    .toMatchObject({ ingredientId: DATES, qtyActual: 1700, costActual: 400_550 });
+  await expect(page.getByTestId(`actual-weight-${DATES}`)).toHaveValue("1700");
+});
+
+/* -------------------------------------------------------------------------- */
+/* M2.13a: what an emptied box falls back to is what the document holds now   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * M2.13a round 2. Holding the TEXT back while a box is focused is right: the
+ * person is the newer source. Holding the FALLBACK back was not. `keptQty`
+ * and `keptCost` are what an empty box drops back to, and while they were
+ * updated only alongside the text, a figure arriving from the other phone
+ * with the caret resting in the box was skipped by both halves at once. Wipe
+ * the box, walk away, and the screen put the figure from before that write
+ * back and sat there showing it, unfocused, with nothing left to correct it:
+ * the effect for that snapshot had already run, and its dependency was never
+ * going to change again. Money on the screen disagreeing with money in the
+ * document, until somebody reloaded.
+ *
+ * Sumayya rests the caret in a box, Shefin's figure lands from his phone, she
+ * wipes the box and walks away. Both boxes, because both own a fallback.
+ */
+test("a figure that arrives while the caret rests in a box is what the emptied box falls back to", async ({
+  page,
+}) => {
+  await seedBatch(REF_RESTING, {
+    productSlug: PRODUCT,
+    productName: "M24 Prawns Pickle",
+    recipeId: RECIPE_TWO_MAIN,
+    mainIngredientName: "M24 Prawns",
+    state: "cooking",
+    plannedJars: 22,
+    bookableJars: 19,
+    perPersonLimit: 4,
+    paidCount: 10,
+    landedOn: "2026-09-01",
+    source: "Beypore harbour",
+    weightRaw: 2000,
+  });
+  // The dates line already carries both figures, as it would after a cook.
+  await patchDocument(`batches/${REF_RESTING}/lines/${DATES}`, {
+    ingredientId: DATES,
+    qtyActual: 1600,
+    costActual: 90_000,
+  });
+
+  await signIn(page, KITCHEN_PHONE);
+  await openBatch(page, REF_RESTING);
+  await expect(page.getByTestId(`actual-weight-${DATES}`)).toHaveValue("1600");
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("900");
+
+  /* ---- The cost box ---- */
+
+  // The caret rests in the cost box. Nothing is typed into it.
+  await page.getByTestId(`actual-cost-${DATES}`).click();
+  // Shefin's figures land from his phone, on this very line.
+  await patchDocument(`batches/${REF_RESTING}/lines/${DATES}`, {
+    ingredientId: DATES,
+    qtyActual: 1750,
+    costActual: 12_345,
+  });
+  // The weight box, which nobody is in, adopts its figure: the snapshot has
+  // landed. The cost box holds its display, because the caret is in it.
+  await expect(page.getByTestId(`actual-weight-${DATES}`)).toHaveValue("1750");
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("900");
+
+  // She wipes the box and walks away, typing no figure. An empty box is not
+  // given, so nothing is written: what it falls back to is what is stored
+  // now, ₹123.45, not the ₹900 that was on the screen before his write.
+  await page.getByTestId(`actual-cost-${DATES}`).fill("");
+  await page.getByTestId(`actual-cost-${DATES}`).blur();
+  await expect(page.getByTestId(`actual-error-${DATES}`)).toHaveCount(0);
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("123.45");
+  expect(await readDocument(`batches/${REF_RESTING}/lines/${DATES}`)).toMatchObject({
+    qtyActual: 1750,
+    costActual: 12_345,
+  });
+
+  /* ---- The weight box, the same sequence ---- */
+
+  await page.getByTestId(`actual-weight-${DATES}`).click();
+  await patchDocument(`batches/${REF_RESTING}/lines/${DATES}`, {
+    ingredientId: DATES,
+    qtyActual: 1850,
+    costActual: 55_555,
+  });
+  // This time the cost box is the one nobody is in.
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("555.55");
+  await expect(page.getByTestId(`actual-weight-${DATES}`)).toHaveValue("1750");
+
+  await page.getByTestId(`actual-weight-${DATES}`).fill("");
+  await page.getByTestId(`actual-weight-${DATES}`).blur();
+  await expect(page.getByTestId(`actual-error-${DATES}`)).toHaveCount(0);
+  await expect(page.getByTestId(`actual-weight-${DATES}`)).toHaveValue("1850");
+  expect(await readDocument(`batches/${REF_RESTING}/lines/${DATES}`)).toMatchObject({
+    qtyActual: 1850,
+    costActual: 55_555,
+  });
+
+  // And the optimistic half of the fallback still holds: a figure typed and
+  // committed here, whose snapshot has not come back yet, is what the box
+  // drops back to when it is cleared, not the figure from before it.
+  await page.getByTestId(`actual-cost-${DATES}`).fill("700");
+  await page.getByTestId(`actual-cost-${DATES}`).blur();
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("700");
+  await page.getByTestId(`actual-cost-${DATES}`).fill("");
+  await page.getByTestId(`actual-cost-${DATES}`).blur();
+  await expect(page.getByTestId(`actual-cost-${DATES}`)).toHaveValue("700");
+  await expect
+    .poll(async () => await readDocument(`batches/${REF_RESTING}/lines/${DATES}`))
+    .toMatchObject({ qtyActual: 1850, costActual: 70_000 });
 });
 
 /* -------------------------------------------------------------------------- */
