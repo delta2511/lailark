@@ -446,13 +446,43 @@ and the live webhook before the production deploy.
       so a resumed refusal is byte-identical to a first-attempt one on all three reasons.
       A refused correction keeps the hold and the `clientRef`. Consents are not carried
       (D57). A191 to A194.
-- [ ] M3.6 [opus] Razorpay webhook and reconciliation, trimmed for launch (D29). HTTP
+- [x] M3.6 [opus] Razorpay webhook and reconciliation, trimmed for launch (D29). HTTP
       function verifying the signature, `webhookEvents` dedupe, `payment.captured` → hold
       becomes Paid, bill or receipt issued (M2.9), order events written;
       `refund.processed` matched to an order (M4.5 records it); scheduled 15-minute
       reconciliation for pending orders. Brief §9.2, §21.1. The daily settlement pull is
       fast-follow (M3.6b). Done when: replaying the same webhook twice changes nothing the
       second time, and a payment with no webhook is recovered by the reconciliation job.
+      Done in two rounds (dffbf49). `razorpayWebhook` (HTTP, its own function URL per
+      brief §19.2, not behind Hosting) verifies the HMAC over the raw body, creates
+      `webhookEvents/{razorpay-<id>}` must-not-exist, answers 200, and enqueues
+      `razorpayWebhookWorker` (Cloud Tasks). `payment.captured` turns a hold into a
+      counted, billed sale in one transaction on the batch document; `refund.processed`
+      is matched for M4.5; `reconcilePayments` every 15 minutes recovers a payment that
+      arrived with no webhook. The A184 guard is built: `releaseHold` reads the order
+      first and, if money has moved, neither releases nor expires.
+      **Round 1 oversold.** A fresh tester proved 23 jars paid on a batch of 22, two
+      bills, through the real HTTP function and the real queue: `readHoldToPaid` read a
+      `heldJars` key's presence as a live hold, while everything else in the system counts
+      one only while its expiry is in the future, so for up to the ~5 minutes between a
+      hold lapsing and the sweep running, one jar was free to the site and convertible by
+      a capture. Round 2 fixed it at the root (a lapsed hold is not a hold) and added the
+      kind outcome where it is safe: a lapsed capture claims a jar afresh inside the same
+      transaction when the batch has one (A196), and raises §21.1's concern when it does
+      not. The builder also caught that a `paused` batch still carries its `bottledJars`,
+      so reclaim is restricted to the sellable states or it would hand out the jar D23
+      exists to freeze (A198). A195 to A198.
+      **Not yet re-tested by a fresh tester after round 2** (see the note in
+      MILESTONE-3-TEST.md): the round-2 builder proved failing-before/passing-after
+      anchored to the one line, ran 6 consecutive green functions suites and asserted
+      `paid + live holds <= capacity` straight off the batch document, and the
+      orchestrator re-ran build, lint and `test:cloud` green. A fresh adversarial pass on
+      the new reclaim path is the first thing the next session should do.
+      **Shefin still owes the real walk on staging**: register the webhook at
+      `https://asia-south1-tree-quiz-74e04.cloudfunctions.net/razorpayWebhook`, tick
+      `payment.captured` and `refund.processed`, set `RAZORPAY_WEBHOOK_SECRET` and
+      redeploy. Razorpay's real payload and signature are the one thing no test here can
+      prove, since `api.razorpay.com` is blocked from the cloud container.
 - [ ] M3.8 [opus] Open batch mechanics end to end. **Note from M3.5a (A194 iv): a
       resumed checkout silently drops `shareCode` and `batchRef` from the request, so a
       customer who books through a share link, dismisses the payment window and taps Pay

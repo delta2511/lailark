@@ -48,13 +48,29 @@ async function json(url: string, init?: RequestInit) {
   return { status: res.status, body };
 }
 
-/** Everything in Firestore, gone. Auth users and their claims survive. */
+/**
+ * Everything in Firestore, gone. Auth users and their claims survive.
+ *
+ * Retried, because the emulator answers 409 while a write is still in
+ * flight. From M3.6 on this suite has work that finishes **off** the request
+ * path (the webhook's queued task, and the triggers that have always been
+ * out of band), so a file can hand over to the next one with a commit still
+ * landing. That is a race in the harness, not in the code under test: the
+ * right answer is to wait a moment and ask again, not to fail a suite
+ * because a task queue was a hundred milliseconds behind.
+ */
 export async function clearFirestore(): Promise<void> {
-  const res = await fetch(
-    `${FIRESTORE_HOST}/emulator/v1/projects/${PROJECT}/databases/(default)/documents`,
-    { method: "DELETE" },
-  );
-  if (!res.ok) throw new Error(`could not clear Firestore: ${res.status}`);
+  let last = 0;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const res = await fetch(
+      `${FIRESTORE_HOST}/emulator/v1/projects/${PROJECT}/databases/(default)/documents`,
+      { method: "DELETE" },
+    );
+    if (res.ok) return;
+    last = res.status;
+    await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+  }
+  throw new Error(`could not clear Firestore: ${last}`);
 }
 
 /**

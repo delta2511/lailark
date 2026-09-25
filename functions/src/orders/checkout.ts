@@ -540,7 +540,7 @@ const RESUMABLE_ORDER_STATES: readonly string[] = ["held", "awaitingPayment"];
  * one of them: the money came back, so a fresh order is the right answer and
  * the page may start one.
  */
-const MONEY_MOVED_PAYMENT_STATUSES: readonly string[] = [
+export const MONEY_MOVED_PAYMENT_STATUSES: readonly string[] = [
   "authorized",
   "captured",
   "partlyRefunded",

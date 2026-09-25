@@ -555,3 +555,266 @@ export async function takeHold(args: {
 function jars(n: number): string {
   return `${n} jar${n === 1 ? "" : "s"}`;
 }
+
+/* -------------------------------------------------------------------------- */
+/* A held jar becoming a paid one (M3.6)                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Where the jars a capture is about to sell came from.
+ *
+ *  - `live-hold`: the order's own hold, still live. The ordinary path.
+ *  - `reclaimed`: the hold had lapsed, but the batch still had a jar free, so
+ *    one was claimed afresh inside this transaction.
+ *  - `none`: the hold had lapsed and the batch has nothing to give. Brief
+ *    §21.1: "Technical, not a sale."
+ */
+export type HoldConversionSource = "live-hold" | "reclaimed" | "none";
+
+export interface HoldConversion {
+  readonly batchRef: string;
+  /** The batch as this transaction read it. `writeAudit`'s `before`. */
+  readonly batchSnap: DocumentSnapshot;
+  /** The printed batch number, or null on a batch not yet bottled (D21c). */
+  readonly batchNo: string | null;
+  /** The batch's own state, which decides bill or receipt (brief 13.1). */
+  readonly batchState: string;
+  readonly source: HoldConversionSource;
+  /**
+   * False only when {@link source} is `none`: the hold had lapsed and the
+   * batch cannot supply a jar. The caller must **not** write the conversion
+   * in that case; it is a concern, not a sale.
+   */
+  readonly held: boolean;
+  /** Jars this sells. Zero when {@link held} is false. */
+  readonly qty: number;
+  /** The batch as it stood before this conversion, for the caller's log. */
+  readonly availabilityBefore: BatchAvailability;
+  /** `{ heldJars, paidCount }`, the whole of both. */
+  readonly auditPatch: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * The read half of turning this order's hold into paid jars, inside the
+ * caller's transaction and on the batch document, which is the only place a
+ * count may move (CLAUDE.md section 3).
+ *
+ * On the ordinary path it is arithmetic on the batch as *this* transaction
+ * read it: the hold's key leaves `heldJars` and its jars are added to
+ * `paidCount`, so the total of "not free" is unchanged and nothing can be
+ * oversold by it.
+ *
+ * ## A hold counts only while it is live, here as everywhere else
+ *
+ * The first cut of this function decided a hold existed by asking whether
+ * the `heldJars` key was **present**, and that was an oversell. Everything
+ * else in this system counts a hold only while its expiry is in the future
+ * (brief 9.3, and the header of this file): `liveHeldJars` skips a lapsed
+ * entry, so `batchAvailability`, `/api/counts`, the site and
+ * `readStockClaim` all treat that jar as free the moment the clock passes.
+ * `sweepHolds` runs every five minutes and a hold is fifteen, so a dead key
+ * outlives its expiry by up to five minutes. In that window the same jar was
+ * free to a new checkout **and** convertible by a capture, and both could
+ * have it: 23 jars sold from a batch of 22.
+ *
+ * So the expiry is read, not just the key. A lapsed hold is not a hold.
+ *
+ * ## What happens instead, when the hold has lapsed
+ *
+ * Refusing every lapsed capture would be safe and unkind: the customer has
+ * paid, and most of the time the jar they were holding is still sitting
+ * there. So the question becomes the one the batch can actually answer, and
+ * it is asked the same way every other caller asks it (`batchAvailability` /
+ * `inStockAvailability` over live holds):
+ *
+ *  - a jar is free, so one is **claimed afresh** and the sale completes;
+ *  - nothing is free, so `source` is `none` and the caller raises brief
+ *    21.1's concern instead: "Technical, not a sale. Owner refunds or
+ *    allocates a surplus jar."
+ *
+ * The claim is safe precisely because it is made **inside the caller's
+ * transaction on the batch document**, in the same commit as the check: two
+ * lapsed captures racing for one last jar are retried against each other and
+ * the loser's arithmetic honestly says no, exactly as in `readStockClaim`.
+ *
+ * The per-person limit is deliberately **not** re-asked. It is a rule about
+ * who may reserve a jar before paying, and this order passed it when its
+ * hold was taken; re-asking it after the money has arrived could only ever
+ * refuse a sale that was already allowed.
+ *
+ * It stays **idempotent**: run a second time on the committed result, the
+ * key is gone and the order's payment has moved, so `capture.ts` returns at
+ * its `alreadyPaid` branch and this is never reached again. A replayed
+ * `payment.captured` costs one read and changes no count.
+ */
+export async function readHoldToPaid(
+  tx: Transaction,
+  db: Firestore,
+  args: {
+    readonly batchRef: string;
+    readonly orderId: string;
+    /** The jars the order is for, used only when the hold has lapsed. */
+    readonly qty: number;
+    readonly nowMillis: number;
+  },
+): Promise<HoldConversion> {
+  const snap = await tx.get(db.collection(BATCHES).doc(args.batchRef));
+  if (!snap.exists) {
+    throw new ReleaseRefused("no-such-batch", `There is no batch ${args.batchRef}.`);
+  }
+
+  const batch = batchViewFrom(snap);
+  const held = heldJarsWithCustomerFrom(snap);
+  const mine = held[args.orderId];
+
+  // This order's key leaves the map either way. A key whose expiry has
+  // passed is counted by nothing in this system, so leaving it behind would
+  // only be leaving litter for the sweep; and on the live path it is the
+  // whole point of the conversion.
+  const nextHeldJars: Record<
+    string,
+    { qty: number; expiresAt: Timestamp; customerPhone: string }
+  > = {};
+  for (const [heldOrderId, hold] of Object.entries(held)) {
+    if (heldOrderId === args.orderId) continue;
+    nextHeldJars[heldOrderId] = {
+      qty: hold.qty,
+      expiresAt: Timestamp.fromMillis(hold.expiresAt),
+      customerPhone: hold.customerPhone ?? "",
+    };
+  }
+
+  // The batch as everything else in the system reads it: live holds only,
+  // and **this order's own hold is never one of them**, because either it
+  // has lapsed (so nothing counts it) or it is live (so the jars it covers
+  // are the jars being sold, and counting them against the sale would refuse
+  // the very hold that reserved them).
+  const availability = availabilityOf(batch, nextHeldJars, args.nowMillis);
+
+  const live = mine !== undefined && mine.qty > 0 && mine.expiresAt > args.nowMillis;
+
+  if (live) {
+    const qty = mine.qty;
+    return {
+      batchRef: args.batchRef,
+      batchSnap: snap,
+      batchNo: batch.batchNo,
+      batchState: batch.state ?? "",
+      source: "live-hold",
+      held: true,
+      qty,
+      availabilityBefore: availability,
+      // The values, not increment sentinels: the document is in this
+      // transaction's read set, so the arithmetic is safe here and the audit
+      // entry carries the number the batch actually went to.
+      auditPatch: { heldJars: nextHeldJars, paidCount: batch.paidCount + qty },
+    };
+  }
+
+  // The hold has lapsed, or was never there. The money has arrived, so the
+  // question is no longer "may this customer hold a jar" but "is there a jar
+  // to give them". If there is, it is claimed here, inside the same
+  // transaction that checked for it, which is what makes the claim safe: the
+  // check and the write commit together, so two lapsed captures racing for
+  // one jar cannot both win.
+  const wanted = Number.isInteger(args.qty) ? args.qty : 0;
+  if (wanted > 0 && canHold(availability, wanted)) {
+    return {
+      batchRef: args.batchRef,
+      batchSnap: snap,
+      batchNo: batch.batchNo,
+      batchState: batch.state ?? "",
+      source: "reclaimed",
+      held: true,
+      qty: wanted,
+      availabilityBefore: availability,
+      auditPatch: { heldJars: nextHeldJars, paidCount: batch.paidCount + wanted },
+    };
+  }
+
+  return {
+    batchRef: args.batchRef,
+    batchSnap: snap,
+    batchNo: batch.batchNo,
+    batchState: batch.state ?? "",
+    source: "none",
+    held: false,
+    qty: 0,
+    availabilityBefore: availability,
+    auditPatch: { heldJars: nextHeldJars, paidCount: batch.paidCount },
+  };
+}
+
+/**
+ * `capacity - paid - live holds`, through the same two shared functions
+ * `readStockClaim` and `/api/counts` use, so a capture cannot disagree with
+ * the site about how many jars exist.
+ *
+ * **Only a batch that is actually on sale can supply a jar.** The states are
+ * the same two families `readStockClaim` accepts, and every other state
+ * answers zero:
+ *
+ *  - `paused` is the one that matters. D23 put `inStock` on the pausable
+ *    list precisely so sales can be frozen on jars that turn out to be bad,
+ *    and a paused batch still has its `bottledJars`. Reclaiming from it
+ *    would hand out exactly the jar somebody froze.
+ *  - `soldOut` and `archived` answer zero too. A jar may briefly look free
+ *    on a sold-out batch when a hold lapses, but "sold out" is the state the
+ *    Owner and the site are both reading, and quietly selling out of it
+ *    behind them is not this function's call to make. The concern is.
+ *
+ * A **live** hold is never affected by any of this: its jars were reserved
+ * before the state moved, and its conversion asks no availability question.
+ */
+function availabilityOf(
+  batch: ReturnType<typeof batchViewFrom>,
+  heldJars: Record<string, { qty: number; expiresAt: Timestamp }>,
+  nowMillis: number,
+): BatchAvailability {
+  const state = batch.state ?? "";
+  if ((BATCH_STATES_OPEN_FOR_BOOKING as readonly string[]).includes(state)) {
+    return batchAvailability({
+      bookableJars: batch.bookableJars,
+      paidCount: batch.paidCount,
+      heldJars,
+      now: nowMillis,
+    });
+  }
+  if ((BATCH_STATES_IN_STOCK as readonly string[]).includes(state)) {
+    return inStockAvailability({
+      bottledJars: batch.bottledJars,
+      paidCount: batch.paidCount,
+      heldJars,
+      writtenOff: batch.writtenOff,
+      now: nowMillis,
+    });
+  }
+  return batchAvailability({
+    bookableJars: 0,
+    paidCount: batch.paidCount,
+    heldJars,
+    now: nowMillis,
+  });
+}
+
+/**
+ * The write half of {@link readHoldToPaid}.
+ *
+ * `update`, never `set({ merge: true })`, for the reason written out at
+ * length above {@link writeStockRelease}: Firestore merges a map field leaf
+ * by leaf, so the hold key this conversion deliberately leaves out of
+ * `heldJars` would be merged straight back in and the jar would be counted
+ * twice, once as held and once as paid.
+ */
+export function writeHoldToPaid(
+  tx: Transaction,
+  db: Firestore,
+  conversion: HoldConversion,
+  actor: string,
+): void {
+  tx.update(db.collection(BATCHES).doc(conversion.batchRef), {
+    ...conversion.auditPatch,
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: actor,
+  });
+}

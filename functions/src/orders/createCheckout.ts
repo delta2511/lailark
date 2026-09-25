@@ -47,7 +47,7 @@ import {
   type DocumentSnapshot,
 } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { WEB_HOLD_MINUTES } from "@lailark/shared";
+import { ORDER_STATES_PAID, WEB_HOLD_MINUTES } from "@lailark/shared";
 
 import { writeAudit } from "../audit/write";
 import { HoldRefused, readStockClaim, type StockClaim, writeStockClaim } from "../batches/holds";
@@ -58,6 +58,7 @@ import { DEFAULT_MAX_INSTANCES, REGION } from "../lib/options";
 import {
   checkResumableCheckout,
   chooseWebBatch,
+  MONEY_MOVED_PAYMENT_STATUSES,
   parseCheckoutRequest,
   planCheckout,
   planResumedContact,
@@ -513,13 +514,63 @@ export const createCheckout = onCall(
  * count because Razorpay was down. The order is marked `expired` in the same
  * commit, so nothing downstream ever sees a held order with no gateway order
  * behind it.
+ *
+ * ## The guard, and why it is not optional (A184, fixed in M3.6)
+ *
+ * Until M3.6 this wrote `state: "expired"` **unconditionally** whenever the
+ * order existed, and released the jars beside it. That was inert only
+ * because nothing in the system could flip a payment mid-flight. The webhook
+ * is exactly that thing. Brief §9.2: "Webhooks are the source of truth."
+ * A `payment.captured` arriving between the resume transaction's commit and
+ * this release would find a paid order and expire it, and put the jars its
+ * customer had just bought back into the free count: the customer is charged,
+ * loses their jar to the next buyer, and nothing anywhere says so.
+ *
+ * So the order is read **first**, and if money has moved this does nothing
+ * at all: it neither releases nor expires, and it returns before the batch
+ * is even read. Doing nothing is the whole of the right answer, because
+ * everything this function could still usefully do is already someone
+ * else's:
+ *
+ *  - the jars, if the capture has landed, are no longer held but paid, so
+ *    there is no hold to release. If the capture is still in flight, its own
+ *    transaction converts the hold; and if it never lands, the hold lapses
+ *    in fifteen minutes and the sweep tidies the key (brief §9.3), which is
+ *    the same ending as a successful release, a quarter of an hour later.
+ *  - the order's state belongs to the capture now. `sweepHolds` has carried
+ *    the same refusal since M3.5 for the same reason.
+ *
+ * The check costs nothing: the order snapshot was already being read inside
+ * this transaction. It is both `payment.status` and the order's state,
+ * because either one saying money moved is enough, and a guard on the money
+ * should not depend on two fields agreeing.
  */
-async function releaseHold(orderId: string, batchRef: string, qty: number): Promise<void> {
+export async function releaseHold(orderId: string, batchRef: string, qty: number): Promise<void> {
   const db = getFirestore(getAdminApp());
   try {
     await db.runTransaction(async (tx) => {
-      const release = await readStockRelease(tx, db, { batchRef, orderId, qty, mode: "hold" });
+      // First, and before the batch: a paid order stops this dead.
       const orderSnap = await tx.get(db.collection(ORDERS).doc(orderId));
+      if (orderSnap.exists) {
+        const paymentStatus = String(
+          ((orderSnap.get("payment") ?? {}) as { status?: unknown }).status ?? "",
+        );
+        const state = String(orderSnap.get("state") ?? "");
+        if (
+          MONEY_MOVED_PAYMENT_STATUSES.includes(paymentStatus) ||
+          (ORDER_STATES_PAID as readonly string[]).includes(state)
+        ) {
+          console.warn("createCheckout: not releasing a paid order", {
+            orderId,
+            batchRef,
+            state,
+            paymentStatus,
+          });
+          return;
+        }
+      }
+
+      const release = await readStockRelease(tx, db, { batchRef, orderId, qty, mode: "hold" });
       writeStockRelease(tx, db, release, ACTOR);
       if (orderSnap.exists) {
         tx.set(

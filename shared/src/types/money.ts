@@ -185,4 +185,11 @@ export interface WebhookEvent extends BaseDoc {
   readonly receivedAt: Timestamp;
   readonly processedAt: Timestamp | null;
   readonly payload: unknown;
+  /**
+   * What the work came to: `"applied"`, `"already"`, `"hold-gone"`,
+   * `"ignored"` and the rest of M3.6's outcomes. Null until it is done.
+   */
+  readonly outcome?: string | null;
+  /** The order this event turned out to be about, when it was about one. */
+  readonly orderId?: string | null;
 }

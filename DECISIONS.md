@@ -956,6 +956,38 @@ break.
   once the writes have landed; a commit still in flight went down with the page about
   one run in twelve under load, which looked exactly like the M2.13a defect without
   being it. Status: open.
+- A195 (M3.6, 25 Sep): the webhook's own assumptions. The four concern summary sentences
+  and their derived ids (admin-facing; `draftMessage` stays null so none can reach a
+  customer, D32). A captured amount that is not the order's total records the payment but
+  does not move a count: brief §21.1 names the QR mismatch as a Concern and this is read
+  the same way, because the Owner can complete a sale by hand and cannot un-sell a jar.
+  `payment.status` is set to `captured` even on branches that do not complete a sale,
+  because the money really arrived. The reconciliation windows: 7 days back, a 2 minute
+  grace before an unprocessed event is picked up, 100 orders and 50 events a run, worker
+  retry 5 attempts with a 5 second floor. `EMULATOR_WEBHOOK_SECRET`, a named constant
+  reached only when `FUNCTIONS_EMULATOR` is exactly "true", which is what lets the suite
+  prove a wrong signature is refused; a deployed project with no secret throws and the
+  webhook answers 500, so Razorpay retries rather than anything being trusted.
+  `releaseHold` exported as a test seam. `WebhookEvent` gains optional `outcome` and
+  `orderId`. Status: open.
+- A196 (M3.6 round 2, 25 Sep): a capture landing on a hold that has lapsed but not yet
+  been swept completes the sale when the batch still has a jar free, rather than becoming
+  a concern. The brief spells out only §21.1's "the jar has gone" case. The customer has
+  paid and a jar exists, so refusing them would be safe and unkind. The claim is made
+  inside the same transaction on the batch document, over live holds only and through the
+  same availability arithmetic the site uses, so it cannot oversell: two lapsed captures
+  racing for one last jar are retried against each other and the loser is told no.
+  Audited as `webSalePaidReclaimed`. Status: open.
+- A197 (M3.6 round 2, 25 Sep): a reclaim does not re-ask the per-person limit. It is a
+  rule about who may reserve a jar before paying, this order passed it when its hold was
+  taken, and re-asking after the money has arrived could only refuse a sale that was
+  already allowed. Status: open.
+- A198 (M3.6 round 2, 25 Sep): no reclaim from a `paused`, `soldOut` or `archived` batch
+  even when the arithmetic would allow one. D23 put `inStock` on the pausable list so
+  sales can be frozen on jars that turn out to be bad, and a paused batch still carries
+  its `bottledJars`, so an unrestricted reclaim would have handed out exactly the jar
+  somebody froze. A live hold still converts in any state, since its jars were reserved
+  before the state moved. Status: open.
 - A191 (M3.5a, 25 Sep): the resume path re-validates the delivery address only when the
   contact actually changed. An unchanged address already passed on the first attempt,
   and re-checking it would let an edit to `settings/pincodes` refuse a customer

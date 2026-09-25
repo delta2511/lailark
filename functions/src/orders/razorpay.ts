@@ -26,6 +26,51 @@ import { defineSecret } from "firebase-functions/params";
 export const RAZORPAY_KEY_ID = defineSecret("RAZORPAY_KEY_ID");
 /** The one that signs. Never leaves the server, never goes in a response. */
 export const RAZORPAY_KEY_SECRET = defineSecret("RAZORPAY_KEY_SECRET");
+/**
+ * The webhook signing secret (M3.6). A **different** secret from
+ * `RAZORPAY_KEY_SECRET`: it is typed into the Razorpay dashboard beside the
+ * webhook URL, and it is the only thing that tells a real delivery from a
+ * body anyone on the internet can POST at a public function URL.
+ */
+export const RAZORPAY_WEBHOOK_SECRET = defineSecret("RAZORPAY_WEBHOOK_SECRET");
+
+/**
+ * The fixed secret the emulator signs and verifies with when none is
+ * configured, so the whole webhook path can be walked offline and, more to
+ * the point, so the test suite can prove that a **wrong** signature is
+ * refused. It is not a secret: it is a constant in a file everybody can
+ * read, exactly like `rzp_test_emulator` above, and it is reachable only
+ * when `FUNCTIONS_EMULATOR` is set, which it never is on a deployed project.
+ */
+export const EMULATOR_WEBHOOK_SECRET = "emulator-webhook-secret-not-a-real-one";
+
+export class RazorpayWebhookNotConfigured extends Error {
+  constructor() {
+    super("No Razorpay webhook secret is configured, so a delivery cannot be verified.");
+    this.name = "RazorpayWebhookNotConfigured";
+  }
+}
+
+/**
+ * The secret this deployment verifies webhook signatures with, or a throw.
+ *
+ * Never a fallback to "accept anything": an unverifiable delivery is refused
+ * (M3.6's HTTP function answers 500, which makes Razorpay retry once the
+ * secret is set) rather than trusted, because a webhook that skips its
+ * signature is an open door onto the money.
+ */
+export function razorpayWebhookSecret(): string {
+  let secret = "";
+  try {
+    secret = (RAZORPAY_WEBHOOK_SECRET.value() ?? "").trim();
+  } catch {
+    secret = "";
+  }
+  if (secret === "") secret = (process.env.RAZORPAY_WEBHOOK_SECRET ?? "").trim();
+  if (secret !== "") return secret;
+  if (inEmulator()) return EMULATOR_WEBHOOK_SECRET;
+  throw new RazorpayWebhookNotConfigured();
+}
 
 const ORDERS_URL = "https://api.razorpay.com/v1/orders";
 
@@ -210,4 +255,82 @@ export async function createRazorpayOrder(args: CreateOrderArgs): Promise<Razorp
     currency: typeof body.currency === "string" ? body.currency : "INR",
     keyId: configured.id,
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Asking the gateway what happened (M3.6's reconciliation)                   */
+/* -------------------------------------------------------------------------- */
+
+/** One payment against a gateway order, as the reconciliation needs it. */
+export interface RazorpayPaymentView {
+  readonly id: string;
+  readonly status: string;
+  readonly amountPaise: number;
+  readonly orderId: string;
+  readonly method: string;
+  readonly notes: Readonly<Record<string, string>>;
+}
+
+/**
+ * Every payment Razorpay holds against one of our gateway orders.
+ *
+ * Brief §21.1: "Webhook never arrives → Reconciliation every 15 minutes for
+ * pending orders asks Razorpay directly." This is that question. It is a
+ * read, so unlike `createRazorpayOrder` it is safe to repeat and safe to
+ * give up on: a failure returns an empty list and the next run asks again,
+ * rather than throwing a scheduled job onto the floor for one bad response.
+ *
+ * **In the emulator with no key configured it makes no network call and
+ * returns nothing.** The same reasoning as `createRazorpayOrder`: the suite
+ * must never reach api.razorpay.com. The reconciliation's own tests pass a
+ * stub in its place, which is why it takes this function as an argument.
+ */
+export async function fetchRazorpayPaymentsForOrder(
+  razorpayOrderId: string,
+  timeoutMs: number = RAZORPAY_TIMEOUT_MS,
+): Promise<readonly RazorpayPaymentView[]> {
+  const configured = keys();
+  if (configured === null || razorpayOrderId === "") return [];
+
+  const auth = Buffer.from(`${configured.id}:${configured.secret}`).toString("base64");
+  let res: Response;
+  try {
+    res = await fetch(`${ORDERS_URL}/${encodeURIComponent(razorpayOrderId)}/payments`, {
+      headers: { Authorization: `Basic ${auth}` },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    console.error("razorpay: could not read payments", { razorpayOrderId, error: String(error) });
+    return [];
+  }
+  if (!res.ok) {
+    console.error("razorpay: payments refused", { razorpayOrderId, status: res.status });
+    return [];
+  }
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const items = Array.isArray(body.items) ? body.items : [];
+  return items.flatMap((item) => {
+    const p = (item ?? {}) as Record<string, unknown>;
+    if (typeof p.id !== "string") return [];
+    const notes: Record<string, string> = {};
+    for (const [key, value] of Object.entries(
+      (typeof p.notes === "object" && p.notes !== null ? p.notes : {}) as Record<string, unknown>,
+    )) {
+      if (typeof value === "string") notes[key] = value;
+    }
+    return [
+      {
+        id: p.id,
+        status: typeof p.status === "string" ? p.status : "",
+        // Integer paise or -1, never a float (CLAUDE.md §3).
+        amountPaise:
+          typeof p.amount === "number" && Number.isSafeInteger(p.amount) && p.amount >= 0
+            ? p.amount
+            : -1,
+        orderId: typeof p.order_id === "string" ? p.order_id : razorpayOrderId,
+        method: typeof p.method === "string" ? p.method : "",
+        notes,
+      },
+    ];
+  });
 }
