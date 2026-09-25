@@ -365,7 +365,7 @@ and the live webhook before the production deploy.
       states plus junk, and D53's sentence is byte-identical at fifteen minutes. Build
       and lint exit 0, 1391 tests green. Shefin still owes the test payment on staging,
       which needs Razorpay test keys in Secret Manager and is walked together with M3.6.
-- [x] M3.11 [orchestrator] Cloud sessions made cheap. (PENDING) Added by the orchestrator on
+- [x] M3.11 [orchestrator] Cloud sessions made cheap. (a90c8ab) Added by the orchestrator on
       25 Sep 2026 from the cloud readiness run, and written by the orchestrator itself:
       repo tooling and docs, no feature code. `npm run cloud:setup`
       (`scripts/cloud-setup.sh`) does the five steps a fresh container needs, with the
