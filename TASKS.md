@@ -349,7 +349,7 @@ and the live webhook before the production deploy.
       plus D48's closing button) and the template is proven generic, percentages and
       all, by a fixture batch rather than a published `/batch/002` URL (A172). Record
       pages show ingredient percentages from batch 002 on (D28).
-- [ ] M3.5 [opus] Checkout. Callable `createCheckout`: validates lines against the
+- [x] M3.5 [opus] Checkout. (f032794; D51, D52, D53, D54 and D55 asked and answered during the task; four fix rounds, the cap waived once by Shefin; round 4 tester PASS; M3.5a filed) Callable `createCheckout`: validates lines against the
       per-person limit across the customer's orders in the batch, pincode against the
       serviceable list and the product's shipping rule, takes a 15-minute hold in a
       transaction, creates the Razorpay order with the order id in notes, returns the
