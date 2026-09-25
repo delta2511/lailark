@@ -9,18 +9,6 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
 
 ## Open
 
-- Q23 (M3.5a, 25 Sep): a customer who reopens a dismissed checkout and ticks the
-  marketing box on the second attempt has that tick dropped, because the resume path
-  hands back the stored order and discards the rest of the request. M3.5a carries the
-  corrected address and email onto the order, but deliberately leaves consent alone:
-  recording a consent the customer gave is arguably right, and dropping it is the safe
-  direction, but consent gates what may be sent to them later, which is on the
-  never-assume list. Options: (a) leave it as it is, the tick is dropped and they can
-  tick it again later, (b) carry a newly added tick onto the order but never carry a
-  removed one, (c) carry whatever the second attempt says, in both directions.
-  Recommended: (b), because it records what they actually did on the attempt that paid,
-  and never silently opts anyone back in. Meanwhile: (a), the behaviour as built, with
-  nothing recorded from the second attempt.
 - Q24 (M2.13a, 25 Sep): should the admin PWA switch on Firestore offline persistence?
   M2.13a fixed a figure being lost on screen, but the same in-flight window exists on a
   real phone: Sumayya types a cost, the app is closed or killed before the write lands,
@@ -40,6 +28,8 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
   allowed and the money is shown as an orphan.
 
 ## Answered
+
+- ~~Q23 (M3.5a, 25 Sep): a customer who reopens a dismissed checkout and ticks the marketing box on the second attempt has that tick dropped. Carry it, or leave it dropped?~~ Answered 25 Sep: leave it dropped, option (a). The customer can tick it again later. Recorded as D57.
 
 - ~~Q22 (M3.5, 25 Sep): round 4 wrote two new customer sentences, for a changed order and for a checkout that cannot be matched to the request. Neither is drafted in any doc.~~ Answered 25 Sep: both approved as drafted. Recorded as D55.
 - ~~Q21 (M3.5, 24 Sep): every sentence the checkout page says to a customer is newly written and drafted in no doc, which puts all of it on the never-assume list. Approve as drafted, or edit?~~ Answered 24 Sep: approved as drafted, after reading the full list. Recorded as D53.
