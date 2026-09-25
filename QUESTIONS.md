@@ -9,6 +9,26 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
 
 ## Open
 
+- Q23 (M3.5a, 25 Sep): a customer who reopens a dismissed checkout and ticks the
+  marketing box on the second attempt has that tick dropped, because the resume path
+  hands back the stored order and discards the rest of the request. M3.5a carries the
+  corrected address and email onto the order, but deliberately leaves consent alone:
+  recording a consent the customer gave is arguably right, and dropping it is the safe
+  direction, but consent gates what may be sent to them later, which is on the
+  never-assume list. Options: (a) leave it as it is, the tick is dropped and they can
+  tick it again later, (b) carry a newly added tick onto the order but never carry a
+  removed one, (c) carry whatever the second attempt says, in both directions.
+  Recommended: (b), because it records what they actually did on the attempt that paid,
+  and never silently opts anyone back in. Meanwhile: (a), the behaviour as built, with
+  nothing recorded from the second attempt.
+- Q24 (M2.13a, 25 Sep): should the admin PWA switch on Firestore offline persistence?
+  M2.13a fixed a figure being lost on screen, but the same in-flight window exists on a
+  real phone: Sumayya types a cost, the app is closed or killed before the write lands,
+  and the write is gone with no error. Persistence would queue it and send it when the
+  app is next open. It changes what "saved" means on a money field, and it interacts
+  with the undo window and with two people editing the same batch from two phones, so
+  it is not a low-layer call. Meanwhile: nothing changed, the window is as it was.
+
 - Q16 (M2.13, 23 Sep): should Sourcing to Cooking be refused when the recipe names no
   main ingredient at all? Today the transition writes the raw weight and cost to a
   placeholder line with no ingredient behind it, because there is nowhere else for
