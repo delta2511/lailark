@@ -9,25 +9,12 @@ Format: `Q<n> (task, date): the question. Options if any. What was done meanwhil
 
 ## Open
 
-- Q24 (M2.13a, 25 Sep): should the admin PWA switch on Firestore offline persistence?
-  M2.13a fixed a figure being lost on screen, but the same in-flight window exists on a
-  real phone: Sumayya types a cost, the app is closed or killed before the write lands,
-  and the write is gone with no error. Persistence would queue it and send it when the
-  app is next open. It changes what "saved" means on a money field, and it interacts
-  with the undo window and with two people editing the same batch from two phones, so
-  it is not a low-layer call. Meanwhile: nothing changed, the window is as it was.
-
-- Q16 (M2.13, 23 Sep): should Sourcing to Cooking be refused when the recipe names no
-  main ingredient at all? Today the transition writes the raw weight and cost to a
-  placeholder line with no ingredient behind it, because there is nowhere else for
-  `costRaw` to go (it is not a field on the batch document). Since M2.13 that money is
-  at least visible, listed as "Recorded against something this recipe does not list",
-  but it cannot be edited until an ingredient is put on the recipe. Refusing the
-  transition instead would be a batch lifecycle change, which is on the never-assume
-  list. Related to D41 and M2.19 but not the same question. Meanwhile: the transition is
-  allowed and the money is shown as an orphan.
+None. Every question raised so far is answered below.
 
 ## Answered
+
+- ~~Q16 (M2.13, 23 Sep): should Sourcing to Cooking be refused when the recipe names no main ingredient at all?~~ Answered 25 Sep: no, leave it as built. The transition stays allowed and the raw cost shows as an orphan. Refusing would be a batch lifecycle change and would stop the kitchen mid-cook. Recorded as D58.
+- ~~Q24 (M2.13a, 25 Sep): should the admin PWA switch on Firestore offline persistence?~~ Answered 25 Sep: not at launch. The honest fix is telling the person when a write has not landed, which is fast-follow work, not a flag. Recorded as D59.
 
 - ~~Q23 (M3.5a, 25 Sep): a customer who reopens a dismissed checkout and ticks the marketing box on the second attempt has that tick dropped. Carry it, or leave it dropped?~~ Answered 25 Sep: leave it dropped, option (a). The customer can tick it again later. Recorded as D57.
 
