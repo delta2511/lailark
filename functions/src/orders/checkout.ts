@@ -684,6 +684,69 @@ export type CheckoutPlanned = { readonly ok: true; readonly value: CheckoutPlan 
  * `batches/holds.ts`'s job, inside the transaction, and this only says what
  * cap that hold should be measured against.
  */
+/**
+ * Brief §6.1 step 3: "Pincode checked against serviceable list and the
+ * product's shipping rule", and the three sentences a customer hears when it
+ * does not pass.
+ *
+ * It lives on its own because a first attempt is not the only request that
+ * carries an address. A resumed checkout (`planResumedContact`) carries one
+ * too, and the address that lands on the order has to have been through this
+ * whichever tap wrote it. Two copies of these three sentences would be two
+ * copies to keep in step, and the day they drift the customer hears a
+ * refusal for one reason on one tap and another on the next.
+ *
+ * `null` means it can go.
+ */
+export function checkCheckoutDelivery(args: {
+  readonly address: CheckoutAddress;
+  readonly productName: string;
+  readonly restriction: ProductShippingRestriction;
+  readonly pincodes: PincodeList;
+}): Failure | null {
+  const deliverable = checkDeliverable({
+    pincode: args.address.pincode,
+    state: args.address.state,
+    list: args.pincodes,
+    product: args.restriction,
+  });
+  if (deliverable.ok) return null;
+
+  if (deliverable.reason === "malformed") return invalid("Please give a six digit pincode.");
+  if (deliverable.reason === "notServiceable") {
+    return fail(
+      "failed-precondition",
+      `We cannot get a parcel to ${args.address.pincode} yet. Message us on WhatsApp and we will see what we can do.`,
+    );
+  }
+  return fail(
+    "failed-precondition",
+    `We cannot send ${args.productName} to ${args.address.pincode}. Message us on WhatsApp and we will see what we can do.`,
+  );
+}
+
+/**
+ * `orders/{id}.deliveryContact`.
+ *
+ * Brief §5 asks for one name and one number, so the person paying is the
+ * person the parcel is addressed to. There is no second contact box on the
+ * checkout to fill a different one from.
+ *
+ * Built in one place because both the first attempt and a resumed one write
+ * it, and a parcel addressed by two slightly different builders is a parcel
+ * that eventually goes to the wrong door.
+ */
+export function deliveryContactFrom(request: CheckoutRequest): Record<string, unknown> {
+  return {
+    name: request.customerName,
+    phone: request.customerPhone,
+    lines: request.address.lines,
+    city: request.address.city,
+    state: request.address.state,
+    pincode: request.address.pincode,
+  };
+}
+
 export function planCheckout(
   request: CheckoutRequest,
   context: CheckoutContext,
@@ -716,25 +779,13 @@ export function planCheckout(
 
   /* ---- where it is going, brief §11.5 -------------------------------- */
 
-  const deliverable = checkDeliverable({
-    pincode: request.address.pincode,
-    state: request.address.state,
-    list: context.pincodes,
-    product: product.restriction,
+  const refusal = checkCheckoutDelivery({
+    address: request.address,
+    productName: product.name,
+    restriction: product.restriction,
+    pincodes: context.pincodes,
   });
-  if (!deliverable.ok) {
-    if (deliverable.reason === "malformed") return invalid("Please give a six digit pincode.");
-    if (deliverable.reason === "notServiceable") {
-      return fail(
-        "failed-precondition",
-        `We cannot get a parcel to ${request.address.pincode} yet. Message us on WhatsApp and we will see what we can do.`,
-      );
-    }
-    return fail(
-      "failed-precondition",
-      `We cannot send ${product.name} to ${request.address.pincode}. Message us on WhatsApp and we will see what we can do.`,
-    );
-  }
+  if (refusal !== null) return refusal;
 
   /* ---- the price, brief §4.1 ----------------------------------------- */
 
@@ -775,17 +826,7 @@ export function planCheckout(
     number: context.orderId,
     channel: "web",
     customerPhone: request.customerPhone,
-    deliveryContact: {
-      // Brief §5 asks for one name and one number, so the person paying is
-      // the person the parcel is addressed to. There is no second contact
-      // box on the checkout to fill a different one from.
-      name: request.customerName,
-      phone: request.customerPhone,
-      lines: request.address.lines,
-      city: request.address.city,
-      state: request.address.state,
-      pincode: request.address.pincode,
-    },
+    deliveryContact: deliveryContactFrom(request),
     placeOfSupply: request.address.state,
     // Brief §9.1: the jars are held and nothing is paid yet.
     state: "held",
@@ -898,4 +939,125 @@ function planCheckoutCustomerPatch(
   };
 
   return { patch, stampFields };
+}
+
+/* -------------------------------------------------------------------------- */
+/* The address on a resumed checkout (M3.5a)                                  */
+/* -------------------------------------------------------------------------- */
+
+/** The contact a started checkout already carries, as the resume path reads it. */
+export interface StoredContact {
+  readonly name: string;
+  readonly phone: string;
+  readonly lines: readonly string[];
+  readonly city: string;
+  readonly state: string;
+  readonly pincode: string;
+  /** `orders/{id}.placeOfSupply`. */
+  readonly placeOfSupply: string;
+  /** `customers/{phone}.email`, which is the only place an email is kept. */
+  readonly customerEmail: string | null;
+}
+
+/** What a resumed checkout changes, if anything. Empty patches mean nothing moved. */
+export interface ResumedContactPlan {
+  /** `orders/{id}`: the delivery contact and the place of supply, or nothing. */
+  readonly orderPatch: Readonly<Record<string, unknown>>;
+  /** `customers/{phone}`: the name and the email, or nothing. Never consents. */
+  readonly customerPatch: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * M3.5a. **The address the customer typed last is the address the jar goes
+ * to**, on a resumed checkout as much as on a first one.
+ *
+ * `clientRef` is minted once per page mount, so the tap that follows a
+ * dismissed Razorpay window carries it again, and `checkResumableCheckout`
+ * compares only what is being bought: the product, the jars, the total and
+ * the phone. Everything else in that second request used to be dropped on
+ * the floor and the stored order handed back. Close the window because the
+ * house number is wrong, fix it, tap Pay: no error, and the jar went to the
+ * first address. The email went the same way.
+ *
+ * So the contact is carried rather than refused. Correcting a typo in an
+ * address is the likeliest reason anybody reopens that window, and making
+ * them lose their jars and tap again for it is the worse read.
+ *
+ * **Carrying it cannot change what is charged.** `shippingFeeFor` never sees
+ * a pincode, so no address moves the shipping line under any of the three
+ * positions of the switch. `placeOfSupply` is a tax field, but `splitGst`
+ * returns the total untaxed while GST is off and throws outright when it is
+ * on, so no address can move a total today and none can quietly start to.
+ * The total the page showed is still the total that was agreed, and this
+ * writes neither it nor a count.
+ *
+ * **What is refused.** The new address goes through the same
+ * {@link checkCheckoutDelivery} the first attempt went through, with the
+ * same three sentences: a resume cannot be a way past the serviceable list
+ * or a product's own shipping rule. A refusal here keeps the hold and keeps
+ * the reference, because the customer's jars are not the problem and their
+ * next tap, with the pincode fixed, is the same checkout going through.
+ *
+ * **Consents are not touched (D57).** A marketing box ticked on the second
+ * attempt is not recorded here, and neither is one unticked. Consent gates
+ * what may be sent to a customer later, so the record on the order stays the
+ * one the customer gave on the attempt that took the hold. Nothing is
+ * silently opted in, and they can tick it again later.
+ */
+export function planResumedContact(
+  request: CheckoutRequest,
+  stored: StoredContact,
+  context: {
+    readonly productName: string;
+    readonly restriction: ProductShippingRestriction;
+    readonly pincodes: PincodeList;
+  },
+): { readonly ok: true; readonly value: ResumedContactPlan } | Failure {
+  const contact = deliveryContactFrom(request);
+
+  const contactChanged =
+    stored.name !== request.customerName ||
+    stored.phone !== request.customerPhone ||
+    stored.city !== request.address.city ||
+    stored.state !== request.address.state ||
+    stored.pincode !== request.address.pincode ||
+    stored.placeOfSupply !== request.address.state ||
+    !sameLines(stored.lines, request.address.lines);
+
+  // An email left blank on the second attempt is "not this time", never
+  // "delete the one you have", exactly as `planCheckoutCustomerPatch` reads
+  // it on a first attempt.
+  const emailChanged = request.email !== null && request.email !== stored.customerEmail;
+
+  const nothing = { orderPatch: {}, customerPatch: {} } as const;
+  if (!contactChanged && !emailChanged) return { ok: true, value: nothing };
+
+  if (contactChanged) {
+    const refusal = checkCheckoutDelivery({
+      address: request.address,
+      productName: context.productName,
+      restriction: context.restriction,
+      pincodes: context.pincodes,
+    });
+    if (refusal !== null) return refusal;
+  }
+
+  const customerPatch: Record<string, unknown> = {};
+  if (contactChanged) customerPatch.name = request.customerName;
+  if (emailChanged) customerPatch.email = request.email;
+
+  return {
+    ok: true,
+    value: {
+      orderPatch: contactChanged
+        ? { deliveryContact: contact, placeOfSupply: request.address.state }
+        : {},
+      customerPatch,
+    },
+  };
+}
+
+function sameLines(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((line, index) => line === b[index]);
 }

@@ -480,6 +480,95 @@ describe("createCheckout, brief 6.1 and 7.2", () => {
     expect(other.error.details.reason).toBe("orderChanged");
   });
 
+  /* ---- M3.5a: the address on the second tap ------------------------- */
+
+  it("sends the jar to the address the customer corrected, not the first one", async () => {
+    // The M3.5 round 4 tester's probe. `ondismiss` leaves the form live, so
+    // a customer who closed the Razorpay window to fix a house number taps
+    // Pay again with the same `clientRef`. Only the product, the jars, the
+    // total and the phone were compared, so the rest of the request was
+    // dropped and the stored order handed back: no error, and the jar went
+    // to the first address.
+    const data = checkoutData();
+    const first = await checkout(data);
+    expect(first.result, JSON.stringify(first.error)).toBeTruthy();
+    const orderId: string = first.result.orderId;
+
+    const corrected = await checkout({
+      ...data,
+      customerName: "Asha Menon",
+      email: "asha@example.com",
+      address: { lines: ["99 New Street"], city: "Kannur", state: "KL", pincode: "670001" },
+    });
+    expect(corrected.result, JSON.stringify(corrected.error)).toBeTruthy();
+    expect(corrected.result.alreadyStarted).toBe(true);
+    expect(corrected.result.orderId).toBe(orderId);
+    // Nothing about the money or the jars moved with the address.
+    expect(corrected.result.totalPaise).toBe(PRICE_IN_STOCK_PAISE);
+    expect(corrected.result.razorpayOrderId).toBe(first.result.razorpayOrderId);
+    expect(liveHeldJars((await batchDoc(ref)).heldJars, Date.now())).toBe(1);
+
+    const order = (await db().collection("orders").doc(orderId).get()).data() ?? {};
+    const contact = order.deliveryContact as Record<string, unknown>;
+    expect(contact.lines).toEqual(["99 New Street"]);
+    expect(contact.city).toBe("Kannur");
+    expect(contact.pincode).toBe("670001");
+    expect(contact.name).toBe("Asha Menon");
+    expect(contact.phone).toBe(ASHA);
+    expect(order.placeOfSupply).toBe("KL");
+    expect(order.total).toBe(PRICE_IN_STOCK_PAISE);
+    expect(order.state).toBe("held");
+
+    // And the page opens Razorpay prefilled with what was just typed.
+    expect(corrected.result.customerName).toBe("Asha Menon");
+    expect(corrected.result.customerEmail).toBe("asha@example.com");
+
+    // The email is kept on the customer, which is the only place it lives.
+    const customer = (await db().collection("customers").doc(ASHA).get()).data() ?? {};
+    expect(customer.email).toBe("asha@example.com");
+    expect(customer.name).toBe("Asha Menon");
+    // Consent was not asked again, so it is not re-recorded (M3.5a).
+    expect(customer.consents.marketing.given).toBe(false);
+  });
+
+  it("refuses a corrected address we cannot deliver to, and keeps the hold", async () => {
+    const data = checkoutData();
+    const first = await checkout(data);
+    expect(first.result, JSON.stringify(first.error)).toBeTruthy();
+
+    await db().collection("settings").doc("pincodes").set({
+      serviceable: ["673571"],
+      enforce: true,
+      source: "manual",
+      count: 1,
+    });
+    try {
+      const corrected = await checkout({
+        ...data,
+        address: { lines: ["99 New Street"], city: "Kannur", state: "KL", pincode: "670001" },
+      });
+      expect(corrected.result).toBeFalsy();
+      // The same sentence a first attempt to that pincode would have heard.
+      expect(corrected.error.message).toContain("670001");
+      expect(corrected.error.message).toContain("We cannot get a parcel to");
+      // Their jars are not the problem, so nothing was released and the page
+      // keeps its reference: the next tap, with the pincode fixed, goes
+      // through on this same checkout.
+      expect(corrected.error.details?.reason).toBeUndefined();
+      expect(liveHeldJars((await batchDoc(ref)).heldJars, Date.now())).toBe(1);
+    } finally {
+      await db().collection("settings").doc("pincodes").delete();
+    }
+
+    // The order still carries the address that was checked and passed.
+    const order = (await db().collection("orders").doc(first.result.orderId).get()).data() ?? {};
+    expect((order.deliveryContact as Record<string, unknown>).pincode).toBe("673571");
+
+    const fixed = await checkout(data);
+    expect(fixed.result, JSON.stringify(fixed.error)).toBeTruthy();
+    expect(fixed.result.orderId).toBe(first.result.orderId);
+  });
+
   it("does not ask a customer whose payment already landed to start again", async () => {
     const data = checkoutData();
     const first = await checkout(data);

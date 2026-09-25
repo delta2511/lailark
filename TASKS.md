@@ -419,7 +419,7 @@ and the live webhook before the production deploy.
       invalid text typed and blurred, leaves the rejected text on screen and never
       adopts the arrived figure. An error line is showing, so it is visibly rather than
       silently wrong, and clearing the box now recovers it.
-- [ ] M3.5a [opus] Checkout resume keeps the first attempt's address. Found by the M3.5
+- [x] M3.5a [opus] Checkout resume keeps the first attempt's address. Found by the M3.5
       round 4 tester, outside that round's scope, logged rather than fixed at the 25 Sep
       break. `checkResumableCheckout` (`functions/src/orders/checkout.ts:520-523`)
       compares only `productSlug`, `qty`, `totalPaise` and `customerPhone`; the rest of
@@ -436,6 +436,16 @@ and the live webhook before the production deploy.
       673571`. Done when: a changed delivery contact is either carried onto the order or
       refused like a changed quantity, whichever reads better to the customer, and a test
       ships the probe above to the corrected address.
+      Done (ddbd585; tester PASS first round; D57 answered during the task). The
+      corrected contact is carried onto the order, not refused: correcting a typo is the
+      likeliest reason anyone reopens that window and losing the hold for it reads worse.
+      Safe on money because `shippingFeeFor` never takes a pincode and `placeOfSupply`
+      feeds `splitGst`, which returns the total untaxed when GST is off and throws when
+      it is on, so no address can move a total. The delivery validation is now one
+      function (`checkCheckoutDelivery`) that both the first attempt and the resume call,
+      so a resumed refusal is byte-identical to a first-attempt one on all three reasons.
+      A refused correction keeps the hold and the `clientRef`. Consents are not carried
+      (D57). A191 to A194.
 - [ ] M3.6 [opus] Razorpay webhook and reconciliation, trimmed for launch (D29). HTTP
       function verifying the signature, `webhookEvents` dedupe, `payment.captured` → hold
       becomes Paid, bill or receipt issued (M2.9), order events written;
@@ -443,7 +453,11 @@ and the live webhook before the production deploy.
       reconciliation for pending orders. Brief §9.2, §21.1. The daily settlement pull is
       fast-follow (M3.6b). Done when: replaying the same webhook twice changes nothing the
       second time, and a payment with no webhook is recovered by the reconciliation job.
-- [ ] M3.8 [opus] Open batch mechanics end to end. Brief §7: 90% cap, per-person limit
+- [ ] M3.8 [opus] Open batch mechanics end to end. **Note from M3.5a (A194 iv): a
+      resumed checkout silently drops `shareCode` and `batchRef` from the request, so a
+      customer who books through a share link, dismisses the payment window and taps Pay
+      again has the share code recorded only if the first attempt carried it. Check this
+      when wiring `?s=<shareCode>` onto orders.** Brief §7: 90% cap, per-person limit
       in the transaction, half-reached and full triggers to approvals (M2.5), 5-day and
       3-day clocks, booking closes at Cooking, surplus to in-stock at Bottled, share
       link `?s=<shareCode>` recorded on orders, private order link `/o/<token>` page on

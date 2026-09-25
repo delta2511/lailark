@@ -956,6 +956,34 @@ break.
   once the writes have landed; a commit still in flight went down with the page about
   one run in twelve under load, which looked exactly like the M2.13a defect without
   being it. Status: open.
+- A191 (M3.5a, 25 Sep): the resume path re-validates the delivery address only when the
+  contact actually changed. An unchanged address already passed on the first attempt,
+  and re-checking it would let an edit to `settings/pincodes` refuse a customer
+  mid-payment for an address nobody touched. The effect, confirmed by the tester: the
+  serviceable list is enforced at hold time, not at resume time, so narrowing it or
+  adding an `excludedPincodes` entry mid-hold does not stop a resume on the old address.
+  The hold was taken when that pincode was serviceable and the parcel is already
+  promised. Status: open.
+- A192 (M3.5a, 25 Sep): a corrected name and email are written to `customers/{phone}` as
+  well as the order, `name` always and `email` only when non-blank, exactly as
+  `planCheckoutCustomerPatch` does on a first attempt. The order document has no email
+  field, so `customers/{phone}.email` is the only place an email can land. Status: open.
+- A193 (M3.5a, 25 Sep): a resumed checkout refused for an undeliverable address keeps
+  its hold and its `clientRef`, with no `details.reason` set, so the customer fixes the
+  pincode and taps Pay onto the same held jars. `CheckoutForm.js` mints a fresh
+  reference only for the reasons in `START_FRESH_REASONS`, so an absent reason is what
+  keeps the checkout alive. Their jars were never the problem. Status: open.
+- A194 (M3.5a, 25 Sep): four latent defects found by the tester and logged rather than
+  fixed, none of which breaks a done-when. (i) `alreadyStarted.customerEmail` is this
+  request's email, so it is null when the customer leaves the box blank on the second
+  tap even though `customers/{phone}` holds one: the stored email is preserved, but the
+  payment window opens without prefilling an address we have. (ii) A corrected address
+  writes `customerPatch.name` even when the name did not change, creating an `audit`
+  entry for a no-op. (iii) If `customers/{phone}` has been deleted mid-hold the resume
+  recreates it with only `name`, `email` and `updatedAt`, missing `country`, `shareCode`
+  and `consents`; unreachable in the normal flow. (iv) `shareCode` and `batchRef` in a
+  resumed request are silently dropped, which M3.8 needs to know because it records the
+  share link on the order. Status: open.
 - A189 (M2.13a, 25 Sep): the fallback an emptied box drops back to is "what is stored
   now, unless this box has typed something newer that has not come back from the server
   yet". `kept` follows the document whether or not the box is focused; only the text is

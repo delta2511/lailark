@@ -19,6 +19,8 @@ import {
   type CheckoutRequest,
   parseCheckoutRequest,
   planCheckout,
+  planResumedContact,
+  type StoredContact,
 } from "./checkout";
 
 const TODAY = "2026-09-24";
@@ -529,6 +531,99 @@ describe("picking a started checkout back up, M3.5 rounds 3 and 4", () => {
       "Your jars were kept for fifteen minutes and that time has passed. Please start again.",
     );
     expect(twenty.message).toContain("twenty minutes");
+  });
+});
+
+describe("the address on a resumed checkout, M3.5a", () => {
+  const stored: StoredContact = {
+    name: "Asha",
+    phone: "+919446587027",
+    lines: ["12 Mill Road"],
+    city: "Kozhikode",
+    state: "KL",
+    pincode: "673571",
+    placeOfSupply: "KL",
+    customerEmail: null,
+  };
+  const ctx = {
+    productName: "Prawns and dates",
+    restriction: { allowedStates: null, excludedPincodes: null },
+    pincodes: DEFAULT_PINCODE_LIST,
+  };
+  const corrected = {
+    customerName: "Asha Menon",
+    address: { lines: ["99 New Street"], city: "Kannur", state: "KL", pincode: "670001" },
+  };
+
+  it("writes nothing when the second tap carries the same contact", () => {
+    const out = planResumedContact(parsed(), stored, ctx);
+    if (!out.ok) throw new Error(out.message);
+    expect(out.value.orderPatch).toEqual({});
+    expect(out.value.customerPatch).toEqual({});
+  });
+
+  it("carries a corrected address and name onto the order", () => {
+    const out = planResumedContact(parsed(corrected), stored, ctx);
+    if (!out.ok) throw new Error(out.message);
+    expect(out.value.orderPatch.deliveryContact).toEqual({
+      name: "Asha Menon",
+      phone: "+919446587027",
+      lines: ["99 New Street"],
+      city: "Kannur",
+      state: "KL",
+      pincode: "670001",
+    });
+    expect(out.value.orderPatch.placeOfSupply).toBe("KL");
+    expect(out.value.customerPatch).toEqual({ name: "Asha Menon" });
+  });
+
+  it("carries the place of supply when only the state was corrected", () => {
+    const out = planResumedContact(
+      parsed({ address: { lines: ["12 Mill Road"], city: "Kozhikode", state: "TN", pincode: "673571" } }),
+      stored,
+      ctx,
+    );
+    if (!out.ok) throw new Error(out.message);
+    expect(out.value.orderPatch.placeOfSupply).toBe("TN");
+  });
+
+  it("carries an email added on the second tap, and never blanks the one we hold", () => {
+    const added = planResumedContact(parsed({ email: "asha@example.com" }), stored, ctx);
+    if (!added.ok) throw new Error(added.message);
+    expect(added.value.customerPatch).toEqual({ email: "asha@example.com" });
+    expect(added.value.orderPatch).toEqual({});
+
+    const blanked = planResumedContact(parsed(), { ...stored, customerEmail: "asha@example.com" }, ctx);
+    if (!blanked.ok) throw new Error(blanked.message);
+    expect(blanked.value.customerPatch).toEqual({});
+  });
+
+  it("refuses a corrected address the list does not cover, in the same words as a first attempt", () => {
+    const out = planResumedContact(parsed(corrected), stored, {
+      ...ctx,
+      pincodes: { serviceable: ["673571"], enforce: true },
+    });
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.message).toBe(
+      "We cannot get a parcel to 670001 yet. Message us on WhatsApp and we will see what we can do.",
+    );
+    // Byte for byte what `planCheckout` refuses a first attempt with.
+    const first = planCheckout(
+      parsed(corrected),
+      context({ pincodes: { serviceable: ["673571"], enforce: true } }),
+    );
+    expect(first.ok).toBe(false);
+    if (!first.ok) expect(first.message).toBe(out.message);
+  });
+
+  it("refuses a corrected address the product itself is not sent to", () => {
+    const out = planResumedContact(parsed(corrected), stored, {
+      ...ctx,
+      restriction: { allowedStates: null, excludedPincodes: ["670001"] },
+    });
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.message).toContain("We cannot send Prawns and dates to 670001");
   });
 });
 

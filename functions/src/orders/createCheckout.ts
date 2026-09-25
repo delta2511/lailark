@@ -60,7 +60,9 @@ import {
   chooseWebBatch,
   parseCheckoutRequest,
   planCheckout,
+  planResumedContact,
   type StartedCheckout,
+  type StoredContact,
 } from "./checkout";
 import {
   createRazorpayOrder,
@@ -201,12 +203,69 @@ export const createCheckout = onCall(
           const productSnap = await tx.get(
             db.collection(PRODUCTS).doc(String(line.productSlug ?? "")),
           );
+          const productName = (productSnap.get("name") as string | undefined) ?? "";
+
+          // M3.5a: the address in *this* request, not the one the first tap
+          // left behind. A customer who dismissed the Razorpay window to fix
+          // a house number used to be answered with the stored order, and
+          // the jar went to the first address.
+          const resumeCustomerRef = db.collection(CUSTOMERS).doc(input.customerPhone);
+          const resumeCustomerSnap = await tx.get(resumeCustomerRef);
+          const contact = planResumedContact(
+            input,
+            storedContactFrom(existing, resumeCustomerSnap),
+            {
+              productName,
+              restriction: productShippingFrom(productSnap).restriction,
+              pincodes: await pincodeList(tx, db),
+            },
+          );
+          // Refused: the new address is one we cannot send to. The hold
+          // stays and so does the reference, because there is nothing wrong
+          // with their jars: the next tap, with the pincode fixed, is this
+          // same checkout going through.
+          if (!contact.ok) throw new HttpsError(contact.code, contact.message);
+
+          const orderPatch = contact.value.orderPatch;
+          if (Object.keys(orderPatch).length > 0) {
+            const orderRef = db.collection(ORDERS).doc(orderId);
+            tx.set(orderRef, withStamps({ ...orderPatch }, ["updatedAt"]), { merge: true });
+            writeAudit(tx, db, {
+              object: `${ORDERS}/${orderId}`,
+              action: "checkout",
+              patch: orderPatch,
+              beforeSnap: existing,
+              by: ACTOR,
+            });
+          }
+          const resumeCustomerPatch = contact.value.customerPatch;
+          if (Object.keys(resumeCustomerPatch).length > 0) {
+            tx.set(
+              resumeCustomerRef,
+              withStamps({ ...resumeCustomerPatch }, ["updatedAt"]),
+              { merge: true },
+            );
+            writeAudit(tx, db, {
+              object: `${CUSTOMERS}/${input.customerPhone}`,
+              action: "checkout",
+              patch: resumeCustomerPatch,
+              beforeSnap: resumeCustomerSnap.exists
+                ? (resumeCustomerSnap as DocumentSnapshot)
+                : null,
+              by: ACTOR,
+            });
+          }
+
           return {
             alreadyStarted: true as const,
             orderId,
             snap: existing,
-            productName: (productSnap.get("name") as string | undefined) ?? "",
+            productName,
             batchNo: (batchSnap?.get("batchNo") as string | null | undefined) ?? null,
+            // What the customer typed this time, which is what the order now
+            // carries and what Razorpay Checkout should open prefilled with.
+            customerName: input.customerName,
+            customerEmail: input.email,
           };
         }
 
@@ -373,7 +432,10 @@ export const createCheckout = onCall(
       // the same reason it is caught there: a customer meets the plain
       // sentence, not an internal error, whichever path they are on.
       try {
-        return alreadyStarted(held.orderId, held.snap, held.productName, held.batchNo);
+        return alreadyStarted(held.orderId, held.snap, held.productName, held.batchNo, {
+          customerName: held.customerName,
+          customerEmail: held.customerEmail,
+        });
       } catch (error) {
         if (error instanceof RazorpayNotConfigured) {
           console.error("createCheckout: no Razorpay key to resume with", {
@@ -486,6 +548,32 @@ function firstLine(snap: DocumentSnapshot): Record<string, unknown> {
   return (Array.isArray(lines) ? (lines[0] ?? {}) : {}) as Record<string, unknown>;
 }
 
+/**
+ * The contact a started checkout already carries, as `planResumedContact`
+ * reads it. The address is on the order; the email is on the customer, which
+ * is the only place the checkout ever put one.
+ */
+function storedContactFrom(
+  orderSnap: DocumentSnapshot,
+  customerSnap: DocumentSnapshot,
+): StoredContact {
+  const d = (orderSnap.data() ?? {}) as Record<string, unknown>;
+  const contact = (d.deliveryContact ?? {}) as Record<string, unknown>;
+  const str = (value: unknown): string => (typeof value === "string" ? value : "");
+  const rawLines = contact.lines;
+  const email = customerSnap.get("email");
+  return {
+    name: str(contact.name),
+    phone: str(contact.phone),
+    lines: Array.isArray(rawLines) ? rawLines.map((line) => str(line)) : [],
+    city: str(contact.city),
+    state: str(contact.state),
+    pincode: str(contact.pincode),
+    placeOfSupply: str(d.placeOfSupply),
+    customerEmail: typeof email === "string" && email !== "" ? email : null,
+  };
+}
+
 /** The order as `checkResumableCheckout` reads it. Plain values only. */
 function startedCheckoutFrom(
   snap: DocumentSnapshot,
@@ -521,12 +609,17 @@ function alreadyStarted(
   snap: DocumentSnapshot,
   productName: string,
   batchNo: string | null,
+  /**
+   * The contact as *this* request gave it, which after M3.5a is what the
+   * order carries: the snapshot was read before that write. Reading the name
+   * back off the snapshot would hand the page the address it just corrected.
+   */
+  given: { readonly customerName: string; readonly customerEmail: string | null },
 ): CheckoutResult {
   const d = (snap.data() ?? {}) as Record<string, unknown>;
   const line = firstLine(snap);
   const payment = (d.payment ?? {}) as Record<string, unknown>;
   const ids = (payment.razorpayIds ?? {}) as Record<string, unknown>;
-  const contact = (d.deliveryContact ?? {}) as Record<string, unknown>;
   const num = (value: unknown): number => (typeof value === "number" ? value : 0);
   const str = (value: unknown): string | null => (typeof value === "string" ? value : null);
   const expiry = d.holdExpiresAt;
@@ -553,9 +646,12 @@ function alreadyStarted(
     // had failed.
     razorpayKeyId: razorpayKeyIdForClient(),
     razorpayOrderId: str(ids.orderId) ?? "",
-    customerName: str(contact.name) ?? "",
+    customerName: given.customerName,
     customerPhone: str(d.customerPhone) ?? "",
-    customerEmail: null,
+    // M3.5a: this used to be `null` whatever the request carried, so a
+    // customer who added an email on the second tap opened the payment
+    // window without it.
+    customerEmail: given.customerEmail,
     alreadyStarted: true,
   };
 }
