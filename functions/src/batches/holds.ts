@@ -51,6 +51,7 @@ import {
   BATCH_STATES_OPEN_FOR_BOOKING,
   canHold,
   inStockAvailability,
+  IN_STOCK_PER_PERSON_LIMIT,
   remainingPerPersonAllowance,
   resolvePerPersonLimit,
   withinPerPersonLimit,
@@ -571,6 +572,24 @@ function jars(n: number): string {
  */
 export type HoldConversionSource = "live-hold" | "reclaimed" | "none";
 
+/**
+ * Why a reclaim was not made. Non-null exactly when the source is `none`, and
+ * it is what lets the caller put the right sentence in front of the Owner:
+ * every one of these ends the same way (brief §21.1, the money recorded and
+ * nothing sold), but they are four different things to go and fix.
+ *
+ *  - `no-jar`: the batch has nothing free, or is not in a state that sells.
+ *  - `qty-mismatch`: the order's line does not add up to the total the
+ *    captured amount matched, so nothing here knows how many jars the money
+ *    bought. See {@link readHoldToPaid}.
+ *  - `over-limit`: a jar was free, but a fresh claim would put this customer
+ *    past the batch's per-person limit (D44, D52).
+ *  - `no-customer`: the order carries no usable number, so the per-person
+ *    limit cannot be counted at all, and a claim that cannot be checked is
+ *    not made.
+ */
+export type HoldConversionRefusal = "no-jar" | "qty-mismatch" | "over-limit" | "no-customer";
+
 export interface HoldConversion {
   readonly batchRef: string;
   /** The batch as this transaction read it. `writeAudit`'s `before`. */
@@ -586,8 +605,16 @@ export interface HoldConversion {
    * in that case; it is a concern, not a sale.
    */
   readonly held: boolean;
+  /** Why no jar was claimed. Non-null exactly when {@link held} is false. */
+  readonly refusal: HoldConversionRefusal | null;
   /** Jars this sells. Zero when {@link held} is false. */
   readonly qty: number;
+  /**
+   * The per-person limit a reclaim was weighed against, and the jars this
+   * customer already had in this batch, for the Owner's sentence. Non-null
+   * only when the reclaim path got as far as asking (D44, D52).
+   */
+  readonly limitCheck: { readonly limit: number; readonly customerJars: number } | null;
   /** The batch as it stood before this conversion, for the caller's log. */
   readonly availabilityBefore: BatchAvailability;
   /** `{ heldJars, paidCount }`, the whole of both. */
@@ -637,10 +664,51 @@ export interface HoldConversion {
  * lapsed captures racing for one last jar are retried against each other and
  * the loser's arithmetic honestly says no, exactly as in `readStockClaim`.
  *
- * The per-person limit is deliberately **not** re-asked. It is a rule about
- * who may reserve a jar before paying, and this order passed it when its
- * hold was taken; re-asking it after the money has arrived could only ever
- * refuse a sale that was already allowed.
+ * ## How many jars a reclaim may claim
+ *
+ * A live hold sells `mine.qty`: the number that was actually reserved, and
+ * which nothing can have changed since. A reclaim has no such anchor, so it
+ * is given two, and it is made only when **both** agree with the jars the
+ * order asks for:
+ *
+ *  - `qtyPaidFor`, the jars the captured money accounts for. The caller has
+ *    already matched the captured amount against the order's stored `total`,
+ *    but `total` is a *separate field* from the line, so a line saying five
+ *    jars against a total of one jar's money would otherwise sail through
+ *    and sell five jars, and bill for five, on one jar's payment;
+ *  - `mine.qty`, when a lapsed key is still there. A reclaim replaces a
+ *    reservation, and it may never grow it.
+ *
+ * Nothing in the admin or the site can make those disagree today (`orders`
+ * is closed to every client in `firestore.rules`, and the M3.5a resume path
+ * refuses a qty change), so this is an invariant rather than a hole being
+ * plugged. It is held here because this is the only place a count moves.
+ *
+ * A disagreement is **not** sold down to the smaller number. A partial sale
+ * would mean this function deciding, on its own, which of two numbers on a
+ * paid order is the true one, and then issuing a bill for that guess. It
+ * refuses instead, and the Owner gets §21.1's concern with the two numbers
+ * in it.
+ *
+ * ## The per-person limit, re-asked on a reclaim only
+ *
+ * A **live** hold converts unconditionally. Those jars really were reserved,
+ * the check they passed was against a world that still holds, and refusing
+ * them would refuse a sale that was properly allowed.
+ *
+ * A **reclaim** is a new claim, made now, so it is checked now (Shefin, 25
+ * Sep 2026, overruling A197, which left it unchecked). The cost of leaving
+ * it unchecked was a loop: take a hold, let it lapse (a lapsed hold counts for
+ * nothing, so the next check passes honestly), repeat, then pay every stale
+ * Razorpay order. One person could take a batch capped at two each.
+ *
+ * The count is the same one `readStockClaim` makes, off the same two
+ * sources: this customer's live holds, and their paid orders in this batch.
+ * The cap is `resolvePerPersonLimit`, so the Owner's typed number governs in
+ * both directions (D44, D52) and nothing here re-derives that rule.
+ *
+ * Over the limit is not a refusal of the money: it is §21.1's outcome, the
+ * same as no jar at all. Nobody inside the limit is ever refused.
  *
  * It stays **idempotent**: run a second time on the committed result, the
  * key is gone and the order's payment has moved, so `capture.ts` returns at
@@ -653,8 +721,16 @@ export async function readHoldToPaid(
   args: {
     readonly batchRef: string;
     readonly orderId: string;
+    /** E.164, for the per-person limit a reclaim is checked against. */
+    readonly customerPhone: string;
     /** The jars the order is for, used only when the hold has lapsed. */
     readonly qty: number;
+    /**
+     * The jars the captured money accounts for, or null when the order's
+     * lines do not add up to the total that amount matched. A reclaim is
+     * made only for a number both this and the order agree on.
+     */
+    readonly qtyPaidFor: number | null;
     readonly nowMillis: number;
   },
 ): Promise<HoldConversion> {
@@ -702,7 +778,9 @@ export async function readHoldToPaid(
       batchState: batch.state ?? "",
       source: "live-hold",
       held: true,
+      refusal: null,
       qty,
+      limitCheck: null,
       availabilityBefore: availability,
       // The values, not increment sentinels: the document is in this
       // transaction's read set, so the arithmetic is safe here and the audit
@@ -717,19 +795,55 @@ export async function readHoldToPaid(
   // transaction that checked for it, which is what makes the claim safe: the
   // check and the write commit together, so two lapsed captures racing for
   // one jar cannot both win.
-  const wanted = Number.isInteger(args.qty) ? args.qty : 0;
+  const wanted = Number.isInteger(args.qty) && args.qty > 0 ? args.qty : 0;
+  // The two bounds, above: the money's number, and the number the lapsed key
+  // had reserved when there is still a key. A qty that is not a whole number
+  // of jars was already flattened to zero, so it fails this too.
+  const reserved =
+    mine !== undefined && Number.isInteger(mine.qty) && mine.qty > 0 ? mine.qty : null;
+  const bounded =
+    wanted > 0 && args.qtyPaidFor === wanted && (reserved === null || reserved === wanted);
+
+  let refusal: HoldConversionRefusal = "no-jar";
+  let limitCheck: { readonly limit: number; readonly customerJars: number } | null = null;
+
+  // "Is there a jar" is asked first, so a batch with nothing to give reads as
+  // exactly that whatever else is wrong with the order.
   if (wanted > 0 && canHold(availability, wanted)) {
-    return {
-      batchRef: args.batchRef,
-      batchSnap: snap,
-      batchNo: batch.batchNo,
-      batchState: batch.state ?? "",
-      source: "reclaimed",
-      held: true,
-      qty: wanted,
-      availabilityBefore: availability,
-      auditPatch: { heldJars: nextHeldJars, paidCount: batch.paidCount + wanted },
-    };
+    if (!bounded) {
+      refusal = "qty-mismatch";
+    } else if (!E164.test(args.customerPhone)) {
+      refusal = "no-customer";
+    } else {
+      // D44 and D52 through the one helper, with the web's blank-box
+      // fallback: two jars in stock, the computed quarter on an open batch,
+      // which is the same choice `createCheckout` and `/api/counts` make.
+      const limit = resolvePerPersonLimit(batch, webLimitFallbackFor(batch.state ?? ""));
+      const customerJars = await customerJarsInBatch(tx, db, {
+        batchRef: args.batchRef,
+        orderId: args.orderId,
+        customerPhone: args.customerPhone,
+        held,
+        nowMillis: args.nowMillis,
+      });
+      limitCheck = { limit, customerJars };
+      if (withinPerPersonLimit(customerJars, wanted, limit)) {
+        return {
+          batchRef: args.batchRef,
+          batchSnap: snap,
+          batchNo: batch.batchNo,
+          batchState: batch.state ?? "",
+          source: "reclaimed",
+          held: true,
+          refusal: null,
+          qty: wanted,
+          limitCheck,
+          availabilityBefore: availability,
+          auditPatch: { heldJars: nextHeldJars, paidCount: batch.paidCount + wanted },
+        };
+      }
+      refusal = "over-limit";
+    }
   }
 
   return {
@@ -739,10 +853,65 @@ export async function readHoldToPaid(
     batchState: batch.state ?? "",
     source: "none",
     held: false,
+    refusal,
     qty: 0,
+    limitCheck,
     availabilityBefore: availability,
     auditPatch: { heldJars: nextHeldJars, paidCount: batch.paidCount },
   };
+}
+
+/**
+ * Brief §7.2 step 3, "across all their orders in this batch", counted exactly
+ * as `readStockClaim` counts it: live holds that are not this order's, plus
+ * the jars on their paid orders. A lapsed hold counts for nothing here for
+ * the same reason it counts for nothing in the availability.
+ *
+ * This order is excluded from both sides. Its own hold has lapsed (or it
+ * would not be on this path) and its payment has not been written yet, so
+ * neither could be counted anyway; excluding it by id says so out loud.
+ */
+async function customerJarsInBatch(
+  tx: Transaction,
+  db: Firestore,
+  args: {
+    readonly batchRef: string;
+    readonly orderId: string;
+    readonly customerPhone: string;
+    readonly held: Record<string, { qty: number; expiresAt: number; customerPhone: string | null }>;
+    readonly nowMillis: number;
+  },
+): Promise<number> {
+  let jarsHeld = 0;
+  for (const [heldOrderId, hold] of Object.entries(args.held)) {
+    if (heldOrderId === args.orderId) continue;
+    if (hold.customerPhone !== args.customerPhone) continue;
+    if (hold.expiresAt > args.nowMillis) jarsHeld += hold.qty;
+  }
+  const orders = await ordersInBatch(tx, db, args.batchRef);
+  for (const order of orders.paid) {
+    if (order.id === args.orderId) continue;
+    if (order.customerPhone !== args.customerPhone) continue;
+    jarsHeld += order.jars;
+  }
+  return jarsHeld;
+}
+
+/**
+ * What the per-person limit falls back to when the Owner has typed nothing,
+ * for a jar bought on the website. D52 and brief §4.1: two on an in-stock
+ * batch, and the batch's own computed quarter while it is open, which is
+ * what `null` leaves `resolvePerPersonLimit` to answer.
+ *
+ * `createCheckout` makes the same choice in one line (`inStock ?
+ * IN_STOCK_PER_PERSON_LIMIT : null`) and so does `/api/counts`. The rule
+ * itself lives in `resolvePerPersonLimit` and is not repeated anywhere: this
+ * only says which of its two doors a web sale comes through.
+ */
+function webLimitFallbackFor(state: string): number | null {
+  return (BATCH_STATES_IN_STOCK as readonly string[]).includes(state)
+    ? IN_STOCK_PER_PERSON_LIMIT
+    : null;
 }
 
 /**

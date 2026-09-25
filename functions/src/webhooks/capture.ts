@@ -43,6 +43,12 @@
  * `technicalFailure` puts it in front of the Owner. Brief §21.1: "Technical,
  * not a sale. Concern marked technical. Owner refunds or allocates a surplus
  * jar."
+ *
+ * A jar claimed afresh after a lapsed hold (A196) ends the same way whenever
+ * it cannot be claimed cleanly: the batch has nothing free, the order's line
+ * does not add up to the total the money matched, or the claim would put the
+ * customer past the batch's per-person limit (D60). All three record the
+ * money, move no count, burn no document number, and raise the concern.
  */
 
 import {
@@ -85,6 +91,12 @@ export type CaptureOutcome =
   | "no-such-order"
   /** Brief §9.3 and §21.1: the hold lapsed and the jar has gone. */
   | "hold-gone"
+  /** The hold lapsed and a fresh claim would go past the per-person limit. */
+  | "over-limit"
+  /** The hold lapsed and the order's line does not add up to its total. */
+  | "qty-mismatch"
+  /** The hold lapsed and the order names no customer to check a limit on. */
+  | "no-customer"
   /** Captured an amount that is not this order's total. */
   | "amount-mismatch"
   /** The order names no batch, so there is no count to move. */
@@ -225,7 +237,14 @@ export async function applyCapturedPayment(
       const conversion = await readHoldToPaid(tx, db, {
         batchRef,
         orderId,
+        customerPhone,
         qty: num(line.qty),
+        // The jars this money actually bought, worked out here because the
+        // money is here: the amount check above matched `order.total`, which
+        // is a field of its own, and a line that disagrees with it must
+        // never become a count move or a bill. `readHoldToPaid` claims a jar
+        // afresh only for a number this and the line both say.
+        qtyPaidFor: jarsThePaymentCovers(order, line, total),
         nowMillis,
       });
 
@@ -233,22 +252,33 @@ export async function applyCapturedPayment(
         // Brief §9.3's rare case, spelled out in §21.1: "Payment confirms
         // after the hold lapsed and the jar has gone. Technical, not a
         // sale." The count is not touched: taking a jar here would take one
-        // somebody else may already have bought.
+        // somebody else may already have bought. The same outcome covers a
+        // reclaim refused for the per-person limit or for a line nobody can
+        // reconcile, with its own concern so the Owner reads what happened.
+        const refused = refusalNoteFor(conversion, {
+          orderId,
+          batchRef,
+          customerPhone,
+          amountPaise: capture.amountPaise,
+          line,
+          shippingFee: num(order.shippingFee),
+          total,
+        });
         const concernId = raiseCaptureConcern(
           tx,
           db,
           {
-            id: `capture-hold-gone-${orderId}`,
+            id: refused.concernId,
             orderId,
             customerPhone: customerPhone === "" ? null : customerPhone,
             batchRef,
             amount: capture.amountPaise,
-            summary: `Razorpay captured ${rupees(capture.amountPaise)} for order ${orderId}, but its hold on ${batchRef} had lapsed and that batch cannot give it another jar: it is ${conversion.batchState} with ${conversion.availabilityBefore.available} free. Refund it, or allocate a surplus jar.`,
+            summary: refused.summary,
           },
           by,
         );
         writePaymentOnly(tx, db, orderRef, orderSnap, capture, by);
-        return { outcome: "hold-gone", orderId, jars: 0, documentNumber: null, concernId };
+        return { outcome: refused.outcome, orderId, jars: 0, documentNumber: null, concernId };
       }
 
       const shape = paidShapeFor(conversion.batchState);
@@ -354,6 +384,118 @@ export async function applyCapturedPayment(
 /* -------------------------------------------------------------------------- */
 /* Pieces                                                                     */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * How many jars the captured money paid for, or null when the order cannot
+ * answer that.
+ *
+ * The amount was already matched against `order.total`. This asks the second
+ * half of the question: does the order's own line add up to that total?
+ * `qty x unitPrice`, less the discount, plus the shipping fee, is exactly
+ * how `saleTotals` built it at checkout, so a line that reconciles is a line
+ * whose jars the money really covers.
+ *
+ * It answers null rather than a guess for anything it cannot add up: more
+ * than one line, a qty or a price that is not a whole positive number of its
+ * unit, arithmetic that does not land on the total. A capture whose jars
+ * cannot be counted sells no jars (see {@link readHoldToPaid}).
+ */
+export function jarsThePaymentCovers(
+  order: Record<string, unknown>,
+  line: Record<string, unknown>,
+  total: number,
+): number | null {
+  const lines = Array.isArray(order.lines) ? order.lines : [];
+  if (lines.length !== 1) return null;
+
+  const qty = num(line.qty);
+  const unitPrice = num(line.unitPrice);
+  const shippingFee = num(order.shippingFee);
+  const discount = num(order.discount);
+  if (!Number.isSafeInteger(qty) || qty < 1) return null;
+  // Money is integers in paise (CLAUDE.md §3), and a jar is never free, so a
+  // zero price would otherwise let any qty at all "reconcile" with a zero
+  // total.
+  if (!readableMoney(unitPrice) || unitPrice < 1) return null;
+  if (!readableMoney(shippingFee) || !readableMoney(discount)) return null;
+  if (!readableMoney(total) || total < 1) return null;
+
+  const subtotal = qty * unitPrice;
+  if (!Number.isSafeInteger(subtotal)) return null;
+  return subtotal - discount + shippingFee === total ? qty : null;
+}
+
+/**
+ * The sentence the Owner reads when a capture stopped short of a sale, and
+ * the concern id it is filed under.
+ *
+ * Every one of these is admin-facing only: nothing is drafted and nothing is
+ * sent (D32). The ids are kept apart so two different problems on one order
+ * do not overwrite each other's concern.
+ */
+function refusalNoteFor(
+  conversion: HoldConversion,
+  about: {
+    readonly orderId: string;
+    readonly batchRef: string;
+    readonly customerPhone: string;
+    readonly amountPaise: number;
+    readonly line: Record<string, unknown>;
+    readonly shippingFee: number;
+    readonly total: number;
+  },
+): {
+  readonly concernId: string;
+  readonly outcome: CaptureOutcome;
+  readonly summary: string;
+} {
+  const money = rupees(about.amountPaise);
+  const opening = `Razorpay captured ${money} for order ${about.orderId}, but its hold on ${about.batchRef} had lapsed`;
+
+  if (conversion.refusal === "qty-mismatch") {
+    const qty = num(about.line.qty);
+    return {
+      concernId: `capture-qty-${about.orderId}`,
+      outcome: "qty-mismatch",
+      summary:
+        `${opening} and its line does not add up to the ${rupees(about.total)} the order says it comes to: ` +
+        `${jars(qty)} at ${rupees(num(about.line.unitPrice))} each, with ${rupees(about.shippingFee)} shipping. ` +
+        "No jars have been sold and no bill has been issued. Check the order against the payment in the Razorpay dashboard before anything else is sold from this batch.",
+    };
+  }
+
+  if (conversion.refusal === "over-limit") {
+    const limit = conversion.limitCheck?.limit ?? 0;
+    const had = conversion.limitCheck?.customerJars ?? 0;
+    return {
+      concernId: `capture-over-limit-${about.orderId}`,
+      outcome: "over-limit",
+      summary:
+        `${opening}, and claiming a jar afresh would take ${about.customerPhone} past this batch's limit of ${jars(limit)} per person: they already have ${had}. ` +
+        "No jar has been sold and no bill has been issued. Refund it, or allocate a jar by hand.",
+    };
+  }
+
+  if (conversion.refusal === "no-customer") {
+    return {
+      concernId: `capture-no-customer-${about.orderId}`,
+      outcome: "no-customer",
+      summary:
+        `${opening} and the order carries no customer number, so the per-person limit on that batch cannot be counted. ` +
+        "No jar has been sold and no bill has been issued. Put the number on the order, or allocate a jar by hand.",
+    };
+  }
+
+  return {
+    concernId: `capture-hold-gone-${about.orderId}`,
+    outcome: "hold-gone",
+    summary: `${opening} and that batch cannot give it another jar: it is ${conversion.batchState} with ${conversion.availabilityBefore.available} free. Refund it, or allocate a surplus jar.`,
+  };
+}
+
+function jars(n: number): string {
+  return `${n} jar${n === 1 ? "" : "s"}`;
+}
 
 /**
  * The money, recorded, and nothing else: no count moved, no state changed,
@@ -489,7 +631,11 @@ function documentSourceFor(
       {
         description: `${productName}, ${conversion.batchNo === null ? "this batch" : `batch ${conversion.batchNo}`}`,
         hsn: productSnap?.exists === true ? (str(productSnap.get("hsn")) || null) : null,
-        qty: num(line.qty),
+        // The jars this sale actually moved, not the number written on the
+        // line. They are the same on every order the system can produce; a
+        // bill is a record of what left the kitchen, so where they could
+        // ever differ it is the count that is true.
+        qty: conversion.qty,
         unitPrice: num(line.unitPrice),
         batchNo: conversion.batchNo,
         // A jar takes its number when it is packed (M4.1).

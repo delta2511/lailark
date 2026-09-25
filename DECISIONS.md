@@ -93,6 +93,9 @@ confirm or replace at the next milestone break.
 | D57 | **A consent tick added on a second checkout attempt is not recorded. The resumed order keeps the consents the first attempt gave** | Asked and answered by Shefin, 25 Sep 2026, during M3.5a. M3.5a carries a corrected delivery contact and email onto a resumed order, because correcting a typo is the likeliest reason a customer reopens a dismissed checkout and losing the hold for it reads worse. Consent is deliberately not carried with them: it gates what may be sent to a customer later, which CLAUDE.md §5 puts on the never-assume list. The options were to leave the tick dropped, to carry a newly added tick but never a removed one, or to carry whatever the second attempt says in both directions. Shefin chose the first: the tick is dropped and the customer can tick it again later. Nothing is silently opted in, and the consent record on the order is always the one the customer gave on the attempt that took the hold. Q23 |
 | D58 | **Sourcing to Cooking stays allowed when the recipe names no main ingredient. The raw cost shows as an orphan rather than blocking the batch** | Asked and answered by Shefin, 25 Sep 2026, closing Q16 (open since 23 Sep, M2.13). The transition writes the raw weight and cost against the main ingredient's line, and a recipe naming none leaves `costRaw` with nowhere to go, so it lands on a placeholder line with no ingredient behind it. The alternative was refusing the transition until the recipe names one. Refusing would be a batch lifecycle change, on the never-assume list, and it stops the kitchen at the worst moment: Sumayya standing over a pot while the app refuses to move the batch because of a recipe field D22 may not even let her edit. So the transition stays allowed. M2.13's orphan display already carries the harm: the money is visible on the Cooking screen as "Recorded against something this recipe does not list", it is never lost, and the moment an ingredient is put on the recipe the row picks the document up again with its figures intact. If this is ever revisited it belongs after the Settings switch that lets Kitchen edit recipes, not before. Q16 |
 | D59 | **The admin PWA does not switch on Firestore offline persistence at launch** | Asked and answered by Shefin, 25 Sep 2026, closing Q24 (raised the same day out of M2.13a). "A for now": leave it off. M2.13a fixed a figure being lost on screen, but the same in-flight window remains on a real phone, where a cost typed and the app killed before the write lands is gone with no error. Persistence would queue it, and would also make the admin usable with no signal, which a home kitchen will hit. It was not taken because it is not a one-line switch: the 8 second undo assumes the write has landed and a queued write has no `audit` entry to undo yet, two phones editing one batch would each hold their own optimistic figure and reconcile later, which on money is worse than an error, and "saved" would quietly start meaning "saved on this phone". The honest fix is narrower, telling the person when a write has not landed, and that is fast-follow work that needs designing rather than a flag. Revisit if writes are actually seen to be lost. Q24 |
+| D60 | **A late payment on a lapsed hold is checked against the per-person limit. A live hold still converts unconditionally** | Asked and answered by Shefin, 25 Sep 2026, during the M3.6 round 2 adversarial pass, overruling A197. A196's reclaim path never re-asked the limit, on the reasoning that the order passed it when its hold was taken. The tester priced that reasoning: with the limit set to 2, one phone number took four holds, let each lapse so the next check passed honestly, then paid all four stale Razorpay orders and ended with four jars. Nothing was oversold; one person simply bought a batch the Owner had capped at two each, bounded only by capacity and by their patience. So the number typed on the batch screen meant "you may not reserve more than two at a time" rather than "you may not buy more than two". Shefin was shown both options and chose to close it. A reclaim is a new claim made now, so it is measured against the limit now, read exactly as the checkout path reads it (D52 and D44: the typed `perPersonLimitOverride` governs in both directions, blank falls back to 2 in stock and the computed quarter for an open batch). Over the limit is brief §21.1's outcome: the payment is recorded because the money really arrived, no count moves, no bill or receipt number is burned, and the Owner settles it by hand. A live hold is untouched, because its jars really were reserved and refusing it would refuse a sale that was properly allowed. Nobody inside the limit is ever refused |
+| D61 | **The captured currency stays unread until international payments are switched on** | Asked and answered by Shefin, 25 Sep 2026, during the M3.6 round 2 adversarial pass. `CapturedPayment` (`functions/src/webhooks/razorpayEvents.ts`) has no `currency` field and `parseRazorpayWebhook` drops it, so a `payment.captured` carrying `amount: 64900, currency: "USD"` is read as ₹649.00 exactly and sells the jar. Every INR mismatch beside it is refused correctly: under, over, zero and a float all record the payment and move no count. The exposure is nil today, because the Razorpay account takes rupees only, and real on the day it does not. Shefin was offered the A195-shaped fix (treat a foreign currency exactly as a mismatched amount: record the payment, move no count, raise the §21.1 concern) and chose to defer it instead. **The trigger is named so it is not lost: before international payments are enabled on the Razorpay account, the currency must be parsed and a non-INR capture refused.** It is written into the launch checklist in M5.11 as well as here, because the day it matters is a day nobody will be re-reading this ledger |
+| D62 | **M3.6 stops at three rounds and is marked `⚠ stuck`. The cap stands** | Asked and answered by Shefin, 25 Sep 2026, after round 3 failed its fresh tester. CLAUDE.md §4.1 step 4 caps the fix loop at three rounds; D54 waived it once for M3.5 and said that was not a precedent. Round 3's tester found a defect that is live on the checkout page today and was outside the three files the round was scoped to: a refused capture counts the jars the customer asked for as jars they own, so a customer refunded under §21.1 is locked out of the batch for its life (A203). Shefin was shown both options, was told the fix is one predicate and that M3.8 builds on the same counter, and chose to stop rather than waive the cap a second time. Round 3's work is committed rather than discarded: it is green, it closes the round 2 tester's overclaim, and it carries D60, which is Shefin's own decision. The defect is written into the M3.6 entry in `TASKS.md`, into A203, and into M5.11 so it reaches the top of the Milestone 3 test note. It is fixed after the break or before launch, not by grinding a fourth round now |
 
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
@@ -978,10 +981,73 @@ break.
   same availability arithmetic the site uses, so it cannot oversell: two lapsed captures
   racing for one last jar are retried against each other and the loser is told no.
   Audited as `webSalePaidReclaimed`. Status: open.
+- A203 (M3.6 round 3 test, 25 Sep): **logged, not fixed. The defect M3.6 is stuck on.**
+  `ordersInBatch` (`functions/src/batches/store.ts:302`) answers "is this order paid"
+  from `payment.status === "captured"` or the presence of `paidAt`, and
+  `writePaymentOnly` (`functions/src/webhooks/capture.ts:510`) writes `payment.status:
+  "captured"` onto every capture that stopped short of a sale: `hold-gone`,
+  `amount-mismatch`, and round 3's `qty-mismatch`, `over-limit` and `no-customer`. Those
+  orders stay `state: "held"` with no `billNumber` and no count moved, but they enter
+  `.paid` carrying `jarsInBatch`, which is the line's qty. So jars the customer only
+  *asked* for are counted as jars they *own*, in the counter `readStockClaim` uses for
+  the per-person limit at checkout and `customerJarsInBatch` now uses on the reclaim.
+  Proven by the round 3 tester: a customer owning zero jars of a batch was refused by
+  `createCheckout` with "This batch is limited to 2 jars per person and you already have
+  2", permanently, with nothing in the admin explaining it because the blocking order
+  reads as `held`; and the Owner's over-limit concern said a customer had 3 jars when
+  they had 2, each refusal inflating the next. Strictly too tight, so it cannot oversell
+  and cannot move money wrongly: the harm is refusing paying customers and misinforming
+  the Owner. **This is live on the customer site today, not only in the webhook.** The
+  fix is one predicate, gated on the order state having reached a paid state or on
+  `paidAt` (which the success path sets and `writePaymentOnly` deliberately does not),
+  satisfying both call sites. `store.ts:313` already closes the same door for `voided`
+  counter sales. Status: open, and it is the first thing to fix when M3.6 is unstuck.
+- A204 (M3.6 round 3 test, 25 Sep): three smaller findings, logged not fixed.
+  (i) `qtyPaidFor === wanted` in `readHoldToPaid` is a tautology, because
+  `jarsThePaymentCovers` returns either null or exactly `num(line.qty)`, which is what
+  `wanted` is; the check really means "does the line reconcile against `total`", and it
+  does that correctly, but the comment describes two independent numbers agreeing when
+  there is one. (ii) The over-limit concern can read "limit of 0 jars" when the Owner has
+  set `perPersonLimit: 0` with a blank override; cosmetic, admin-facing. (iii) Round 3
+  changed the **live-hold** path's bill line to `conversion.qty` rather than
+  `num(line.qty)`, which is outside its stated "reclaim path only" scope. It is the safer
+  number and nothing the system can produce makes them differ, so it was kept, but the
+  round's own description says the live path was untouched and this line touches it.
+  Status: open.
+- A199 (M3.6 round 3, 25 Sep): the over-limit outcome of D60 is a concern, not a partial
+  sale. A customer whose late payment would put them three jars over a limit of two is
+  given none of them rather than the two that would fit, because a partial sale charges
+  the full captured amount for fewer jars than the order says and there is no path in the
+  build that can refund the difference (D31: refunds are recorded, not started). The whole
+  payment sits on one concern the Owner settles in one decision. Status: open.
+- A200 (M3.6 round 2 test, 25 Sep): `cooking` refuses a reclaim, which A198 does not
+  name. It is in neither `BATCH_STATES_OPEN_FOR_BOOKING` nor `BATCH_STATES_IN_STOCK`, so
+  `availabilityOf` falls through to `bookableJars: 0` and answers zero. The effect, proved
+  by the tester: a customer who booked while the batch was Open, and whose hold lapsed
+  after the kitchen started cooking, gets a concern rather than a jar even though
+  `bookableJars` has room and their booking was legitimate. Left as built for now because
+  booking closes at Cooking (brief §7) and the concern puts it in front of the Owner
+  rather than losing it. **M3.8 owns the question**, since it builds the booking-closes-at
+  -Cooking transition end to end. Junk states and a missing `state` field also answer
+  zero, which is the safe direction. Status: open.
+- A201 (M3.6 round 2 test, 25 Sep): an order whose capture ends as a concern stays in
+  `held` with `payment.status: "captured"`, so the Orders screen will show a held order
+  that is really paid. Correct per A184, which forbids anything expiring a paid order, and
+  the concern is what surfaces it. **M3.9 should show the payment on a held order**, or an
+  Owner reading that screen alone will not see the money. Status: open.
+- A202 (M3.6 round 2 test, 25 Sep): an order whose `lines[0].batchRef` points at a
+  different batch than its hold reclaims from the batch the line names and leaves the
+  lapsed key on the other one. Harmless: a lapsed key counts for nothing and `sweepHolds`
+  tidies it. Unreachable through `firestore.rules`, which denies every client write to
+  `orders`. Logged rather than fixed. Status: open.
 - A197 (M3.6 round 2, 25 Sep): a reclaim does not re-ask the per-person limit. It is a
   rule about who may reserve a jar before paying, this order passed it when its hold was
   taken, and re-asking after the money has arrived could only refuse a sale that was
-  already allowed. Status: open.
+  already allowed. Status: replaced by D60, 25 Sep. The round 2 tester priced the
+  reasoning and it did not hold: a lapsed hold counts for nothing, so a customer can take
+  a hold, let it lapse, take another, and pay every stale order at the end, which put one
+  phone number four jars into a limit of two. A reclaim is a new claim, not the honouring
+  of an old reservation, so it is measured against the limit now.
 - A198 (M3.6 round 2, 25 Sep): no reclaim from a `paused`, `soldOut` or `archived` batch
   even when the arithmetic would allow one. D23 put `inStock` on the pausable list so
   sales can be frozen on jars that turn out to be bad, and a paused batch still carries

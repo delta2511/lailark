@@ -446,7 +446,7 @@ and the live webhook before the production deploy.
       so a resumed refusal is byte-identical to a first-attempt one on all three reasons.
       A refused correction keeps the hold and the `clientRef`. Consents are not carried
       (D57). A191 to A194.
-- [x] M3.6 [opus] Razorpay webhook and reconciliation, trimmed for launch (D29). HTTP
+- [ ] ⚠ M3.6 [opus] Razorpay webhook and reconciliation, trimmed for launch (D29). HTTP
       function verifying the signature, `webhookEvents` dedupe, `payment.captured` → hold
       becomes Paid, bill or receipt issued (M2.9), order events written;
       `refund.processed` matched to an order (M4.5 records it); scheduled 15-minute
@@ -483,6 +483,38 @@ and the live webhook before the production deploy.
       `payment.captured` and `refund.processed`, set `RAZORPAY_WEBHOOK_SECRET` and
       redeploy. Razorpay's real payload and signature are the one thing no test here can
       prove, since `api.razorpay.com` is blocked from the cloud container.
+      **Round 2 was tested and FAILED. Round 3 was built and FAILED. Marked `⚠ stuck`
+      at three rounds by Shefin's decision on 25 Sep (D62), per CLAUDE.md §4.1 step 4.**
+      Round 3 is committed, because it is good and because it carries D60: it bounded the
+      jars a reclaim may claim (the round 2 tester sold 5 jars and billed ₹3,245 against a
+      ₹649 capture by forcing the order's `lines[0].qty`) and it made a reclaim re-ask the
+      per-person limit. The round 3 tester then confirmed the limit holds under parallel
+      captures, does not reset when the kitchen ships, agrees with `createCheckout` and
+      `/api/counts` across 42 state and override combinations, and oversells nothing.
+
+      **The defect it is stuck on (A203), which is live on the checkout page today and is
+      not only a webhook problem:** `ordersInBatch` (`functions/src/batches/store.ts:302`)
+      decides an order is paid from `payment.status === "captured"` alone, and
+      `writePaymentOnly` (`functions/src/webhooks/capture.ts:510`) writes exactly that onto
+      every refused capture, which stays `state: "held"` with no `billNumber` and no count
+      moved. So a refused capture counts the jars the customer *asked* for as jars they
+      *own*, in the counter `readStockClaim` uses for the per-person limit at checkout.
+      A customer who is refused under §21.1 and refunded is then locked out of the batch
+      for its whole life: `createCheckout` answers "This batch is limited to 2 jars per
+      person and you already have 2" when they own none, and nothing in the admin explains
+      it, because the blocking order reads as `held` everywhere a person looks. The Owner's
+      concern sentence overcounts the same way, each refusal inflating the next (the tester
+      drove four captures and was told a customer had 3 jars when they had 2). The harm is
+      strictly too tight: it cannot oversell and cannot move money wrongly, it refuses
+      paying customers and misinforms the Owner. The shape of the fix is one predicate:
+      "paid" must mean the order actually took jars, gated on the order state having
+      reached a paid state or on `paidAt`, which the success path sets and
+      `writePaymentOnly` deliberately does not. It must satisfy both call sites,
+      `readStockClaim` at checkout and `customerJarsInBatch` on the reclaim. The comment
+      at `store.ts:313` already closes this exact door for `voided` counter sales; the
+      refusal path walks in through another one.
+      **M5.11 must put this at the top of the Milestone 3 test note.** M3.8 builds on the
+      same counter and must not deepen it.
 - [ ] M3.8 [opus] Open batch mechanics end to end. **Note from M3.5a (A194 iv): a
       resumed checkout silently drops `shareCode` and `batchRef` from the request, so a
       customer who books through a share link, dismisses the payment window and taps Pay
@@ -497,12 +529,24 @@ and the live webhook before the production deploy.
       Manual sending (D32): on "yes" in Today, the approval shows the drafted message
       and one prefilled `wa.me` link per booked customer, each ticked when sent. The
       approval closes when all are ticked or the Owner closes it.
+      **Note from the M3.6 round 2 test (A200): `cooking` refuses a reclaim.** A customer
+      who booked while the batch was Open, and whose 15 minute hold lapsed after the
+      kitchen started cooking, gets a concern rather than a jar even though `bookableJars`
+      has room and their booking was legitimate: `cooking` is in neither
+      `BATCH_STATES_OPEN_FOR_BOOKING` nor `BATCH_STATES_IN_STOCK`, so `availabilityOf`
+      answers zero. This task owns the question, because it builds booking-closes-at
+      -Cooking end to end. Decide whether that customer is served or left as a concern.
 - [ ] M3.9 [sonnet] (Shefin checks) Orders screen in admin. Brief §17.5 groups, filters, search, order
       detail with lines, jar numbers, payment, documents, kitchen note, timeline.
       Actions that exist so far. Done when: every order created in M2 and M3 is
       findable and readable.
       Each order shows a prefilled `wa.me` link that sends the customer their private
       order link with the bill (D32).
+      **Note from the M3.6 round 2 test (A201): an order whose capture ended as a concern
+      stays in `held` with `payment.status: "captured"`.** It is really paid, and A184
+      forbids anything expiring a paid order, so the state is correct. The screen must show
+      the payment on a `held` order, or an Owner reading Orders alone will not see money
+      that has arrived.
 - [ ] M4.1 [sonnet] (Shefin checks) Packing and India Post. To pack list by batch, jar numbers assigned
       in payment order, Packed with editable packing cost (default from Settings),
       India Post consignment number entry → Shipped, tracking link built from it,
@@ -539,7 +583,15 @@ and the live webhook before the production deploy.
       step-by-step manual walkthrough on staging that stands in for the fast-follow
       Playwright e2e (open a batch, sell at the counter, buy online, fill to half,
       approve and send by hand, cook, bottle, pack, ship, deliver, refund one), and the
-      manual workarounds from D33. Print the production deploy commands; do not run
+      manual workarounds from D33. **The Milestone 3 test note opens with A203, the
+      defect M3.6 is stuck on: a customer refused under §21.1 and refunded is locked out
+      of that batch for its life, because a refused capture counts the jars they asked for
+      as jars they own. It is live on the checkout page, not only in the webhook.**
+      **`LAUNCH.md` must carry D61's trigger in the list of
+      things only Shefin can tick: before international payments are enabled on the
+      Razorpay account, the captured currency must be parsed and a non-INR capture
+      refused. Today `currency` is dropped, so a capture of `amount: 64900, currency:
+      "USD"` sells a ₹649 jar.** Print the production deploy commands; do not run
       them. Then stop.
 
 ---

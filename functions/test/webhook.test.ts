@@ -947,3 +947,224 @@ describe("a capture landing on a lapsed but unswept hold", () => {
     }
   }, WORKER_TEST_TIMEOUT_MS);
 });
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a reclaim is allowed to claim.
+ *
+ * A capture landing on a lapsed hold claims a jar afresh (A196). Round 2 of
+ * M3.6 left that claim unbounded in two directions, and both are money:
+ *
+ *  - the jars came from the order's line and nothing compared them with the
+ *    money. The captured amount is matched against `orders.total`, a
+ *    separate stored field, so a line saying five jars on a total of one
+ *    jar's money sold five jars and billed for five on one jar's payment;
+ *  - the per-person limit was deliberately not re-asked (A197), so one
+ *    person could take a hold, let it lapse, repeat, and then pay every
+ *    stale Razorpay order: a batch capped at two each, bought out by one
+ *    number. Shefin overruled A197 on 25 Sep 2026.
+ *
+ * Neither is reachable from any client today (`orders` is closed to every
+ * role in `firestore.rules`, and a resumed checkout refuses a qty change),
+ * which is why these are written as invariants on the money path.
+ */
+describe("what a reclaimed jar is bounded by", () => {
+  let ref = "";
+
+  beforeAll(async () => {
+    await clearFirestore();
+    await seedProduct();
+  }, 120_000);
+
+  beforeEach(async () => {
+    ref = await inStockBatch();
+  }, 120_000);
+
+  afterAll(drainWorker, 60_000);
+
+  async function lapse(orderId: string): Promise<void> {
+    await db()
+      .collection("batches")
+      .doc(ref)
+      .update({ [`heldJars.${orderId}.expiresAt`]: new Date(Date.now() - 60_000) });
+  }
+
+  /** CLAUDE.md §3, read straight off the batch: `paid + live holds <= capacity`. */
+  async function assertNeverOversold(): Promise<void> {
+    const batch = await batchDoc(ref);
+    const capacity = (batch.bottledJars as number) ?? (batch.bookableJars as number);
+    const paid = batch.paidCount as number;
+    const held = liveHeldJars(batch.heldJars, Date.now());
+    expect(paid + held).toBeLessThanOrEqual(capacity);
+  }
+
+  it("sells no jars at all when the line does not add up to the money", async () => {
+    // The tester's probe, exactly: a batch of 22 with 14 paid, a lapsed hold
+    // of one jar, and a line edited to say five.
+    await leaveJarsFree(ref, 8);
+    const started = await startCheckout({ batchRef: ref });
+    await lapse(started.orderId);
+    await db().collection("orders").doc(started.orderId).update({
+      lines: [
+        {
+          productSlug: PRODUCT,
+          batchRef: ref,
+          qty: 5,
+          unitPrice: PRICE_IN_STOCK_PAISE,
+          customDescription: null,
+          jarNumbers: [],
+        },
+      ],
+    });
+
+    const before = await batchDoc(ref);
+    expect(before.paidCount).toBe(14);
+    const countersBefore = await countersSnapshot();
+    const documentsBefore = (await db().collection("documents").get()).size;
+
+    const applied = await applyCapturedPayment(db(), {
+      paymentId: "pay_qty_bound_1",
+      razorpayOrderId: started.razorpayOrderId,
+      // One jar's money, which is what the order's own total still says.
+      amountPaise: started.totalPaise,
+      orderId: started.orderId,
+      method: "upi",
+    });
+
+    expect(applied.outcome).toBe("qty-mismatch");
+    expect(applied.jars).toBe(0);
+    expect(applied.documentNumber).toBeNull();
+
+    // 14 -> 14. No jar moved, on a line that asked for five.
+    expect((await batchDoc(ref)).paidCount).toBe(14);
+    // No bill number burned, and no document drawn for five jars.
+    expect(await countersSnapshot()).toEqual(countersBefore);
+    expect((await db().collection("documents").get()).size).toBe(documentsBefore);
+
+    const order = await orderDoc(started.orderId);
+    expect(order.state).toBe("held");
+    expect(order.billNumber ?? null).toBeNull();
+    // The money is still recorded: it really did arrive (§21.1).
+    expect((order.payment as { status: string }).status).toBe("captured");
+
+    const concern = await db().collection("concerns").doc(`capture-qty-${started.orderId}`).get();
+    expect(concern.exists).toBe(true);
+    expect(concern.get("type")).toBe("technicalFailure");
+    // Nothing may reach a customer from here (D32).
+    expect(concern.get("draftMessage")).toBeNull();
+    expect((await db().collection("messages").get()).size).toBe(0);
+
+    await assertNeverOversold();
+    await db().collection("concerns").doc(`capture-qty-${started.orderId}`).delete();
+  }, 120_000);
+
+  it("stops a lapse-and-repay loop at the per-person limit", async () => {
+    await leaveJarsFree(ref, 10);
+    await db().collection("batches").doc(ref).update({ perPersonLimitOverride: 2 });
+    const paidBefore = (await batchDoc(ref)).paidCount as number;
+    expect(paidBefore).toBe(12);
+
+    // One number, four holds, each one let go stale before the next. Every
+    // limit check at checkout passes honestly, because a lapsed hold counts
+    // for nothing.
+    const customerPhone = nextCustomer();
+    const stale: Array<{ orderId: string; razorpayOrderId: string; totalPaise: number }> = [];
+    for (let i = 0; i < 4; i += 1) {
+      const started = await startCheckout({ batchRef: ref, customerPhone });
+      await lapse(started.orderId);
+      stale.push(started);
+    }
+
+    // Then all four stale Razorpay orders are paid.
+    const outcomes: string[] = [];
+    for (const [i, started] of stale.entries()) {
+      const applied = await applyCapturedPayment(db(), {
+        paymentId: `pay_limit_loop_${i}`,
+        razorpayOrderId: started.razorpayOrderId,
+        amountPaise: started.totalPaise,
+        orderId: started.orderId,
+        method: "upi",
+      });
+      outcomes.push(applied.outcome);
+    }
+
+    // Two jars, which is the limit. Not four.
+    expect(outcomes.filter((o) => o === "applied").length).toBe(2);
+    expect(outcomes.filter((o) => o === "over-limit").length).toBe(2);
+    expect((await batchDoc(ref)).paidCount).toBe(paidBefore + 2);
+
+    const states: string[] = [];
+    let billed = 0;
+    for (const started of stale) {
+      const order = await orderDoc(started.orderId);
+      states.push(String(order.state));
+      if (order.billNumber != null) billed += 1;
+      // Every one of the four has its money on it, sold or not.
+      expect((order.payment as { status: string }).status).toBe("captured");
+    }
+    expect(states.filter((s) => s === "toPack").length).toBe(2);
+    expect(states.filter((s) => s === "held").length).toBe(2);
+    // No bill number burned by a concern.
+    expect(billed).toBe(2);
+    expect((await db().collection("documents").get()).size).toBe(2);
+
+    const concerns = await db().collection("concerns").get();
+    expect(concerns.size).toBe(2);
+    for (const doc of concerns.docs) {
+      expect(doc.id).toMatch(/^capture-over-limit-/);
+      expect(doc.get("draftMessage")).toBeNull();
+    }
+    expect((await db().collection("messages").get()).size).toBe(0);
+
+    await assertNeverOversold();
+    for (const doc of concerns.docs) await doc.ref.delete();
+  }, 180_000);
+
+  it("still sells to someone who is inside the limit after that", async () => {
+    await leaveJarsFree(ref, 10);
+    await db().collection("batches").doc(ref).update({ perPersonLimitOverride: 2 });
+    const paidBefore = (await batchDoc(ref)).paidCount as number;
+
+    const started = await startCheckout({ batchRef: ref });
+    await lapse(started.orderId);
+    const applied = await applyCapturedPayment(db(), {
+      paymentId: "pay_limit_ok_1",
+      razorpayOrderId: started.razorpayOrderId,
+      amountPaise: started.totalPaise,
+      orderId: started.orderId,
+      method: "upi",
+    });
+
+    expect(applied.outcome).toBe("applied");
+    expect(applied.jars).toBe(1);
+    expect((await batchDoc(ref)).paidCount).toBe(paidBefore + 1);
+    expect((await db().collection("concerns").get()).size).toBe(0);
+    await assertNeverOversold();
+  }, 120_000);
+
+  it("converts a live hold whatever the limit says, because those jars were reserved", async () => {
+    await leaveJarsFree(ref, 10);
+    const customerPhone = nextCustomer();
+    const first = await startCheckout({ batchRef: ref, customerPhone });
+    const second = await startCheckout({ batchRef: ref, customerPhone });
+    // The Owner tightens the limit to one after both holds were taken.
+    await db().collection("batches").doc(ref).update({ perPersonLimitOverride: 1 });
+    const paidBefore = (await batchDoc(ref)).paidCount as number;
+
+    for (const [i, started] of [first, second].entries()) {
+      const applied = await applyCapturedPayment(db(), {
+        paymentId: `pay_live_limit_${i}`,
+        razorpayOrderId: started.razorpayOrderId,
+        amountPaise: started.totalPaise,
+        orderId: started.orderId,
+        method: "upi",
+      });
+      expect(applied.outcome).toBe("applied");
+    }
+
+    expect((await batchDoc(ref)).paidCount).toBe(paidBefore + 2);
+    expect((await db().collection("concerns").get()).size).toBe(0);
+    await assertNeverOversold();
+  }, 120_000);
+});

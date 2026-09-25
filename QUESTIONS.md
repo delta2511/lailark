@@ -13,6 +13,10 @@ None. Every question raised so far is answered below.
 
 ## Answered
 
+- ~~Q27 (M3.6, 25 Sep): round 3 failed its fresh tester, which is the third failure and where CLAUDE.md §4.1's cap says a task is marked stuck. Waive the cap for a round 4, as D54 did once for M3.5, or stop?~~ Answered 25 Sep: stop and move on. M3.6 is marked `⚠ stuck` with the defect named, round 3's work is committed, and the defect goes to the top of the Milestone 3 test note. Recorded as D62.
+- ~~Q26 (M3.6, 25 Sep): a `payment.captured` carrying a currency other than INR is read as rupees, because `currency` is never parsed, so a capture of `amount: 64900, currency: "USD"` sells a ₹649 jar. Fix it now as an A195-shaped mismatch, or defer?~~ Answered 25 Sep: defer until international payments are switched on, with the trigger named in `LAUNCH.md` (M5.11) as well as in the ledger. Recorded as D61.
+- ~~Q25 (M3.6, 25 Sep): A196's reclaim never re-asks the per-person limit (A197), so a customer can take a hold, let it lapse, repeat, and pay every stale Razorpay order at the end. The tester put one phone number four jars into a limit of two. Should a reclaim re-ask the limit?~~ Answered 25 Sep: yes, on the reclaim path only; a live hold still converts unconditionally, and over the limit is the §21.1 outcome. Recorded as D60, which replaces A197. Built in M3.6 round 3.
+
 - ~~Q16 (M2.13, 23 Sep): should Sourcing to Cooking be refused when the recipe names no main ingredient at all?~~ Answered 25 Sep: no, leave it as built. The transition stays allowed and the raw cost shows as an orphan. Refusing would be a batch lifecycle change and would stop the kitchen mid-cook. Recorded as D58.
 - ~~Q24 (M2.13a, 25 Sep): should the admin PWA switch on Firestore offline persistence?~~ Answered 25 Sep: not at launch. The honest fix is telling the person when a write has not landed, which is fast-follow work, not a flag. Recorded as D59.
 
