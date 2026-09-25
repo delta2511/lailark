@@ -96,6 +96,8 @@ confirm or replace at the next milestone break.
 | D60 | **A late payment on a lapsed hold is checked against the per-person limit. A live hold still converts unconditionally** | Asked and answered by Shefin, 25 Sep 2026, during the M3.6 round 2 adversarial pass, overruling A197. A196's reclaim path never re-asked the limit, on the reasoning that the order passed it when its hold was taken. The tester priced that reasoning: with the limit set to 2, one phone number took four holds, let each lapse so the next check passed honestly, then paid all four stale Razorpay orders and ended with four jars. Nothing was oversold; one person simply bought a batch the Owner had capped at two each, bounded only by capacity and by their patience. So the number typed on the batch screen meant "you may not reserve more than two at a time" rather than "you may not buy more than two". Shefin was shown both options and chose to close it. A reclaim is a new claim made now, so it is measured against the limit now, read exactly as the checkout path reads it (D52 and D44: the typed `perPersonLimitOverride` governs in both directions, blank falls back to 2 in stock and the computed quarter for an open batch). Over the limit is brief §21.1's outcome: the payment is recorded because the money really arrived, no count moves, no bill or receipt number is burned, and the Owner settles it by hand. A live hold is untouched, because its jars really were reserved and refusing it would refuse a sale that was properly allowed. Nobody inside the limit is ever refused |
 | D61 | **The captured currency stays unread until international payments are switched on** | Asked and answered by Shefin, 25 Sep 2026, during the M3.6 round 2 adversarial pass. `CapturedPayment` (`functions/src/webhooks/razorpayEvents.ts`) has no `currency` field and `parseRazorpayWebhook` drops it, so a `payment.captured` carrying `amount: 64900, currency: "USD"` is read as ₹649.00 exactly and sells the jar. Every INR mismatch beside it is refused correctly: under, over, zero and a float all record the payment and move no count. The exposure is nil today, because the Razorpay account takes rupees only, and real on the day it does not. Shefin was offered the A195-shaped fix (treat a foreign currency exactly as a mismatched amount: record the payment, move no count, raise the §21.1 concern) and chose to defer it instead. **The trigger is named so it is not lost: before international payments are enabled on the Razorpay account, the currency must be parsed and a non-INR capture refused.** It is written into the launch checklist in M5.11 as well as here, because the day it matters is a day nobody will be re-reading this ledger |
 | D62 | **M3.6 stops at three rounds and is marked `⚠ stuck`. The cap stands** | Asked and answered by Shefin, 25 Sep 2026, after round 3 failed its fresh tester. CLAUDE.md §4.1 step 4 caps the fix loop at three rounds; D54 waived it once for M3.5 and said that was not a precedent. Round 3's tester found a defect that is live on the checkout page today and was outside the three files the round was scoped to: a refused capture counts the jars the customer asked for as jars they own, so a customer refunded under §21.1 is locked out of the batch for its life (A203). Shefin was shown both options, was told the fix is one predicate and that M3.8 builds on the same counter, and chose to stop rather than waive the cap a second time. Round 3's work is committed rather than discarded: it is green, it closes the round 2 tester's overclaim, and it carries D60, which is Shefin's own decision. The defect is written into the M3.6 entry in `TASKS.md`, into A203, and into M5.11 so it reaches the top of the Milestone 3 test note. It is fixed after the break or before launch, not by grinding a fourth round now |
+| D63 | **The private order page's copy is approved as drafted, and it does not tell the customer the order's state** | Asked and answered by Shefin, 25 Sep 2026, during M3.8. `/o/<token>` is the page a customer opens from the link we send them, and nothing is drafted for it anywhere: the brief names the page (§5) and says nothing about what it says, and the story doc drafts no sentence for it, so all of it sat on CLAUDE.md §5's never-assume list. Approved: the heading "Your order"; "We cannot find an order on this link. Do check it, or message us and we will look." for a link that matches nothing; "We cannot show your order just now. Please try again in a moment." for a page that will not load; "Nothing has been issued on this order yet." where the documents go; the labels Order, Placed, Batch, Shipping, Total, Going to, Your jars, Bills and receipts, Open; and the document names Receipt, Bill, Refund note and Credit note. It keeps the D53 voice: says "we", no em dash, and no error tone where nothing has gone wrong. **The order's state is deliberately not shown.** Shefin was offered it and chose to leave it out: it is the largest copy surface on the page, a dozen phrases a customer would have to decode, every one of them a sentence to approve, and the page reads correctly without it. It can be added later without moving anything else. Q28 |
+| D64 | **The notify-me beside a cooking batch is approved as drafted** | Asked and answered by Shefin, 25 Sep 2026, during M3.8. Brief §7.5 drafts the cooking card's own line ("Being cooked now. Unpaid jars go on sale when bottled"), which is used word for word, and then asks for a notify-me next to it without drafting what it says; there is no notify-me anywhere else on the new site to copy from. Approved: the label "Tell me when these jars go on sale", the button "Tell me", and "We have your number. We will tell you when this batch is bottled." after it is tapped. It promises only what the batch lifecycle actually guarantees, and carries no countdown and no scarcity (CLAUDE.md §3). Q29 |
 
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
@@ -1014,6 +1016,131 @@ break.
   number and nothing the system can produce makes them differ, so it was kept, but the
   round's own description says the live path was untouched and this line touches it.
   Status: open.
+- A205 (M3.8 round 2, 25 Sep): a `shareCode` that does not match `isShareCode` is
+  **dropped, not refused**, and the order is recorded unattributed. Found by the round 1
+  tester: `createCheckout` checked the code's length only and is public and
+  unauthenticated until App Check lands in M5.9, so `<script>alert(1)</script>` reached
+  `orders/{id}.shareCodeUsed` through both the first attempt and the A194 (iv) resume,
+  in a field M3.9 draws on the order screen inside a `wa.me` link. Dropping rather than
+  refusing because a share code is an attribution and moves no price, no count and no
+  total: an order arriving with a mangled one is still a customer who wants a jar, and
+  refusing the sale over a URL parameter they never typed would cost them the jar to
+  protect a field nobody is paid from. Both doors read the one parsed value. Status: open.
+- A206 (M3.8, 25 Sep): the order token is 32 lower-case hex characters (128 bits from
+  `randomBytes`), minted server-side inside the transaction that creates the order,
+  stored as `orders/{id}.token` and never changed, so a link already sent keeps working.
+  The round 1 tester confirmed 6 samples unique with no relation to the order id, and
+  that a malformed, unknown, cross-customer, uppercase or deleted-order token all answer
+  the same JSON 404. Status: open.
+- A207 (M3.8, 25 Sep): every customer gets a `customers/{phone}.shareCode` minted on
+  their first order, at checkout rather than at capture, through either door (web or
+  counter). Ten lower-case alphanumerics, minted once and never replaced, because
+  replacing it would orphan every share link that person has already sent. Counter sales
+  get an order token too, not only web orders, so M3.9 can show `/o/<token>` for every
+  channel. Status: open.
+- A208 (M3.8, 25 Sep): `/api/order/<token>` is the endpoint behind the page and returns a
+  narrow projection, never the order document: number, placed date, lines with jar
+  numbers and batch number, shipping, total, delivery contact, and documents with
+  short-lived links. It carries no Razorpay ids, no `clientRef`, no kitchen note, no
+  internal batch reference, no cost, no consent record and no `audit`, and it does not
+  echo the token. Round 2 also trimmed `state`, `paymentStatus`, `paymentMethod` and
+  `channel`, which nothing rendered and which D63 keeps off the page deliberately. Every
+  answer is `no-store`, including the 404. Status: open.
+- A209 (M3.8, 25 Sep): the site is a static export, so one published file (`/o.html`)
+  serves every token through a Hosting rewrite of `/o/**`, and the token is read from the
+  path in the browser. Nothing private is in the HTML, which the round 1 tester
+  confirmed. Round 2 widened the header glob to `/o{,.html,.txt,/**}` because the bare
+  paths were getting `no-cache` and no `X-Robots-Tag`, leaving `/o` indexable. Status: open.
+- A210 (M3.8, 25 Sep): `/api/counts` gains a fourth mode, `cooking`, carrying `count`,
+  `total` and `available: 0`, with no `perPersonLimit` and no price, ranked below in-stock
+  and open so it is only ever shown when a product has nothing that can be bought. The
+  round 1 tester confirmed nothing downstream can build a jar picker from it. Status: open.
+- A211 (M3.8, 25 Sep): D32's sending list is built by a trigger (`onApprovalWritten`)
+  rather than by the three yes doors, so there is one rule rather than three that must
+  agree. It is built once and never rebuilt, so a customer who pays after the yes does not
+  appear in a list somebody is halfway down, and a tick is never undone. A tick records
+  `recipients[].sentAt`; the approval's own `sentAt` is still written by nothing. The
+  approval closes via `closedAt`, set by the last tick or by the Owner. `recipients` and
+  `closedAt` join `approvalServerFields()` in `firestore.rules`, so no client including
+  the Owner can write the list or tick a row, which the rules tests now cover. Status: open.
+- A212 (M3.8, 25 Sep): "did this order really take jars", for the sending list only, is a
+  paid order state or `paidAt` set (`orderTookJars` in
+  `functions/src/approvals/recipients.ts`). Deliberately narrower than `ordersInBatch`'s
+  predicate and it does not touch it, because A203 is the defect M3.6 is stuck on: with
+  the loose predicate a customer whose payment was refused and refunded would be sent
+  "half the batch is paid for". Both testers confirmed `ordersInBatch` is byte-for-byte
+  unchanged and that the refused customer is absent from the list. Status: open.
+- A213 (M3.8, 25 Sep): `batchRef` stays dropped on a resumed checkout, where `shareCode`
+  is now carried, because an order's batch is where its jars are held and letting a second
+  request move it would move a count. Previously silent, now stated. Status: open.
+- A214 (M3.8 round 2, 25 Sep): the private order page shows `products/{slug}.name`, read
+  in the same `getAll` that fetches `batchNo`. Round 1 returned
+  `str(line.customDescription) || str(line.productSlug)` while `createCheckout` writes
+  `customDescription: null` on every web order, so the slug was always the branch taken
+  and a customer opening the link we send with their bill read `prawns-and-dates` instead
+  of `Prawns and dates`, on the page whose copy D63 had just approved. **The round 1 test
+  hid it:** `site/tests/order.spec.js` stubbed the endpoint with a `description` the real
+  endpoint cannot produce for a web order and then asserted the page showed it, so it
+  passed green against broken behaviour. **Round 2 only half fixed it and round 3 finished
+  it:** `fieldFor` rejected only `""`, so a name of `"   "` rendered as blank space, and the
+  chain still ended `|| str(line.productSlug)`, so a product renamed to blank, set to a
+  non-string, or deleted, and a line whose slug pointed at nothing, all put the URL back in
+  front of the customer. Round 3 trims the guard and drops the slug fallback. Round 2 also
+  added an assertion to the stubbed site test that could not fail, since the stub never
+  contained the slug; round 3 deleted it and demoted that file from claiming to be endpoint
+  coverage, leaving a comment naming the trap. The genuine coverage is
+  `functions/test/open-batch.test.ts`, extended in round 3 to all six broken-product cases
+  and to a counter order's name, which nothing covered. Status: open.
+- A215 (M3.8 round 2, 25 Sep): a malformed `/api/order/<token>` path answers the same
+  JSON 404 with `no-store` as every other miss. Express decodes the param before the
+  router runs, so a raw `%` threw a `URIError` and returned an Express HTML error page
+  with no `Cache-Control`, making the router's stated invariant ("one answer for a token
+  that is the wrong shape, a token nobody has") false and showing a customer who mistyped
+  one character of a WhatsApp link a raw stack page instead of D63's sentence. No order
+  data was ever in that body. **Round 2's claim was wrong and round 3 corrected it rather
+  than shipping a second wrong fix.** The `URIError` is thrown in the platform router's
+  route-matching layer, above the app `onRequest` mounts, so `decodeToken`'s try/catch sits
+  downstream of the throw, and an Express error handler inside our app could never fire
+  either: measured in the emulator, the function is not entered at all for `%`, `%zz` or
+  `%E0%A4`. Adding `express` as a dependency for a handler proven unreachable was refused
+  under CLAUDE.md §3 ("do not add dependencies casually"). Two things the round 2 tester's
+  method hid, both verified by the orchestrator: `firebase.json` already carries
+  `Cache-Control: no-store` on `/api/**`, so an answer produced above the function is still
+  uncacheable on the path a browser uses, and `tokenFromPath` and `orderApiUrl` both gate on
+  `isOrderToken`, so a mistyped link never becomes a malformed API request at all. The page
+  draws D63's sentence itself, so the customer harm asserted in round 2 does not occur. The
+  residual is a 400 HTML page carrying no customer data at a URL nothing on this site calls.
+  Round 3 locked the Hosting rule with a test that goes red if it is deleted. Production
+  behaviour is **inferred, not measured**, in either direction: no local environment can
+  answer it, since the emulator's own router throws first and the hosting emulator crashes
+  on a raw `%` (A216 iii). Status: open.
+- A216 (M3.8 round 1 test, 25 Sep): three findings logged rather than fixed. (i) The
+  endpoint has a three-way timing oracle, median 12ms for a real token, 5ms for a
+  valid-shape unknown one and 2ms for a malformed one, which contradicts the router's
+  "a caller learns nothing from the difference"; 128 bits of token makes enumeration
+  infeasible, so there is nothing to exploit. (ii) `api` runs at `maxInstances: 3` and now
+  serves the private order page as well as `/api/counts`, so the ceiling matters more than
+  it did; M5.9 owns rate limits. (iii) The hosting emulator itself crashes on a raw `%`
+  path, reproducibly, which is a firebase-tools bug and not this repo's, and it is why
+  A215's behaviour behind production Hosting is inferred from the `%25` case rather than
+  measured. Status: open.
+- A217 (M3.8, 25 Sep): every admin string on the new "To send" card, and all file,
+  function and test names across the task. Status: open.
+- A218 (M3.8 round 3, 25 Sep): when `/api/order/<token>` has no usable name for a line, the
+  line renders **no description at all** rather than a stand-in noun. The quantity, unit
+  price, batch number and jar numbers still render, so the line stays honest and readable.
+  Chosen because D63 approved this page's copy sentence by sentence, and any stand-in word
+  would be undrafted customer-facing copy on CLAUDE.md §5's never-assume list, which would
+  have blocked the last available fix round on a new question. The client drops the span
+  entirely rather than rendering an empty one, which would hold a blank column exactly where
+  the name belongs, and `site/lib/order.js` trims too, so an older deploy of the function
+  still sending whitespace cannot draw a blank either. Status: open.
+- A219 (M3.8 round 2 test, 25 Sep): at exactly one jar left in stock the web door refuses
+  with "We have no <product> to send just now" while the counter still sells it. Found by
+  the round 2 tester, outside M3.8's scope, logged rather than chased. Worth deciding
+  deliberately: it may be correct, since the counter is the master POS and Sumayya is
+  standing in front of the jar, or it may be an off-by-one in the web availability
+  arithmetic. Status: open.
 - A199 (M3.6 round 3, 25 Sep): the over-limit outcome of D60 is a concern, not a partial
   sale. A customer whose late payment would put them three jars over a limit of two is
   given none of them rather than the two that would fit, because a partial sale charges

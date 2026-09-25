@@ -3,7 +3,7 @@
  * §4.1, §4.2, §6.2 and §11.5, each as its own refusal.
  */
 
-import { DEFAULT_PINCODE_LIST, DEFAULT_SHIPPING_SWITCH } from "@lailark/shared";
+import { DEFAULT_PINCODE_LIST, DEFAULT_SHIPPING_SWITCH, isOrderToken } from "@lailark/shared";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -74,6 +74,8 @@ function context(over: Partial<CheckoutContext> = {}): CheckoutContext {
     holdMinutes: 15,
     nowMillis: Date.parse("2026-09-24T10:00:00+05:30"),
     todayIso: TODAY,
+    orderToken: "0123456789abcdef0123456789abcdef",
+    freshShareCode: "k3n9x2p1a7",
     ...over,
   };
 }
@@ -544,6 +546,7 @@ describe("the address on a resumed checkout, M3.5a", () => {
     pincode: "673571",
     placeOfSupply: "KL",
     customerEmail: null,
+    shareCodeUsed: null,
   };
   const ctx = {
     productName: "Prawns and dates",
@@ -624,6 +627,168 @@ describe("the address on a resumed checkout, M3.5a", () => {
     });
     expect(out.ok).toBe(false);
     if (!out.ok) expect(out.message).toContain("We cannot send Prawns and dates to 670001");
+  });
+});
+
+describe("the private order link and the share code, M3.8", () => {
+  it("puts the minted token on the order and nothing a caller sent", () => {
+    const out = planCheckout(parsed(), context());
+    if (!out.ok) throw new Error(out.message);
+    expect(out.value.order.token).toBe("0123456789abcdef0123456789abcdef");
+    expect(isOrderToken(out.value.order.token)).toBe(true);
+  });
+
+  it("records the share code the link carried", () => {
+    const out = planCheckout(parsed({ shareCode: "k3n9x2p1a7" }), context());
+    if (!out.ok) throw new Error(out.message);
+    expect(out.value.order.shareCodeUsed).toBe("k3n9x2p1a7");
+  });
+
+  it("drops a share code that is not one, and still sells the jar (A205)", () => {
+    // `createCheckout` is public and unauthenticated (App Check is M5.9), so
+    // `shareCode` is whatever a caller puts on the query string. It is
+    // attribution and nothing else, so anything that is not a share code is
+    // dropped and the sale goes through: refusing would lose a paying
+    // customer over a URL parameter they never typed.
+    for (const rubbish of [
+      "<img src=x onerror=alert(1)>",
+      "<script>alert(1)</script>xx",
+      "UPPERCASE",
+      "has space",
+      "abc", // three characters: under the four `isShareCode` wants
+      "x".repeat(33),
+      "../../etc/passwd",
+      "k3n9x2p1a7 and more",
+    ]) {
+      const out = parseCheckoutRequest(request({ shareCode: rubbish }));
+      expect(out.ok, `refused ${JSON.stringify(rubbish)}`).toBe(true);
+      if (!out.ok) continue;
+      expect(out.value.shareCode, `kept ${JSON.stringify(rubbish)}`).toBeNull();
+
+      const planned = planCheckout(out.value, context());
+      if (!planned.ok) throw new Error(planned.message);
+      expect(planned.value.order.shareCodeUsed).toBeNull();
+    }
+  });
+
+  it("drops rubbish on the resume door too, A194 (iv)", () => {
+    const stored: StoredContact = {
+      name: "Asha",
+      phone: "+919446587027",
+      lines: ["12 Mill Road"],
+      city: "Kozhikode",
+      state: "KL",
+      pincode: "673571",
+      placeOfSupply: "KL",
+      customerEmail: null,
+      shareCodeUsed: null,
+    };
+    const out = parseCheckoutRequest(request({ shareCode: "<script>alert(1)</script>xx" }));
+    if (!out.ok) throw new Error(out.message);
+    const plan = planResumedContact(out.value, stored, {
+      productName: "Prawns and dates",
+      restriction: { allowedStates: null, excludedPincodes: null },
+      pincodes: DEFAULT_PINCODE_LIST,
+    });
+    if (!plan.ok) throw new Error(plan.message);
+    expect(plan.value.orderPatch).toEqual({});
+  });
+
+  it("mints a share code for a customer who has none", () => {
+    const out = planCheckout(parsed(), context());
+    if (!out.ok) throw new Error(out.message);
+    expect(out.value.customerPatch.shareCode).toBe("k3n9x2p1a7");
+  });
+
+  it("leaves an existing share code alone, so their links keep working", () => {
+    const out = planCheckout(
+      parsed(),
+      context({
+        customer: {
+          phone: "+919446587027",
+          name: "Asha",
+          email: null,
+          orders: 1,
+          jars: 1,
+          consentUpdates: true,
+          consentMarketing: false,
+          shareCode: "alreadyhere",
+        },
+      }),
+    );
+    if (!out.ok) throw new Error(out.message);
+    expect(out.value.customerPatch.shareCode).toBeUndefined();
+  });
+});
+
+describe("the share link on a resumed checkout, M3.8 (A194 iv)", () => {
+  const stored: StoredContact = {
+    name: "Asha",
+    phone: "+919446587027",
+    lines: ["12 Mill Road"],
+    city: "Kozhikode",
+    state: "KL",
+    pincode: "673571",
+    placeOfSupply: "KL",
+    customerEmail: null,
+    shareCodeUsed: null,
+  };
+  const ctx = {
+    productName: "Prawns and dates",
+    restriction: { allowedStates: null, excludedPincodes: null },
+    pincodes: DEFAULT_PINCODE_LIST,
+  };
+
+  it("records a share code the first tap did not carry", () => {
+    const out = planResumedContact(parsed({ shareCode: "k3n9x2p1a7" }), stored, ctx);
+    if (!out.ok) throw new Error(out.message);
+    expect(out.value.orderPatch).toEqual({ shareCodeUsed: "k3n9x2p1a7" });
+    // Attribution only: nothing here may move a total or a count.
+    expect(Object.keys(out.value.orderPatch)).not.toContain("total");
+    expect(Object.keys(out.value.orderPatch)).not.toContain("lines");
+    expect(Object.keys(out.value.orderPatch)).not.toContain("shippingFee");
+    expect(out.value.customerPatch).toEqual({});
+  });
+
+  it("never overwrites the code the first tap already recorded", () => {
+    const out = planResumedContact(parsed({ shareCode: "second0000" }), {
+      ...stored,
+      shareCodeUsed: "first00000",
+    }, ctx);
+    if (!out.ok) throw new Error(out.message);
+    expect(out.value.orderPatch).toEqual({});
+  });
+
+  it("writes nothing when neither tap carried one", () => {
+    const out = planResumedContact(parsed(), stored, ctx);
+    if (!out.ok) throw new Error(out.message);
+    expect(out.value.orderPatch).toEqual({});
+  });
+
+  it("carries the code alongside a corrected address", () => {
+    const out = planResumedContact(
+      parsed({
+        shareCode: "k3n9x2p1a7",
+        address: { lines: ["99 New Street"], city: "Kannur", state: "KL", pincode: "673571" },
+      }),
+      stored,
+      ctx,
+    );
+    if (!out.ok) throw new Error(out.message);
+    expect(out.value.orderPatch.shareCodeUsed).toBe("k3n9x2p1a7");
+    expect(out.value.orderPatch.placeOfSupply).toBe("KL");
+  });
+
+  it("refuses an undeliverable corrected address even with a share code on it", () => {
+    const out = planResumedContact(
+      parsed({
+        shareCode: "k3n9x2p1a7",
+        address: { lines: ["99 New Street"], city: "Kannur", state: "KL", pincode: "670001" },
+      }),
+      stored,
+      { ...ctx, pincodes: { serviceable: ["673571"], enforce: true } },
+    );
+    expect(out.ok).toBe(false);
   });
 });
 

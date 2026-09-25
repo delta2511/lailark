@@ -10,6 +10,8 @@
 
 import {
   effectiveShippingSwitch,
+  isShareCode,
+  SHARE_CODE_PARAM,
   formatINR,
   IN_STOCK_PER_PERSON_LIMIT,
   MAX_WEB_JARS,
@@ -19,20 +21,52 @@ import {
 
 export { formatINR };
 
-/** `?p=<slug>&q=<jars>`, read off a URL string. Nothing is trusted. */
+/**
+ * `?p=<slug>&q=<jars>&s=<shareCode>`, read off a URL string. Nothing is
+ * trusted: a slug that is not a slug, a quantity that is not a small whole
+ * number and a share code that is not one are all dropped rather than passed
+ * on, because every one of them ends up in a request to the server.
+ *
+ * `s` is M3.8's: brief §7.2 step 4 gives a customer a share link with their
+ * receipt, and this is where a person who followed one is recognised. It is
+ * an attribution and nothing else: it moves no price, no count and no total,
+ * here or on the server.
+ */
 export function readCheckoutQuery(search) {
   let params;
   try {
     params = new URLSearchParams(typeof search === "string" ? search : "");
   } catch {
-    return { slug: null, qty: 1 };
+    return { slug: null, qty: 1, shareCode: null };
   }
   const slug = params.get("p");
   const qty = Number.parseInt(params.get("q") ?? "1", 10);
   return {
     slug: typeof slug === "string" && /^[a-z0-9][a-z0-9-]{1,48}$/.test(slug) ? slug : null,
     qty: Number.isInteger(qty) && qty >= 1 && qty <= 20 ? qty : 1,
+    shareCode: shareCodeFrom(search),
   };
+}
+
+/**
+ * The share code on a URL, or null. Used by the product page as well as the
+ * checkout, so somebody who lands on `/pickles/<slug>?s=<code>` still carries
+ * the code into `/checkout`.
+ */
+export function shareCodeFrom(search) {
+  try {
+    const params = new URLSearchParams(typeof search === "string" ? search : "");
+    const code = params.get(SHARE_CODE_PARAM);
+    return isShareCode(code) ? code : null;
+  } catch {
+    return null;
+  }
+}
+
+/** `/checkout?p=<slug>&q=<jars>`, with the share code kept if there is one. */
+export function checkoutHref(slug, qty, shareCode) {
+  const base = `/checkout?p=${encodeURIComponent(slug)}&q=${encodeURIComponent(String(qty))}`;
+  return isShareCode(shareCode) ? `${base}&${SHARE_CODE_PARAM}=${shareCode}` : base;
 }
 
 /**

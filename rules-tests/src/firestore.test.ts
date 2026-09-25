@@ -132,8 +132,32 @@ describe("notify, the only public write", () => {
     await assertFails(write(who.unauth, "notify/new-3", { ...valid, contact: "12345" }));
   });
 
-  it("refuses a source that is not one of the two pages", async () => {
+  it("refuses a source that is not one of the three the site has", async () => {
     await assertFails(write(who.unauth, "notify/new-4", { ...valid, source: "x" }));
+  });
+
+  it("takes the cooking card's source, with the pickle somebody asked about", async () => {
+    // Brief 7.5's notify-me beside a batch on the stove (M3.8, D64).
+    await assertSucceeds(
+      write(who.unauth, "notify/new-6", {
+        ...valid,
+        source: "cooking",
+        productSlug: "prawns-and-dates",
+      }),
+    );
+    // A row with no pickle on it is still a row: the number is the point.
+    await assertSucceeds(
+      write(who.unauth, "notify/new-7", { ...valid, source: "cooking", productSlug: null }),
+    );
+  });
+
+  it("refuses a productSlug that is not a string, and still refuses anything else", async () => {
+    await assertFails(
+      write(who.unauth, "notify/new-8", { ...valid, source: "cooking", productSlug: 7 }),
+    );
+    await assertFails(
+      write(who.unauth, "notify/new-9", { ...valid, source: "cooking", utm: "instagram" }),
+    );
   });
 
   it("refuses a client-supplied createdAt that is not a timestamp", async () => {
@@ -917,6 +941,26 @@ describe("concerns and approvals", () => {
     // Not even alongside a legitimate answer.
     await assertFails(
       patch(who.owner, "approvals/app-1", { status: "approved", sentAt: new Date() }),
+    );
+  });
+
+  /**
+   * D32's sending list, M3.8. `recipients` is who an approved message is for
+   * and which of them has been sent it by hand; `closedAt` is whether the
+   * list is finished with. A client that could write either could add a
+   * customer this batch has never had, or tick a message sent that nobody
+   * sent, which is exactly the lie `sentAt` is kept out of reach for. Both
+   * are written only by `onApprovalWritten` and by `answerApproval`.
+   */
+  it("never let a client write the sending list or close it", async () => {
+    const row = [{ phone: "+919446587027", name: "Asha", jars: 1, sentAt: null }];
+    await assertFails(patch(who.owner, "approvals/app-1", { recipients: row }));
+    await assertFails(patch(who.kitchen, "approvals/app-1", { recipients: row }));
+    await assertFails(patch(who.viewer, "approvals/app-1", { recipients: row }));
+    await assertFails(patch(who.owner, "approvals/app-1", { closedAt: new Date() }));
+    // Not even alongside a legitimate answer.
+    await assertFails(
+      patch(who.owner, "approvals/app-1", { status: "approved", recipients: row }),
     );
   });
 

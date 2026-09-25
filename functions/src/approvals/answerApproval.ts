@@ -9,6 +9,10 @@
  *   - **yes**, and **edit then yes**, for the two kinds that move no state:
  *     the broadcast offers (batch open, back in stock) and the kitchen photo
  *     updates of D5.
+ *   - **sent**, and **close**, which are D32's: a message already said yes to
+ *     is worked down by hand, one prefilled `wa.me` link per customer, and
+ *     each row is ticked as the Owner sends it. The list closes when the last
+ *     row is ticked, or when he closes it himself.
  *
  * The yes on a half-reached approval is not here: it **is** the `Half reached
  * -> Sourcing` row of section 8.2, so it goes through `transitionBatch`, and
@@ -81,6 +85,21 @@ export const answerApproval = onCall(
       }
       if (plan.remindAtMillis !== null) {
         patch.remindAt = Timestamp.fromMillis(plan.remindAtMillis);
+      }
+      // D32: the sending list, rewritten whole because Firestore cannot set
+      // one element of an array and cannot hold a server timestamp inside
+      // one. `sentAt` on the approval itself is still untouched, and always
+      // will be from here: that field says a machine sent the message.
+      if (plan.recipients) {
+        patch.recipients = plan.recipients.map((row) => ({
+          phone: row.phone,
+          name: row.name,
+          jars: row.jars,
+          sentAt: row.sentAtMillis === null ? null : Timestamp.fromMillis(row.sentAtMillis),
+        }));
+      }
+      if (plan.closedAtMillis !== undefined && plan.closedAtMillis !== null) {
+        patch.closedAt = Timestamp.fromMillis(plan.closedAtMillis);
       }
       tx.set(approvalDoc, patch, { merge: true });
 

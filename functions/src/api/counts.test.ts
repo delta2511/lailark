@@ -431,3 +431,69 @@ describe("computeCounts", () => {
     expect(payload.shipping.rule).toBe("free");
   });
 });
+
+describe("a batch that is cooking, brief §7.5 (M3.8)", () => {
+  const cooking = {
+    id: "b-cook",
+    productSlug: "prawns-and-dates",
+    state: "cooking",
+    bookableJars: 19,
+    paidCount: 14,
+    priceOpen: 59_900,
+    perPersonLimit: 4,
+  };
+
+  it("shows the jars booked, offers none, and names no limit", async () => {
+    const db = fakeDb([product("prawns-and-dates")], [cooking]);
+    const payload = await computeCounts(db);
+    expect(payload.products["prawns-and-dates"]).toEqual({
+      mode: "cooking",
+      count: 14,
+      total: 19,
+      available: 0,
+      shippingRule: "free",
+    });
+  });
+
+  it("never outranks a batch a customer could actually buy from", async () => {
+    const db = fakeDb(
+      [product("prawns-and-dates")],
+      [
+        cooking,
+        {
+          id: "b-stock",
+          productSlug: "prawns-and-dates",
+          state: "inStock",
+          bottledJars: 8,
+          paidCount: 3,
+          writtenOff: 0,
+          priceInStock: 64_900,
+          packedOn: "2026-09-04",
+          bestBefore: "2027-03-04",
+          saleStopOn: "2099-01-01",
+        },
+      ],
+    );
+    const payload = await computeCounts(db);
+    expect(payload.products["prawns-and-dates"]?.mode).toBe("inStock");
+  });
+
+  it("never outranks an open batch either", async () => {
+    const db = fakeDb(
+      [product("prawns-and-dates")],
+      [
+        cooking,
+        {
+          id: "b-open",
+          productSlug: "prawns-and-dates",
+          state: "open",
+          bookableJars: 18,
+          paidCount: 2,
+          priceOpen: 59_900,
+        },
+      ],
+    );
+    const payload = await computeCounts(db);
+    expect(payload.products["prawns-and-dates"]?.mode).toBe("open");
+  });
+});

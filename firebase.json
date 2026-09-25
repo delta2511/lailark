@@ -30,6 +30,10 @@
       ],
       "rewrites": [
         {
+          "source": "/o/**",
+          "destination": "/o.html"
+        },
+        {
           "source": "/api/checkout",
           "function": {
             "functionId": "createCheckout",
@@ -77,6 +81,19 @@
             {
               "key": "Cache-Control",
               "value": "no-store"
+            }
+          ]
+        },
+        {
+          "source": "/o{,.html,.txt,/**}",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-store"
+            },
+            {
+              "key": "X-Robots-Tag",
+              "value": "noindex, nofollow"
             }
           ]
         },

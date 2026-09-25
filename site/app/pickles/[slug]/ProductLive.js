@@ -1,7 +1,10 @@
 "use client";
 
 import JarMarks from "../../ds/JarMarks";
-import { canBuyToday, useProductDetail, useShipping } from "../../_lib/counts";
+import NotifyMe from "./NotifyMe";
+import { BEING_COOKED, canBuyToday, useProductDetail, useShipping } from "../../_lib/counts";
+import { checkoutHref } from "../../../lib/checkout";
+import { useShareCode } from "../../_lib/search";
 import { formatINR, inStockPrice, openBatchPrice } from "../../../lib/money";
 
 // M3.3: the product page's live section. Reuses the home page's own
@@ -65,6 +68,9 @@ function priceFor(entry) {
  */
 export function ProductBuyBlock({ slug }) {
   const state = useProductDetail(slug);
+  // M3.8: kept across the hop to `/checkout` so the order records the link
+  // that brought this customer here (brief §7.2 step 4).
+  const shareCode = useShareCode();
 
   if (state.status !== "ready") {
     return (
@@ -79,6 +85,21 @@ export function ProductBuyBlock({ slug }) {
     return (
       <div className="product-live" aria-live="polite">
         <p className="product-live__note">{NOT_IN_KITCHEN}</p>
+      </div>
+    );
+  }
+
+  if (entry.mode === "cooking") {
+    // Brief §7.5: "When cooking starts, booking closes. The card reads
+    // 'Being cooked now. Unpaid jars go on sale when bottled' with a
+    // notify-me". No Buy control, no jar picker, no price: there is nothing
+    // to sell today. The notify-me beside it is D64's, approved as drafted.
+    return (
+      <div className="product-live" aria-live="polite">
+        <JarMarks count={entry.count} total={entry.total} reading="paid" />
+        <p className="product-live__reading">jars paid into this batch</p>
+        <p className="product-live__note">{BEING_COOKED}</p>
+        <NotifyMe slug={slug} />
       </div>
     );
   }
@@ -101,7 +122,7 @@ export function ProductBuyBlock({ slug }) {
         // opening anything in place, and it still works with JavaScript
         // half loaded. The class is unchanged, so the control looks and
         // tests exactly as it did.
-        <a className="product-buy" href={`/checkout?p=${encodeURIComponent(slug)}&q=1`}>
+        <a className="product-buy" href={checkoutHref(slug, 1, shareCode)}>
           {inStock ? BUY_LABEL : `Pay ${priceFor(entry)} to book a jar`}
         </a>
       )}

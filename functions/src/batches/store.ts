@@ -138,6 +138,19 @@ export interface ApprovalView {
   readonly remindAtMillis: number | null;
   /** Non-null only once M5 has actually sent the message. */
   readonly sentAtMillis: number | null;
+  /**
+   * D32's sending list, or null on an approval that has none yet. One row per
+   * customer the approved message is for, each ticked by hand when the Owner
+   * has sent it from his own phone.
+   */
+  readonly recipients: readonly {
+    readonly phone: string;
+    readonly name: string;
+    readonly jars: number;
+    readonly sentAtMillis: number | null;
+  }[] | null;
+  /** When the Owner closed the list, ticked or not. Null while it is open. */
+  readonly closedAtMillis: number | null;
 }
 
 export function approvalViewFrom(snap: DocumentSnapshot): ApprovalView {
@@ -151,6 +164,15 @@ export function approvalViewFrom(snap: DocumentSnapshot): ApprovalView {
     status: typeof d.status === "string" ? d.status : "",
     remindAtMillis: millisOf(d.remindAt),
     sentAtMillis: millisOf(d.sentAt),
+    recipients: Array.isArray(d.recipients)
+      ? (d.recipients as Array<Record<string, unknown>>).map((row) => ({
+          phone: typeof row?.phone === "string" ? row.phone : "",
+          name: typeof row?.name === "string" ? row.name : "",
+          jars: typeof row?.jars === "number" ? row.jars : 0,
+          sentAtMillis: millisOf(row?.sentAt),
+        }))
+      : null,
+    closedAtMillis: millisOf(d.closedAt),
   };
 }
 

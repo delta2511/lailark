@@ -1,9 +1,11 @@
 import { getFirestore } from "firebase-admin/firestore";
-import { SHARED_VERSION } from "@lailark/shared";
+import { isOrderToken, SHARED_VERSION } from "@lailark/shared";
 
 import { getAdminApp } from "../lib/admin";
 import { getProjectId } from "../lib/project";
 import { computeCounts, type CountsPayload } from "./counts";
+import { addToNotifyList, type NotifyResult } from "./notify";
+import { readPublicOrder, type PublicOrderPayload } from "./order";
 
 /**
  * Minimal request/response shapes the router needs. The real onRequest
@@ -15,6 +17,8 @@ import { computeCounts, type CountsPayload } from "./counts";
 export interface ApiRequestLike {
   path: string;
   method: string;
+  /** Parsed JSON body, for the one route that takes a POST. */
+  body?: unknown;
 }
 
 export interface ApiResponseLike {
@@ -31,10 +35,20 @@ export interface ApiResponseLike {
  */
 export interface ApiDeps {
   getCounts?(): Promise<CountsPayload>;
+  getOrder?(token: string): Promise<PublicOrderPayload | null>;
+  addNotify?(body: unknown): Promise<NotifyResult>;
 }
 
 function defaultGetCounts(): Promise<CountsPayload> {
   return computeCounts(getFirestore(getAdminApp()));
+}
+
+function defaultGetOrder(token: string): Promise<PublicOrderPayload | null> {
+  return readPublicOrder(getFirestore(getAdminApp()), token);
+}
+
+function defaultAddNotify(body: unknown): Promise<NotifyResult> {
+  return addToNotifyList(getFirestore(getAdminApp()), body);
 }
 
 /**
@@ -97,7 +111,126 @@ export function handleApiRequest(
       });
   }
 
-  res.status(404).json({ ok: false, error: "not found" });
+  // `POST /api/notify`: the notify-me beside a batch on the stove (brief
+  // §7.5, D64). Never cached, and it never answers with anything about who
+  // is already on the list.
+  if (path === "/notify") {
+    if (req.method !== "POST") {
+      res
+        .status(405)
+        .set("Cache-Control", "no-store")
+        .json({ ok: false, error: "method not allowed" });
+      return;
+    }
+    const addNotify = deps.addNotify ?? defaultAddNotify;
+    return addNotify(req.body)
+      .then((out) => {
+        if (out.ok) {
+          res.status(200).set("Cache-Control", "no-store").json({ ok: true });
+          return;
+        }
+        res
+          .status(out.status)
+          .set("Cache-Control", "no-store")
+          .json({ ok: false, error: out.message });
+      })
+      .catch(() => {
+        res
+          .status(503)
+          .set("Cache-Control", "no-store")
+          .json({ ok: false, error: "We could not add you just now. Please try again in a moment." });
+      });
+  }
+
+  // `/api/order/<token>`: the private order page's only source (brief §5).
+  // M3.8. Never cached anywhere: `no-store` on every answer, the 404
+  // included, so a CDN cannot hold somebody's address or bill.
+  if (path.startsWith("/order/")) {
+    if (req.method !== "GET") {
+      res
+        .status(405)
+        .set("Cache-Control", "no-store")
+        .json({ ok: false, error: "method not allowed" });
+      return;
+    }
+    const token = decodeToken(path.slice("/order/".length));
+    // The shape is checked here, at the edge, before anything is asked of
+    // Firestore. `readPublicOrder` checks it too and always will, but a
+    // caller should not be able to reach a read at all with a string that
+    // cannot be a token, and a mistyped link should not be an exception
+    // escaping this handler (M3.8 round 2).
+    if (token === null || !isOrderToken(token)) {
+      res.status(404).set("Cache-Control", "no-store").json({ ok: false, error: "not found" });
+      return;
+    }
+    const getOrder = deps.getOrder ?? defaultGetOrder;
+    return getOrder(token)
+      .then((payload) => {
+        // One answer for a token that is the wrong shape, a token nobody
+        // has, and a token that has been superseded: a caller learns
+        // nothing from the difference.
+        if (payload === null) {
+          res.status(404).set("Cache-Control", "no-store").json({ ok: false, error: "not found" });
+          return;
+        }
+        res.status(200).set("Cache-Control", "no-store").json(payload);
+      })
+      .catch(() => {
+        res
+          .status(503)
+          .set("Cache-Control", "no-store")
+          .json({ ok: false, error: "order unavailable" });
+      });
+  }
+
+  res.status(404).set("Cache-Control", "no-store").json({ ok: false, error: "not found" });
+}
+
+/**
+ * The token out of the path, or null when the path is not valid
+ * percent-encoding. `req.path` is the raw pathname, undecoded, so `%`, `%zz`
+ * and a truncated escape all reach here and `decodeURIComponent` throws on
+ * every one of them. Null here, a JSON 404 above.
+ *
+ * **This guard is not the whole of A215, and M3.8 round 2 was wrong to say
+ * it was** (M3.8 round 3). The claim there was that a malformed escape used
+ * to escape this handler as an HTML error page and now does not. Only the
+ * second half is true, and only for the escapes that get this far.
+ *
+ * A raw `%`, `%zz`, `%2`, `%E0%A4`, `%C0%80` and `%u0041` never reach this
+ * function at all. They are decoded, and thrown on, one layer further out,
+ * by the router that matches the request to the function in the first place:
+ * `decodeParam` (`router/lib/layer.js`) rethrows the `URIError` with
+ * `status = 400`, and whatever router owns that layer answers it. Measured
+ * against the emulator at the function URL with `curl --path-as-is`: the
+ * functions emulator logs "Beginning execution of asia-south1-api" for a
+ * well-formed token and logs nothing at all for `/order/%`, `/order/%zz` and
+ * `/order/%E0%A4`, which end as `URIError: Failed to decode param
+ * 'order/%'` inside firebase-tools' own Express. No code mounted inside this
+ * function, error middleware included, can answer a request the function is
+ * never handed. The same is true of `POST /api/notify` with a body that is
+ * not an object: firebase-tools' `body-parser` throws before we are called.
+ *
+ * What holds the `no-store` invariant for those is Hosting, not this file:
+ * `firebase.json` sets `Cache-Control: no-store` on `/api/**` (with
+ * `/api/counts` overriding it, brief §19.2), so an answer produced above us
+ * still cannot be cached on the path a customer's browser actually uses.
+ * The direct function URL, where the tester measured a bare 400, is a door
+ * no customer and no page on this site ever calls: `orderApiUrl` builds
+ * `/api/order/<token>` only for a token that already passes `isOrderToken`,
+ * so a mistyped WhatsApp link is drawn by the page itself as D63's own
+ * sentence and never becomes a request. Logged as A215 (ii).
+ *
+ * This `try` still earns its place: `%00`, `%25`, `abc%`, a double-encoded
+ * escape and anything else the outer router decodes successfully do arrive
+ * here, and each must be the same JSON 404 as a token nobody has.
+ */
+function decodeToken(raw: string): string | null {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
 }
 
 function stripLeadingApiSegment(path: string): string {
@@ -109,3 +242,4 @@ function stripLeadingApiSegment(path: string): string {
   }
   return path;
 }
+

@@ -85,7 +85,8 @@ export function useOpenApprovals(): Live<ApprovalDoc> {
 
 export interface AnswerApprovalInput {
   readonly id: string;
-  readonly answer: "yes" | "notYet";
+  /** D32 adds `sent` and `close`, which answer a message already said yes to. */
+  readonly answer: "yes" | "notYet" | "sent" | "close";
   readonly data: Readonly<Record<string, unknown>>;
 }
 
@@ -136,4 +137,49 @@ export async function answerYes(
 /** "Not yet, with a reason": nothing moves, and the card comes back. */
 export async function answerNotYet(approval: ApprovalDoc, reason: string): Promise<void> {
   await callAnswerApproval({ id: approval.id, answer: "notYet", data: { reason } });
+}
+
+/* -------------------------------------------------------------------------- */
+/* D32: the messages waiting to be sent by hand                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Every approved message whose sending list is still open.
+ *
+ * The query is `closedAt == null`, which is exactly the right set and needs
+ * no composite index: an approval that has never been answered carries no
+ * `closedAt` field at all, and a document with no field does not match an
+ * equality on null. Only `onApprovalWritten` writes the field, and only on a
+ * yes, so this streams approved lists and nothing else. `close` (and the last
+ * tick) puts a timestamp there and the card leaves the screen on its own.
+ */
+export function useOpenSendingLists(): Live<ApprovalDoc> {
+  const [state, setState] = useState<Live<ApprovalDoc>>({ items: [], loading: true, denied: false });
+
+  useEffect(() => {
+    const q = query(collection(db, APPROVALS_COLLECTION), where("closedAt", "==", null));
+    const stop: Unsubscribe = onSnapshot(
+      q,
+      (snap) =>
+        setState({
+          items: snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ApprovalDoc),
+          loading: false,
+          denied: false,
+        }),
+      () => setState({ items: [], loading: false, denied: true }),
+    );
+    return stop;
+  }, []);
+
+  return state;
+}
+
+/** "I have sent this one." Nothing is sent by us: this records that it went. */
+export async function markRecipientSent(approval: ApprovalDoc, phone: string): Promise<void> {
+  await callAnswerApproval({ id: approval.id, answer: "sent", data: { phone } });
+}
+
+/** "That is as far as I am taking this list." D32's other ending. */
+export async function closeSendingList(approval: ApprovalDoc): Promise<void> {
+  await callAnswerApproval({ id: approval.id, answer: "close", data: {} });
 }

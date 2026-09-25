@@ -38,12 +38,30 @@ import {
 import type { ApprovalView } from "../batches/store";
 import type { ErrorCode, Failure } from "../batches/transitions";
 
-/** Brief 7.3's answers. "Edit then yes" is a `yes` carrying `messageText`. */
-export const APPROVAL_ANSWERS = ["yes", "notYet"] as const;
+/**
+ * Brief 7.3's answers. "Edit then yes" is a `yes` carrying `messageText`.
+ *
+ * `sent` and `close` are D32's, and they are answers to a message that has
+ * already been said yes to rather than to the approval itself: `sent` ticks
+ * one recipient off the sending list once the Owner has sent it from his own
+ * phone, and `close` puts the list away whether or not every row was ticked
+ * ("the approval closes when all are ticked or the Owner closes it").
+ *
+ * Neither sends anything. Nothing in this repo sends anything.
+ */
+export const APPROVAL_ANSWERS = ["yes", "notYet", "sent", "close"] as const;
 export type ApprovalAnswer = (typeof APPROVAL_ANSWERS)[number];
 
 const MAX_MESSAGE = 1000;
 const MAX_REASON = 300;
+
+/** How each answer reads in a refusal the Owner might see. */
+const ANSWER_WORDS: Readonly<Record<ApprovalAnswer, string>> = {
+  yes: "yes",
+  notYet: "not yet",
+  sent: "sent",
+  close: "close",
+};
 
 export interface AnswerApprovalRequest {
   /** The `approvals/{id}` document id. */
@@ -76,6 +94,20 @@ export interface ApprovalAnswerPlan {
     readonly updateId: string;
     readonly messageText: string;
   } | null;
+  /**
+   * D32: the whole sending list as it should now stand, on a `sent` answer,
+   * and null on every other answer. The callable turns `sentAtMillis` into
+   * `Timestamp`s, because Firestore refuses a server timestamp inside an
+   * array and a tick has to carry a real time.
+   */
+  readonly recipients?: readonly {
+    readonly phone: string;
+    readonly name: string;
+    readonly jars: number;
+    readonly sentAtMillis: number | null;
+  }[] | null;
+  /** When the sending list closed, on the answer that closed it. */
+  readonly closedAtMillis?: number | null;
   readonly computed: Readonly<Record<string, number | string>>;
 }
 
@@ -136,11 +168,18 @@ export function parseAnswerApprovalRequest(
   // than dropped: a "not yet" that arrived carrying `messageText` is somebody
   // who meant to say yes, and silently recording it as a deferral would lose
   // the message and the intention together.
-  const allowed = answer === "yes" ? ["messageText"] : ["reason"];
+  const allowed =
+    answer === "yes"
+      ? ["messageText"]
+      : answer === "notYet"
+        ? ["reason"]
+        : answer === "sent"
+          ? ["phone"]
+          : [];
   const unexpected = Object.keys(given).filter((key) => !allowed.includes(key));
   if (unexpected.length > 0) {
     return invalid(
-      `Answering ${answer === "yes" ? "yes" : "not yet"} asks for ${allowed.join(", ")}, not ${unexpected
+      `Answering ${ANSWER_WORDS[answer]} asks for ${allowed.length === 0 ? "nothing" : allowed.join(", ")}, not ${unexpected
         .sort()
         .join(", ")}.`,
     );
@@ -191,9 +230,141 @@ export function planApprovalAnswer(
     return fail("failed-precondition", "That approval has been dropped.");
   }
 
+  if (request.answer === "sent") return planSent(request, approval, caller.uid, nowMillis);
+  if (request.answer === "close") return planClose(approval, caller.uid);
   return request.answer === "yes"
     ? planYes(request, approval, caller.uid)
     : planNotYet(request, approval, caller.uid, nowMillis);
+}
+
+/**
+ * D32: one row of the sending list ticked, because the Owner has just sent
+ * that message from his own phone.
+ *
+ * What it records is a fact about the past ("this went"), so it is written
+ * once and never moved: a second tap on the same row writes nothing, and the
+ * time the first tick recorded stands. When the tick is the last untied row
+ * the list closes itself, which is what makes "the approval closes when all
+ * are ticked" true without anybody having to notice.
+ *
+ * It can only ever tick a row that is already on the list. There is no way in
+ * to add a recipient, which is the point: the list is who the batch's paid
+ * customers were when the Owner said yes, not a box anybody can type a phone
+ * number into.
+ */
+function planSent(
+  request: AnswerApprovalRequest,
+  approval: ApprovalView,
+  uid: string,
+  nowMillis: number,
+): ApprovalAnswerPlanned | Failure {
+  if (!isApprovalApproved(approval.status)) {
+    return fail(
+      "failed-precondition",
+      "Say yes to this message first. Nothing goes to a customer before that.",
+    );
+  }
+  const recipients = approval.recipients;
+  if (recipients === null || recipients.length === 0) {
+    return fail("failed-precondition", "That approval has nobody to send to.");
+  }
+  const phone = text(request.data.phone, "phone", 20);
+  if (isFailure(phone)) return phone;
+
+  const index = recipients.findIndex((row) => row.phone === phone);
+  if (index === -1) {
+    return fail("not-found", `${phone} is not on this message's list.`);
+  }
+  if (recipients[index]?.sentAtMillis !== null) {
+    return {
+      ok: true,
+      value: {
+        id: approval.id,
+        kind: approval.kind,
+        answer: "sent",
+        patch: {},
+        stampFields: [],
+        remindAtMillis: null,
+        alreadyAnswered: true,
+        photoUpdate: null,
+        computed: { status: approval.status, phone },
+      },
+    };
+  }
+
+  // The whole array is rewritten, because Firestore cannot set one element of
+  // one, and a server timestamp cannot live inside an array at all. It is
+  // rebuilt from the approval as this transaction read it, so two ticks
+  // racing are retried against each other rather than overwriting.
+  const next = recipients.map((row, i) => ({
+    phone: row.phone,
+    name: row.name,
+    jars: row.jars,
+    sentAtMillis: i === index ? nowMillis : row.sentAtMillis,
+  }));
+  const remaining = next.filter((row) => row.sentAtMillis === null).length;
+
+  return {
+    ok: true,
+    value: {
+      id: approval.id,
+      kind: approval.kind,
+      answer: "sent",
+      patch: { answeredBy: uid },
+      stampFields: ["updatedAt"],
+      remindAtMillis: null,
+      alreadyAnswered: false,
+      photoUpdate: null,
+      recipients: next,
+      // "The approval closes when all are ticked or the Owner closes it"
+      // (D32). The last tick is the one that closes it, so nobody has to.
+      closedAtMillis: remaining === 0 ? nowMillis : null,
+      computed: { status: approval.status, phone, remaining },
+    },
+  };
+}
+
+/**
+ * D32's other ending: the Owner closes the list himself, ticked or not. A
+ * customer who cannot be reached on WhatsApp is not a reason for a card to
+ * sit in Today for the life of the batch.
+ */
+function planClose(approval: ApprovalView, uid: string): ApprovalAnswerPlanned | Failure {
+  if (!isApprovalApproved(approval.status)) {
+    return fail("failed-precondition", "There is nothing to close until you have said yes.");
+  }
+  if (approval.closedAtMillis !== null) {
+    return {
+      ok: true,
+      value: {
+        id: approval.id,
+        kind: approval.kind,
+        answer: "close",
+        patch: {},
+        stampFields: [],
+        remindAtMillis: null,
+        alreadyAnswered: true,
+        photoUpdate: null,
+        computed: { status: approval.status },
+      },
+    };
+  }
+  return {
+    ok: true,
+    value: {
+      id: approval.id,
+      kind: approval.kind,
+      answer: "close",
+      patch: { answeredBy: uid },
+      // `closedAt`, never `sentAt`: `sentAt` says a machine sent the message,
+      // and no machine here sends anything (D32, D5).
+      stampFields: ["closedAt", "updatedAt"],
+      remindAtMillis: null,
+      alreadyAnswered: false,
+      photoUpdate: null,
+      computed: { status: approval.status },
+    },
+  };
 }
 
 /**

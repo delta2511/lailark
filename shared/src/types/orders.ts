@@ -89,4 +89,15 @@ export interface Order extends BaseDoc {
   readonly draft: boolean;
   readonly soldBy: ActorId | null;
   readonly holdExpiresAt: Timestamp | null;
+  /**
+   * The private order page's token (M3.8). Brief §5: "'Where is my order' is
+   * answered by the agent on WhatsApp, or by a private order link sent with
+   * the bill (`lailark.in/o/<long random token>`). No login page."
+   *
+   * 32 hex characters, minted by the server in the same transaction that
+   * creates the order and never changed afterwards, so a link that has been
+   * sent to a customer keeps working. Null only on an order written before
+   * M3.8.
+   */
+  readonly token: string | null;
 }

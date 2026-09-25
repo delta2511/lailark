@@ -48,6 +48,7 @@ import {
   batchAvailability,
   batchLabelCapitalised,
   BATCH_STATES_IN_STOCK,
+  BATCH_STATES_HONOUR_PAID_BOOKING,
   BATCH_STATES_OPEN_FOR_BOOKING,
   canHold,
   inStockAvailability,
@@ -919,10 +920,24 @@ function webLimitFallbackFor(state: string): number | null {
  * `readStockClaim` and `/api/counts` use, so a capture cannot disagree with
  * the site about how many jars exist.
  *
- * **Only a batch that is actually on sale can supply a jar.** The states are
- * the same two families `readStockClaim` accepts, and every other state
- * answers zero:
+ * **Only a batch that can still honour a booking may supply a jar.** Those
+ * are the two families `readStockClaim` accepts, plus `cooking`, and every
+ * other state answers zero:
  *
+ *  - `cooking` is the one M3.8 added, answering A200. Booking closes when
+ *    the pot goes on (brief §7.5), and it stays closed: `readStockClaim`
+ *    still refuses `cooking` outright, so nothing on the site or at the
+ *    counter can take a jar out of a batch on the stove. But a capture
+ *    landing on a lapsed hold is not a new booking. That customer booked
+ *    while the batch was Open and has paid; the only thing that happened is
+ *    that fifteen minutes passed while the Razorpay window was up. Before
+ *    this, `cooking` fell through to `bookableJars: 0` and they were told
+ *    there was no jar while the pot had room inside the 90% cap they had
+ *    booked under, and the Owner had a concern to settle by hand. The
+ *    arithmetic is unchanged, so this cannot oversell: the reclaim is still
+ *    `paid + live holds + requested <= bookableJars` on the batch as this
+ *    transaction read it. `BATCH_STATES_HONOUR_PAID_BOOKING` in
+ *    `@lailark/shared` is where that reasoning is written down.
  *  - `paused` is the one that matters. D23 put `inStock` on the pausable
  *    list precisely so sales can be frozen on jars that turn out to be bad,
  *    and a paused batch still has its `bottledJars`. Reclaiming from it
@@ -941,7 +956,7 @@ function availabilityOf(
   nowMillis: number,
 ): BatchAvailability {
   const state = batch.state ?? "";
-  if ((BATCH_STATES_OPEN_FOR_BOOKING as readonly string[]).includes(state)) {
+  if ((BATCH_STATES_HONOUR_PAID_BOOKING as readonly string[]).includes(state)) {
     return batchAvailability({
       bookableJars: batch.bookableJars,
       paidCount: batch.paidCount,

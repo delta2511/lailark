@@ -24,9 +24,21 @@ const types = {
   ".xml": "application/xml",
 };
 
+// The Hosting rewrites this server has to mirror, or a Playwright test would
+// be testing a shape the deployed site does not have. Keep in step with the
+// `rewrites` block of firebase.json; `tests-unit/order.test.mjs` asserts the
+// two agree.
+const REWRITES = [
+  // M3.8, brief §5: one static file serves every `/o/<token>`.
+  { prefix: "/o/", file: "o.html" },
+];
+
 async function resolvePath(urlPath) {
   const decoded = decodeURIComponent(urlPath.split("?")[0]);
   const safe = normalize(decoded).replace(/^(\.\.[/\\])+/, "");
+  for (const rule of REWRITES) {
+    if (safe.startsWith(rule.prefix)) return join(outDir, rule.file);
+  }
   const candidates = [
     join(outDir, safe),
     join(outDir, safe, "index.html"),

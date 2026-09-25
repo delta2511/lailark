@@ -110,6 +110,34 @@ export interface Approval extends BaseDoc {
    * yes, and sending itself arrives in M5.
    */
   readonly sentAt: Timestamp | null;
+  /**
+   * Who this approved message is for, one entry per customer, with the
+   * WhatsApp link already built (D32: at launch nothing is sent by machine,
+   * the Owner taps a prefilled `wa.me` link per recipient and ticks it sent).
+   *
+   * Empty until the Owner says yes: an approval that is still waiting has no
+   * list, because the list is of people a message is about to go to, and
+   * nothing is about to go anywhere until he answers. Null on an approval
+   * that never had recipients at all, such as a kitchen photo update.
+   */
+  readonly recipients: readonly ApprovalRecipient[] | null;
+  /**
+   * When the Owner closed the sending list, whether or not every recipient
+   * was ticked (D32: "the approval closes when all are ticked or the Owner
+   * closes it"). Null while there is still somebody to message.
+   */
+  readonly closedAt: Timestamp | null;
+}
+
+/** One person an approved message is to be sent to by hand (D32). */
+export interface ApprovalRecipient {
+  readonly phone: PhoneE164;
+  /** As we know them, for the Owner to recognise. Empty when we have none. */
+  readonly name: string;
+  /** Jars this customer has paid for in the batch, so the list reads honestly. */
+  readonly jars: number;
+  /** When the sender ticked this one sent. Null until they do. */
+  readonly sentAt: Timestamp | null;
 }
 
 /** `notify/{id}`: the notify-me list. */

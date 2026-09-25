@@ -218,6 +218,7 @@ export function saleCustomerViewFrom(snap: DocumentSnapshot): SaleCustomerView {
     jars: numberOr(stats.jars, 0),
     consentUpdates: updates.given === true,
     consentMarketing: marketing.given === true,
+    shareCode: typeof d.shareCode === "string" && d.shareCode !== "" ? d.shareCode : null,
   };
 }
 

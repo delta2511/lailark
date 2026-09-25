@@ -51,6 +51,8 @@ function context(overrides: Partial<CounterSaleContext> = {}): CounterSaleContex
   return {
     caller: KITCHEN,
     orderId: "o-abc123",
+    orderToken: "0123456789abcdef0123456789abcdef",
+    freshShareCode: "k3n9x2p1a7",
     batch: {
       ref: "b-7f3a2c",
       batchNo: "001",
@@ -73,6 +75,7 @@ function context(overrides: Partial<CounterSaleContext> = {}): CounterSaleContex
       jars: 3,
       consentUpdates: false,
       consentMarketing: false,
+      shareCode: "alreadyhere",
     },
     kitchenDiscountCap: null,
     homeState: "KL",

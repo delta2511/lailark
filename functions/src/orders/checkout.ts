@@ -32,6 +32,7 @@ import {
   formatINR,
   IN_STOCK_PER_PERSON_LIMIT,
   isSellablePrice,
+  isShareCode,
   MAX_WEB_JARS,
   type Paise,
   parseIndianMobile,
@@ -123,7 +124,6 @@ const MAX_ADDRESS_LINE = 100;
 const MAX_CITY = 60;
 const MAX_STATE = 60;
 const MAX_CLIENT_REF = 64;
-const MAX_SHARE_CODE = 32;
 const SLUG = /^[a-z0-9][a-z0-9-]{1,48}$/;
 /** Deliberately loose: an address is not the place to argue about an email. */
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -227,10 +227,22 @@ export function parseCheckoutRequest(
     return invalid("Something went wrong with the form. Please reload the page and try again.");
   }
 
-  const shareCode = text(data.shareCode);
-  if (shareCode.length > MAX_SHARE_CODE) {
-    return invalid("That share link does not look right. You can order without it.");
-  }
+  // M3.8 (A205). `createCheckout` is public and unauthenticated until App
+  // Check lands in M5.9, so `shareCode` is whatever a caller cares to send:
+  // it arrives off `?s=` on a link a stranger wrote. It is checked against
+  // `isShareCode` here, before it can reach `orders/{id}.shareCodeUsed`,
+  // which M3.9 draws on the order screen and puts inside a `wa.me` link.
+  //
+  // **Dropped, not refused.** A share code is an attribution and nothing
+  // else: it moves no price, no count and no total, here or anywhere. An
+  // order that arrives with a mangled one is still a customer who wants a
+  // jar, and refusing the sale over a URL parameter they never typed would
+  // cost them the jar to protect a field nobody is paid from. So a code that
+  // is not one becomes no code, the order is unattributed, and the checkout
+  // carries on. Both doors read this one parsed value: the first attempt
+  // (`planCheckout`) and the A194 (iv) resume (`planResumedContact`).
+  const rawShareCode = text(data.shareCode);
+  const shareCode = isShareCode(rawShareCode) ? rawShareCode : "";
 
   return {
     ok: true,
@@ -648,6 +660,18 @@ export interface CheckoutContext {
   readonly nowMillis: number;
   /** `"YYYY-MM-DD"` in Asia/Kolkata, for the shelf-life stop. */
   readonly todayIso: string;
+  /**
+   * A freshly minted order token (M3.8), the `/o/<token>` page's whole
+   * access control. Minted by the callable, never by anything a caller sends.
+   */
+  readonly orderToken: string;
+  /**
+   * A freshly minted share code, used **only** when this customer has none
+   * yet. A customer who already has one keeps it: the code is what their own
+   * share links carry, and a code that changed would orphan every link they
+   * have already sent.
+   */
+  readonly freshShareCode: string;
 }
 
 export interface CheckoutPlan {
@@ -864,6 +888,9 @@ export function planCheckout(
     // Set by the callable from the claim it took, so the order and the
     // batch agree to the millisecond about when this jar comes back.
     holdExpiresAt: null,
+    // M3.8, brief §5: the private order page, `/o/<token>`. Minted here and
+    // never changed, so a link sent with the bill keeps working.
+    token: context.orderToken,
     billNumber: null,
     billSentAt: null,
     voidedAt: null,
@@ -923,9 +950,13 @@ function planCheckoutCustomerPatch(
 
   if (isNew) {
     patch.country = "IN";
-    patch.shareCode = null;
     stampFields.push("createdAt");
   }
+  // Brief §7.2 step 4: the receipt carries a share link, so the customer has
+  // to have a code by the time it is written. Minted once and then left
+  // alone: an existing code is what every link this person has already sent
+  // carries, and replacing it would break all of them.
+  if (!isShareCode(existing?.shareCode)) patch.shareCode = context.freshShareCode;
   // A name and an email typed into this checkout are the freshest the
   // customer has given us, so they correct the record. Neither ever blanks
   // it: an email left empty online is "not this time", not "delete it".
@@ -957,6 +988,11 @@ export interface StoredContact {
   readonly placeOfSupply: string;
   /** `customers/{phone}.email`, which is the only place an email is kept. */
   readonly customerEmail: string | null;
+  /**
+   * `orders/{id}.shareCodeUsed` as the first attempt left it, or null when
+   * the first tap carried no share link. M3.8, answering A194 (iv).
+   */
+  readonly shareCodeUsed: string | null;
 }
 
 /** What a resumed checkout changes, if anything. Empty patches mean nothing moved. */
@@ -1029,8 +1065,22 @@ export function planResumedContact(
   // it on a first attempt.
   const emailChanged = request.email !== null && request.email !== stored.customerEmail;
 
+  // M3.8, answering A194 (iv). A customer who arrived through somebody's
+  // share link, dismissed the Razorpay window and tapped Pay again used to
+  // have the link forgotten, because `checkResumableCheckout` compares only
+  // what is being bought and everything else in the second request was
+  // dropped. The code is recorded on the second tap too.
+  //
+  // It is written **only onto an order that carries none**. A share code is
+  // an attribution, and the first one to arrive is the one that brought this
+  // customer here; letting a later tap overwrite it would let a link pasted
+  // over the top take the credit. It moves no total and no count: nothing in
+  // the system prices an order from `shareCodeUsed`.
+  const shareCodeAdded =
+    stored.shareCodeUsed === null && request.shareCode !== null && request.shareCode !== "";
+
   const nothing = { orderPatch: {}, customerPatch: {} } as const;
-  if (!contactChanged && !emailChanged) return { ok: true, value: nothing };
+  if (!contactChanged && !emailChanged && !shareCodeAdded) return { ok: true, value: nothing };
 
   if (contactChanged) {
     const refusal = checkCheckoutDelivery({
@@ -1046,15 +1096,14 @@ export function planResumedContact(
   if (contactChanged) customerPatch.name = request.customerName;
   if (emailChanged) customerPatch.email = request.email;
 
-  return {
-    ok: true,
-    value: {
-      orderPatch: contactChanged
-        ? { deliveryContact: contact, placeOfSupply: request.address.state }
-        : {},
-      customerPatch,
-    },
-  };
+  const orderPatch: Record<string, unknown> = {};
+  if (contactChanged) {
+    orderPatch.deliveryContact = contact;
+    orderPatch.placeOfSupply = request.address.state;
+  }
+  if (shareCodeAdded) orderPatch.shareCodeUsed = request.shareCode;
+
+  return { ok: true, value: { orderPatch, customerPatch } };
 }
 
 function sameLines(a: readonly string[], b: readonly string[]): boolean {

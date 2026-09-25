@@ -27,6 +27,8 @@ function approval(overrides: Partial<ApprovalView> = {}): ApprovalView {
     status: "waiting",
     remindAtMillis: null,
     sentAtMillis: null,
+    recipients: null,
+    closedAtMillis: null,
     ...overrides,
   };
 }
@@ -321,5 +323,130 @@ describe("not yet", () => {
   it("cannot put off something already said yes to", () => {
     const plan = planApprovalAnswer(notYet(), context({ approval: approval({ status: "edited" }) }));
     expect(plan).toMatchObject({ ok: false, code: "failed-precondition" });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* D32: the sending list, worked down by hand                                 */
+/* -------------------------------------------------------------------------- */
+
+describe("ticking a message sent, D32", () => {
+  const LIST = [
+    { phone: "+919446587027", name: "Asha", jars: 2, sentAtMillis: null },
+    { phone: "+919446587028", name: "Bina", jars: 1, sentAtMillis: null },
+  ];
+
+  function approved(recipients = LIST, over: Partial<ApprovalView> = {}): ApprovalView {
+    return approval({ kind: "halfReached", status: "approved", recipients, ...over });
+  }
+
+  function sent(phone: string) {
+    return { id: "open-b-abc123", answer: "sent" as const, data: { phone } };
+  }
+
+  it("is refused before the Owner has said yes", () => {
+    const plan = planApprovalAnswer(
+      sent("+919446587027"),
+      context({ approval: approval({ recipients: LIST }) }),
+    );
+    expect(plan.ok).toBe(false);
+    if (!plan.ok) expect(plan.code).toBe("failed-precondition");
+  });
+
+  it("is refused for anyone not already on the list", () => {
+    const plan = planApprovalAnswer(sent("+919999999999"), context({ approval: approved() }));
+    expect(plan.ok).toBe(false);
+    if (!plan.ok) expect(plan.code).toBe("not-found");
+  });
+
+  it("ticks one row and leaves the rest alone, and closes nothing yet", () => {
+    const plan = planApprovalAnswer(sent("+919446587027"), context({ approval: approved() }));
+    if (!plan.ok) throw new Error(plan.message);
+    expect(plan.value.recipients).toEqual([
+      { phone: "+919446587027", name: "Asha", jars: 2, sentAtMillis: NOW },
+      { phone: "+919446587028", name: "Bina", jars: 1, sentAtMillis: null },
+    ]);
+    expect(plan.value.closedAtMillis).toBeNull();
+    // Nothing here sends anything, on any answer.
+    expect(plan.value.stampFields).not.toContain("sentAt");
+    expect(Object.keys(plan.value.patch)).not.toContain("sentAt");
+  });
+
+  it("the last tick closes the list, so nobody has to", () => {
+    const plan = planApprovalAnswer(
+      sent("+919446587028"),
+      context({
+        approval: approved([
+          { phone: "+919446587027", name: "Asha", jars: 2, sentAtMillis: NOW - 1000 },
+          { phone: "+919446587028", name: "Bina", jars: 1, sentAtMillis: null },
+        ]),
+      }),
+    );
+    if (!plan.ok) throw new Error(plan.message);
+    expect(plan.value.closedAtMillis).toBe(NOW);
+    expect(plan.value.computed.remaining).toBe(0);
+  });
+
+  it("a second tick on the same row writes nothing, so the first time stands", () => {
+    const plan = planApprovalAnswer(
+      sent("+919446587027"),
+      context({
+        approval: approved([
+          { phone: "+919446587027", name: "Asha", jars: 2, sentAtMillis: NOW - 5000 },
+        ]),
+      }),
+    );
+    if (!plan.ok) throw new Error(plan.message);
+    expect(plan.value.alreadyAnswered).toBe(true);
+    expect(plan.value.patch).toEqual({});
+  });
+
+  it("refuses a tick on an approval with nobody on it", () => {
+    const plan = planApprovalAnswer(sent("+919446587027"), context({ approval: approved([]) }));
+    expect(plan.ok).toBe(false);
+  });
+
+  it("only the Owner may tick", () => {
+    const plan = planApprovalAnswer(
+      sent("+919446587027"),
+      context({ approval: approved(), caller: { uid: "k", role: "kitchen" } }),
+    );
+    expect(plan.ok).toBe(false);
+    if (!plan.ok) expect(plan.code).toBe("permission-denied");
+  });
+});
+
+describe("closing the sending list, D32", () => {
+  function close() {
+    return { id: "open-b-abc123", answer: "close" as const, data: {} };
+  }
+
+  it("closes an approved list with rows still unticked", () => {
+    const plan = planApprovalAnswer(
+      close(),
+      context({
+        approval: approval({
+          kind: "halfReached",
+          status: "approved",
+          recipients: [{ phone: "+919446587027", name: "Asha", jars: 2, sentAtMillis: null }],
+        }),
+      }),
+    );
+    if (!plan.ok) throw new Error(plan.message);
+    expect(plan.value.stampFields).toContain("closedAt");
+    // Closing is not sending.
+    expect(plan.value.stampFields).not.toContain("sentAt");
+  });
+
+  it("is refused before a yes, and writes nothing twice", () => {
+    expect(planApprovalAnswer(close(), context()).ok).toBe(false);
+    const again = planApprovalAnswer(
+      close(),
+      context({
+        approval: approval({ kind: "halfReached", status: "approved", closedAtMillis: NOW - 10 }),
+      }),
+    );
+    if (!again.ok) throw new Error(again.message);
+    expect(again.value.alreadyAnswered).toBe(true);
   });
 });

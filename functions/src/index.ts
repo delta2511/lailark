@@ -6,7 +6,7 @@
 import "./lib/options";
 
 export { api } from "./api";
-export { answerApproval } from "./approvals";
+export { answerApproval, onApprovalWritten } from "./approvals";
 export { setRole } from "./auth";
 export { createCheckout, createCounterSale, sweepHolds, voidCounterSale } from "./orders";
 export { billForOrder, onDocumentIssued } from "./money";

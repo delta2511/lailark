@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   APPROVAL_KINDS,
   BATCH_STATES,
+  BATCH_STATES_HONOUR_PAID_BOOKING,
   BATCH_STATES_IN_STOCK,
   BATCH_STATES_OPEN_FOR_BOOKING,
   BATCH_STATES_PAUSABLE,
@@ -78,6 +79,20 @@ describe("batch states, brief 8.1", () => {
     expect([...BATCH_STATES_OPEN_FOR_BOOKING]).toEqual(["open", "halfReached", "sourcing"]);
     expect(BATCH_STATES_OPEN_FOR_BOOKING).not.toContain("cooking");
     expect([...BATCH_STATES_IN_STOCK]).toEqual(["bottled", "inStock"]);
+    // M3.8, answering A200: a booking already paid for is honoured while the
+    // pot is on, although no new booking may be taken then.
+    expect([...BATCH_STATES_HONOUR_PAID_BOOKING]).toEqual([
+      "open",
+      "halfReached",
+      "sourcing",
+      "cooking",
+    ]);
+    for (const state of BATCH_STATES_OPEN_FOR_BOOKING) {
+      expect(BATCH_STATES_HONOUR_PAID_BOOKING).toContain(state);
+    }
+    for (const frozen of ["paused", "soldOut", "archived", "draft", "bottled"]) {
+      expect(BATCH_STATES_HONOUR_PAID_BOOKING).not.toContain(frozen);
+    }
   });
 
   it("can be paused from the six states of decision D23, and resume to each", () => {

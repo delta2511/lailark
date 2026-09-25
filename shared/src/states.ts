@@ -36,6 +36,40 @@ export const BATCH_STATES_OPEN_FOR_BOOKING = ["open", "halfReached", "sourcing"]
 export const BATCH_STATES_IN_STOCK = ["bottled", "inStock"] as const;
 
 /**
+ * The batch states in which a booking that was **already made and paid for**
+ * is still honoured, as opposed to the states in which a *new* booking may be
+ * taken (`BATCH_STATES_OPEN_FOR_BOOKING`, above).
+ *
+ * **Decision, M3.8, answering A200.** Booking closes when cooking starts
+ * (brief §7.5), and it closes here too: `readStockClaim` refuses `cooking`
+ * with "not on sale", so nothing on the site or at the counter can take a
+ * jar out of a batch on the stove. That is about people who have not paid.
+ *
+ * A capture landing on a lapsed hold is a different question. The customer
+ * booked while the batch was Open, the money has arrived, and the only thing
+ * that went wrong is that fifteen minutes passed between the Razorpay window
+ * opening and the payment confirming, which is not something they did. Before
+ * this group existed `cooking` fell through to `bookableJars: 0`, so that
+ * customer was told there was no jar and the Owner got a concern to settle by
+ * hand, while the pot on the stove had room for them.
+ *
+ * Honouring it cannot oversell. The reclaim is still `paid + live holds +
+ * requested <= bookableJars`, on the batch as that transaction read it, and
+ * `bookableJars` is the 90% cap (brief §7.1) that the pot was planned around.
+ * A jar honoured here is a jar that was inside the cap the whole time.
+ *
+ * `paused`, `soldOut` and `archived` are deliberately **not** here (A198): a
+ * paused batch is one somebody froze on purpose, and the other two have
+ * nothing left to give.
+ */
+export const BATCH_STATES_HONOUR_PAID_BOOKING = [
+  "open",
+  "halfReached",
+  "sourcing",
+  "cooking",
+] as const;
+
+/**
  * Every state a batch can be paused from, and so every state it can resume to.
  *
  * **Decision D23**, answering Q13. The brief contradicted itself: §8.2's

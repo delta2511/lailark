@@ -73,6 +73,7 @@ import {
   RazorpayFailed,
   RazorpayNotConfigured,
 } from "./razorpay";
+import { newOrderToken, newShareCode } from "./links";
 import { saleProductViewFrom } from "./store";
 import {
   CUSTOMERS,
@@ -328,6 +329,10 @@ export const createCheckout = onCall(
           holdMinutes,
           nowMillis,
           todayIso,
+          // M3.8: minted here, never taken from the request. The token is
+          // the whole of the access control on `/o/<token>`.
+          orderToken: newOrderToken(),
+          freshShareCode: newShareCode(),
         });
         if (!decision.ok) throw new HttpsError(decision.code, decision.message);
         const plan = decision.value;
@@ -622,6 +627,10 @@ function storedContactFrom(
     pincode: str(contact.pincode),
     placeOfSupply: str(d.placeOfSupply),
     customerEmail: typeof email === "string" && email !== "" ? email : null,
+    shareCodeUsed:
+      typeof d.shareCodeUsed === "string" && d.shareCodeUsed !== ""
+        ? (d.shareCodeUsed as string)
+        : null,
   };
 }
 

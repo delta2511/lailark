@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  checkoutHref,
+  shareCodeFrom,
   checkoutTotals,
   jarChoicesFor,
   jarWords,
@@ -35,7 +37,29 @@ describe("reading the checkout link", () => {
     assert.deepEqual(readCheckoutQuery("?p=prawns-and-dates&q=2"), {
       slug: "prawns-and-dates",
       qty: 2,
+      shareCode: null,
     });
+  });
+
+  it("carries a share code, and drops one that is not one (M3.8)", () => {
+    assert.equal(
+      readCheckoutQuery("?p=prawns-and-dates&q=1&s=k3n9x2p1a7").shareCode,
+      "k3n9x2p1a7",
+    );
+    assert.equal(readCheckoutQuery("?p=prawns-and-dates&s=<script>").shareCode, null);
+    assert.equal(readCheckoutQuery("?p=prawns-and-dates").shareCode, null);
+    // It moves nothing else on the link.
+    assert.equal(readCheckoutQuery("?p=prawns-and-dates&q=2&s=k3n9x2p1a7").qty, 2);
+  });
+
+  it("keeps the share code on the link to the checkout", () => {
+    assert.equal(
+      checkoutHref("prawns-and-dates", 1, "k3n9x2p1a7"),
+      "/checkout?p=prawns-and-dates&q=1&s=k3n9x2p1a7",
+    );
+    assert.equal(checkoutHref("koorka", 2, null), "/checkout?p=koorka&q=2");
+    assert.equal(shareCodeFrom("?s=k3n9x2p1a7"), "k3n9x2p1a7");
+    assert.equal(shareCodeFrom(undefined), null);
   });
 
   it("drops a slug that is not a slug, rather than trusting it", () => {

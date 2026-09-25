@@ -530,6 +530,18 @@ export const TODAY = {
    * `admin/src/batches/clock.ts` from the approval's own `dueAt`, in the same
    * words the batch cards use, so there is one clock in the admin and not two.
    */
+  /* ---- D32: the message is sent by hand, one customer at a time ---- */
+  sendingHeading: "To send",
+  sendingHow:
+    "Nothing is sent by us. Open each one on WhatsApp, send the message, then tick it.",
+  sendingJars: (jars: number) => `${jars} jar${jars === 1 ? "" : "s"}`,
+  sendingOpen: "Open WhatsApp",
+  sendingTick: "Sent",
+  sendingSent: "Sent",
+  sendingRemaining: (left: number, total: number) => `${left} of ${total} still to send`,
+  sendingClose: "Close this list",
+  sendingNobody: "Nobody has paid into this batch yet.",
+
   clockHalf: "5 day production clock",
   clockFull: "3 day production clock",
   clocksEmpty: "No batch is on a clock.",

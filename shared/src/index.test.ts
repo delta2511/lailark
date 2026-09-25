@@ -13,6 +13,7 @@ const EXPECTED_EXPORTS = [
   "BATCH_STATES",
   "BATCH_STATES_OPEN_FOR_BOOKING",
   "BATCH_STATES_IN_STOCK",
+  "BATCH_STATES_HONOUR_PAID_BOOKING",
   "BATCH_STATES_PAUSABLE",
   "BATCH_TRANSITIONS",
   "canTransitionBatch",
@@ -237,6 +238,16 @@ const EXPECTED_EXPORTS = [
   "normaliseState",
   "WEB_HOLD_MINUTES",
   "MAX_WEB_JARS",
+  // links (M3.8): the private order page and the share link
+  "ORDER_TOKEN_LENGTH",
+  "isOrderToken",
+  "orderPath",
+  "orderUrl",
+  "waMeLink",
+  "SHARE_CODE_PARAM",
+  "SHARE_CODE_LENGTH",
+  "isShareCode",
+  "shareLinkPath",
 ] as const;
 
 describe("the barrel", () => {

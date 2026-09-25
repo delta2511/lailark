@@ -515,7 +515,7 @@ and the live webhook before the production deploy.
       refusal path walks in through another one.
       **M5.11 must put this at the top of the Milestone 3 test note.** M3.8 builds on the
       same counter and must not deepen it.
-- [ ] M3.8 [opus] Open batch mechanics end to end. **Note from M3.5a (A194 iv): a
+- [x] M3.8 [opus] Open batch mechanics end to end. **Note from M3.5a (A194 iv): a
       resumed checkout silently drops `shareCode` and `batchRef` from the request, so a
       customer who books through a share link, dismisses the payment window and taps Pay
       again has the share code recorded only if the first attempt carried it. Check this
@@ -536,6 +536,21 @@ and the live webhook before the production deploy.
       `BATCH_STATES_OPEN_FOR_BOOKING` nor `BATCH_STATES_IN_STOCK`, so `availabilityOf`
       answers zero. This task owns the question, because it builds booking-closes-at
       -Cooking end to end. Decide whether that customer is served or left as a concern.
+      **Done in three rounds** (D63, D64, A200 and A205 to A219). A200 answered: that
+      customer **is** served. `BATCH_STATES_HONOUR_PAID_BOOKING` honours an already paid
+      booking at `cooking` while `readStockClaim` still refuses a new one, so nothing takes
+      a jar off a pot on the stove and the 90% cap still binds. Built: `?s=<shareCode>` on
+      orders through both doors, the A194 (iv) resume carrying it, `/o/<token>` with
+      `/api/order/<token>` behind it, a `cooking` mode on `/api/counts` with the notify-me
+      (D64), and D32's sending list as a trigger with `recipients` and `closedAt` server-only
+      in the rules. Done-when proven by `functions/test/open-batch.test.ts`: a seeded batch
+      fills through the real `createCheckout` over HTTP and walks Open to In stock, with
+      every approval `sentAt: null` and `conversations` and `messages` empty.
+      Two fresh adversarial rounds found real defects, both fixed: unvalidated attacker text
+      reaching `orders/{id}.shareCodeUsed` (A205, dropped not refused), and the private order
+      page showing a URL slug where the product name belongs (A214), which round 1 shipped
+      **with a passing test over it** and round 2 only half fixed. Round 3 also refused a
+      specified fix it measured to be unreachable, and corrected the ledger instead (A215).
 - [ ] M3.9 [sonnet] (Shefin checks) Orders screen in admin. Brief §17.5 groups, filters, search, order
       detail with lines, jar numbers, payment, documents, kitchen note, timeline.
       Actions that exist so far. Done when: every order created in M2 and M3 is

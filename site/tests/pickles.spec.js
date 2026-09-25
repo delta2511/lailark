@@ -215,3 +215,145 @@ test("the shipping switch reads as flatFee shows the fee, not an invented charge
 
   await expect(page.locator(".product-shipping")).toHaveText("Shipping ₹60.");
 });
+
+// M3.8: booking closes when cooking starts (brief §7.5), and the share link
+// travels from the product page into the checkout (brief §7.2 step 4).
+
+async function stubCounts(page, entry) {
+  await page.route("**/api/counts", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        products: { "prawns-and-dates": entry },
+        shipping: { rule: "free", flatFeePaise: 0, freeFromJars: 2 },
+      }),
+    })
+  );
+}
+
+test("a batch that is cooking draws its marks and offers no Buy (brief §7.5)", async ({
+  page,
+}) => {
+  const consoleErrors = [];
+  page.on("console", (msg) => {
+    if (msg.type() === "error") consoleErrors.push(msg.text());
+  });
+  page.on("pageerror", (err) => consoleErrors.push(String(err)));
+
+  await stubCounts(page, { mode: "cooking", count: 14, total: 19, available: 0 });
+  await page.goto("/pickles/prawns-and-dates");
+
+  await expect(page.locator(".product-live .ds-jarmarks")).toHaveAttribute(
+    "aria-label",
+    "14 jars paid of 19",
+  );
+  await expect(page.locator(".product-live__note")).toHaveText(
+    "Being cooked now. Unpaid jars go on sale when bottled.",
+  );
+  // Nothing may be bought out of a batch on the stove.
+  await expect(page.locator(".product-buy")).toHaveCount(0);
+
+  // The notify-me the same sentence of the brief asks for, in D64's words.
+  await expect(page.locator(".product-notify__label")).toHaveText(
+    "Tell me when these jars go on sale",
+  );
+  await expect(page.locator(".product-notify__row button")).toHaveText("Tell me");
+
+  // No countdown, no scarcity, no date (CLAUDE.md §3).
+  const text = await page.locator(".product-live").innerText();
+  expect(text).not.toMatch(/left|hurry|only|last chance|\bsoon\b/i);
+  expect(text).not.toContain("\u2014");
+
+  await page.waitForTimeout(200);
+  expect(consoleErrors).toEqual([]);
+});
+
+test("the notify-me takes a number and says so, and sends it nowhere else", async ({
+  page,
+  baseURL,
+}) => {
+  const foreign = [];
+  const localOrigin = new URL(baseURL).origin;
+  page.on("request", (req) => {
+    if (new URL(req.url()).origin !== localOrigin) foreign.push(req.url());
+  });
+
+  await stubCounts(page, { mode: "cooking", count: 14, total: 19, available: 0 });
+
+  let sent = null;
+  await page.route("**/api/notify", (route) => {
+    sent = JSON.parse(route.request().postData() ?? "null");
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+
+  await page.goto("/pickles/prawns-and-dates");
+  await page.locator("#notify-contact-prawns-and-dates").fill("7736110087");
+  await page.locator(".product-notify__row button").click();
+
+  await expect(page.locator(".product-notify__done")).toHaveText(
+    "We have your number. We will tell you when this batch is bottled.",
+  );
+  // The box is gone once it is answered: nothing to tap twice.
+  await expect(page.locator(".product-notify__row")).toHaveCount(0);
+  expect(sent).toEqual({
+    contact: "7736110087",
+    source: "cooking",
+    productSlug: "prawns-and-dates",
+  });
+  expect(foreign).toEqual([]);
+});
+
+test("the notify-me says what is wrong with a number and keeps the box", async ({ page }) => {
+  await stubCounts(page, { mode: "cooking", count: 14, total: 19, available: 0 });
+  await page.route("**/api/notify", (route) =>
+    route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        error: "That does not look like a 10 digit Indian mobile number. Please check it.",
+      }),
+    }),
+  );
+
+  await page.goto("/pickles/prawns-and-dates");
+  await page.locator("#notify-contact-prawns-and-dates").fill("12345");
+  await page.locator(".product-notify__row button").click();
+
+  await expect(page.locator(".product-notify__problem")).toHaveText(
+    "That does not look like a 10 digit Indian mobile number. Please check it.",
+  );
+  // Still there to correct, and nothing claims we have their number.
+  await expect(page.locator(".product-notify__row button")).toBeEnabled();
+  await expect(page.locator(".product-notify__done")).toHaveCount(0);
+});
+
+test("the share code on the link is carried into the checkout", async ({ page }) => {
+  await stubCounts(page, {
+    mode: "open",
+    count: 2,
+    total: 18,
+    available: 16,
+    priceOpenPaise: 59_900,
+    perPersonLimit: 4,
+    shippingRule: null,
+  });
+
+  await page.goto("/pickles/prawns-and-dates?s=k3n9x2p1a7");
+  await expect(page.locator(".product-buy")).toHaveAttribute(
+    "href",
+    "/checkout?p=prawns-and-dates&q=1&s=k3n9x2p1a7",
+  );
+
+  // A code that is not one is dropped rather than passed on.
+  await page.goto("/pickles/prawns-and-dates?s=%3Cscript%3E");
+  await expect(page.locator(".product-buy")).toHaveAttribute(
+    "href",
+    "/checkout?p=prawns-and-dates&q=1",
+  );
+});

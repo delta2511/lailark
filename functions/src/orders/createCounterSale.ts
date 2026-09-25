@@ -56,6 +56,7 @@ import {
 import { BATCHES, PRODUCTS } from "../batches/store";
 import { getAdminApp } from "../lib/admin";
 import { DEFAULT_MAX_INSTANCES, REGION } from "../lib/options";
+import { newOrderToken, newShareCode } from "./links";
 import { issueDocument, readDocumentContext, readIssue } from "../money/issue";
 import { type DocumentSource, GST_NOT_BUILT_REFUSAL } from "../money/plan";
 import {
@@ -247,6 +248,9 @@ export const createCounterSale = onCall(
         const decision = planCounterSale(input, {
           caller,
           orderId,
+          // M3.8: minted here, never taken from a request.
+          orderToken: newOrderToken(),
+          freshShareCode: newShareCode(),
           batch: claim === null ? null : saleBatchViewFrom(claim.batchSnap),
           product,
           customer: customerView,

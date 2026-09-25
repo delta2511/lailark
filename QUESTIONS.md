@@ -13,6 +13,9 @@ None. Every question raised so far is answered below.
 
 ## Answered
 
+- ~~Q29 (M3.8, 25 Sep): brief §7.5 asks for a notify-me beside the cooking card but drafts nothing for its label, button or acknowledgement, and there is no notify-me elsewhere on the new site to copy.~~ Answered 25 Sep: approved as drafted. Recorded as D64.
+- ~~Q28 (M3.8, 25 Sep): every sentence on the private order page `/o/<token>` is undrafted, which puts all of it on the never-assume list. Approve, extend with the order's state, or edit?~~ Answered 25 Sep: approved as drafted, and the order's state is deliberately left off the page. Recorded as D63.
+
 - ~~Q27 (M3.6, 25 Sep): round 3 failed its fresh tester, which is the third failure and where CLAUDE.md §4.1's cap says a task is marked stuck. Waive the cap for a round 4, as D54 did once for M3.5, or stop?~~ Answered 25 Sep: stop and move on. M3.6 is marked `⚠ stuck` with the defect named, round 3's work is committed, and the defect goes to the top of the Milestone 3 test note. Recorded as D62.
 - ~~Q26 (M3.6, 25 Sep): a `payment.captured` carrying a currency other than INR is read as rupees, because `currency` is never parsed, so a capture of `amount: 64900, currency: "USD"` sells a ₹649 jar. Fix it now as an A195-shaped mismatch, or defer?~~ Answered 25 Sep: defer until international payments are switched on, with the trigger named in `LAUNCH.md` (M5.11) as well as in the ledger. Recorded as D61.
 - ~~Q25 (M3.6, 25 Sep): A196's reclaim never re-asks the per-person limit (A197), so a customer can take a hold, let it lapse, repeat, and pay every stale Razorpay order at the end. The tester put one phone number four jars into a limit of two. Should a reclaim re-ask the limit?~~ Answered 25 Sep: yes, on the reclaim path only; a live hold still converts unconditionally, and over the limit is the §21.1 outcome. Recorded as D60, which replaces A197. Built in M3.6 round 3.

@@ -18,7 +18,7 @@
  *   {
  *     "products": {
  *       "<slug>": {
- *         "mode": "inStock" | "open" | "none",
+ *         "mode": "inStock" | "open" | "cooking" | "none",
  *         "count": <int>,               // jars left (inStock) or paid (open)
  *         "total": <int>,               // bottled jars (inStock) or bookable jars (open)
  *         "priceInStockPaise": <int>,   // this batch's own price (D40), inStock only
@@ -37,6 +37,11 @@
  *       "freeFromJars": <int>   // brief 4.2: where "freeOnTwo" stops charging
  *     }
  *   }
+ *
+ * `"cooking"` (M3.8) carries `count`, `total`, `available: 0` and nothing
+ * else: brief §7.5 closes booking when the pot goes on, so the card says
+ * "Being cooked now. Unpaid jars go on sale when bottled" and offers no Buy
+ * control and no jar picker.
  *
  * A slug with no batch in a visible state still appears, as `{"mode":"none"}`,
  * so a customer sees "not in the kitchen" rather than an unavailable count:
@@ -64,7 +69,17 @@ import {
 
 import { chooseWebBatch, type CheckoutBatchCandidate } from "../orders/checkout";
 
-export type CountsMode = "inStock" | "open" | "none";
+/**
+ * What a customer may do with this product right now.
+ *
+ *  - `inStock`: bottled jars, ₹649, buyable today.
+ *  - `open`: a batch open for booking at ₹599.
+ *  - `cooking`: brief §7.5. Booking closed when the pot went on, and the
+ *    jars that were not booked go on sale when the batch is bottled. The
+ *    card says so and offers no Buy control (M3.8).
+ *  - `none`: nothing of this product is in the kitchen.
+ */
+export type CountsMode = "inStock" | "open" | "cooking" | "none";
 
 export interface CountsProductEntry {
   readonly mode: CountsMode;
@@ -153,6 +168,8 @@ async function readShipping(db: Firestore): Promise<CountsShipping> {
 
 const IN_STOCK_STATES: readonly string[] = BATCH_STATES_IN_STOCK;
 const OPEN_STATES: readonly string[] = BATCH_STATES_OPEN_FOR_BOOKING;
+/** Brief §7.5: booking closes when cooking starts, and the card says so. */
+const COOKING_STATE = "cooking";
 
 function numberOr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -175,14 +192,22 @@ function isoDateOr(value: unknown): string | null {
 
 interface Best {
   readonly data: DocumentData;
-  /** 0 = in stock, ranks ahead of 1 = open for booking. */
-  readonly tier: 0 | 1;
+  /**
+   * 0 = in stock, ranks ahead of 1 = open for booking, which ranks ahead of
+   * 2 = cooking. A batch on the stove is the last thing to show, because it
+   * cannot be bought: it is only shown when this product has nothing else.
+   */
+  readonly tier: 0 | 1 | 2;
   readonly available: number;
   readonly candidate: CheckoutBatchCandidate;
 }
 
-function availabilityFor(data: DocumentData, tier: 0 | 1, nowMillis: number): number {
+function availabilityFor(data: DocumentData, tier: 0 | 1 | 2, nowMillis: number): number {
   const heldJars = data.heldJars as HeldJars | undefined;
+  // Nothing is takeable on a batch that is cooking: booking closed when the
+  // pot went on (brief §7.5), and the site must never offer a jar the
+  // transaction is about to refuse.
+  if (tier === 2) return 0;
   if (tier === 0) {
     return inStockAvailability({
       bottledJars: numberOr(data.bottledJars, 0),
@@ -219,6 +244,20 @@ function shippingRuleOf(data: DocumentData): ShippingRule | null {
 function entryFor(best: Best, product: DocumentData): CountsProductEntry {
   const { data, tier } = best;
   const shippingRule = shippingRuleOf(product);
+  if (tier === 2) {
+    // Brief §7.5. The marks are still drawn, because the count is true and
+    // "every count on the site is computed" (CLAUDE.md §3): these are the
+    // jars people booked before booking closed. `available` is zero, and
+    // `perPersonLimit` is deliberately absent, so nothing downstream can
+    // build a jar picker out of this entry.
+    return {
+      mode: "cooking",
+      count: numberOr(data.paidCount, 0),
+      total: Math.max(1, numberOr(data.bookableJars, 1)),
+      available: 0,
+      shippingRule,
+    };
+  }
   if (tier === 0) {
     return {
       mode: "inStock",
@@ -279,8 +318,12 @@ function entryFor(best: Best, product: DocumentData): CountsProductEntry {
  * anyway.
  */
 function pickBatch(list: readonly Best[], productName: string, todayIso: string): Best {
+  // A cooking batch is never offered to the chooser: `createCheckout` would
+  // refuse it, so putting it in front of `chooseWebBatch` could only make
+  // the page and the callable disagree. It is the fallback, and only when
+  // this product has nothing that can be bought at all.
   const chosen = chooseWebBatch(
-    list.map((b) => b.candidate),
+    list.filter((b) => b.tier !== 2).map((b) => b.candidate),
     productName,
     todayIso,
   );
@@ -315,7 +358,11 @@ export async function computeCounts(db: Firestore): Promise<CountsPayload> {
     return { products: {}, shipping };
   }
 
-  const visibleStates = [...IN_STOCK_STATES, ...OPEN_STATES];
+  // `cooking` joins the query in M3.8: brief §7.5 gives that batch a card of
+  // its own ("Being cooked now. Unpaid jars go on sale when bottled"), so the
+  // endpoint has to be able to see it. It never outranks a batch that can
+  // actually be bought (`pickBatch`).
+  const visibleStates = [...IN_STOCK_STATES, ...OPEN_STATES, COOKING_STATE];
   const batchesSnap = await db.collection("batches").where("state", "in", visibleStates).get();
   const todayIso = kolkataToday(nowMillis);
 
@@ -325,7 +372,12 @@ export async function computeCounts(db: Firestore): Promise<CountsPayload> {
     const slug = data.productSlug;
     if (typeof slug !== "string" || slug === "") continue;
 
-    const tier: 0 | 1 = IN_STOCK_STATES.includes(String(data.state)) ? 0 : 1;
+    const state = String(data.state);
+    const tier: 0 | 1 | 2 = IN_STOCK_STATES.includes(state)
+      ? 0
+      : OPEN_STATES.includes(state)
+        ? 1
+        : 2;
     const available = availabilityFor(data, tier, nowMillis);
     const list = bySlug.get(slug);
     const best: Best = {
@@ -335,7 +387,7 @@ export async function computeCounts(db: Firestore): Promise<CountsPayload> {
       candidate: {
         ref: doc.id,
         batchNo: typeof data.batchNo === "string" ? data.batchNo : null,
-        state: String(data.state),
+        state,
         packedOn: isoDateOr(data.packedOn),
         saleStopOn: isoDateOr(data.saleStopOn),
         createdAtMillis: millisOr(data.createdAt, 0),

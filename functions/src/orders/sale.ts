@@ -26,6 +26,7 @@ import {
   checkDiscount,
   isBatchRef,
   isSellablePrice,
+  isShareCode,
   MAX_SALE_QTY,
   MRP_PAISE,
   type Paise,
@@ -539,11 +540,26 @@ export interface SaleCustomerView {
   readonly jars: number;
   readonly consentUpdates: boolean;
   readonly consentMarketing: boolean;
+  /**
+   * `customers/{phone}.shareCode` (M3.8). Null on a customer who has never
+   * been given one, which is the only case in which a fresh one is minted:
+   * an existing code is what their share links already carry.
+   */
+  readonly shareCode: string | null;
 }
 
 export interface CounterSaleContext {
   readonly caller: { readonly uid: string | null; readonly role: unknown };
   readonly orderId: string;
+  /**
+   * The private order page's token (M3.8, brief §5). Minted by the callable
+   * for a counter sale exactly as it is for a web one, so the bill the
+   * Kitchen sends by hand can carry `/o/<token>` whichever door the sale
+   * came through.
+   */
+  readonly orderToken: string;
+  /** A fresh share code, used only if this customer has none yet (M3.8). */
+  readonly freshShareCode: string;
   /** Null on a `custom` line with no batch behind it. */
   readonly batch: SaleBatchView | null;
   /** Null when the line names no product (a bare custom line). */
@@ -727,6 +743,8 @@ export function planCounterSale(
     soldBy: caller.uid,
     /** Null on a paid sale; the payment link's expiry on an unpaid one. */
     holdExpiresAt: null,
+    /** M3.8, brief §5: the private order page, `/o/<token>`. */
+    token: context.orderToken,
     /** M2.9 fills these in when a bill is issued and sent. */
     billNumber: null,
     billSentAt: null,
@@ -940,12 +958,15 @@ function planCustomerPatch(
     patch.name = request.customerName ?? "";
     patch.email = null;
     patch.country = "IN";
-    patch.shareCode = null;
     stampFields.push("createdAt");
   } else if (request.customerName !== null && request.customerName !== existing?.name) {
     // A name typed at the counter corrects the record; it never blanks it.
     patch.name = request.customerName;
   }
+  // M3.8: every customer carries a share code by the time they have bought
+  // anything, whichever door they came through. Minted once and then left
+  // alone, because the code is what their existing share links carry.
+  if (!isShareCode(existing?.shareCode)) patch.shareCode = context.freshShareCode;
 
   const consents: Record<string, unknown> = {};
   // Ticked: consent given, with today's date and who ticked it. New customer:

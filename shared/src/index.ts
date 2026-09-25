@@ -21,4 +21,5 @@ export * from "./catalogue.js";
 export * from "./batchLines.js";
 export * from "./counterSale.js";
 export * from "./checkout.js";
+export * from "./links.js";
 export * from "./types/index.js";

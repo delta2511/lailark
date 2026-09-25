@@ -281,12 +281,21 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow update, delete: if false;
 
-      allow create: if request.resource.data.keys().hasOnly(['contact', 'source', 'createdAt'])
+      // `productSlug` is optional and may be null: it says which pickle
+      // somebody asked about, so the Owner's list at Bottled is the people
+      // who asked about that one rather than everybody (brief 7.5, M3.8).
+      // `cooking` is that card's own source.
+      allow create: if request.resource.data.keys().hasOnly(['contact', 'source', 'productSlug', 'createdAt'])
+                    && request.resource.data.keys().hasAll(['contact', 'source', 'createdAt'])
                     && request.resource.data.contact is string
                     && request.resource.data.contact.size() >= 6
                     && request.resource.data.contact.size() <= 120
                     && request.resource.data.source is string
-                    && request.resource.data.source in ['index', 'batch-001']
+                    && request.resource.data.source in ['index', 'batch-001', 'cooking']
+                    && (!('productSlug' in request.resource.data)
+                        || request.resource.data.productSlug == null
+                        || (request.resource.data.productSlug is string
+                            && request.resource.data.productSlug.size() <= 50))
                     && request.resource.data.createdAt is timestamp;
     }
 
@@ -587,7 +596,16 @@ service cloud.firestore {
     // in M5 and will write it with the Admin SDK, which is not bound by these
     // rules.
     function approvalServerFields() {
-      return ['sentAt', 'kind', 'batchRef', 'updateId', 'dueAt', 'dueAtSupersededBy'];
+      // `recipients` and `closedAt` join the list in M3.8. They are D32's
+      // sending list: who the approved message is for, and which of them has
+      // been sent it by hand. A client that could write them could add a
+      // customer nobody's batch has, or tick a message sent that nobody
+      // sent, which is the same lie `sentAt` is kept out of reach for. Both
+      // are written only by `onApprovalWritten` and by `answerApproval`.
+      return [
+        'sentAt', 'kind', 'batchRef', 'updateId', 'dueAt', 'dueAtSupersededBy',
+        'recipients', 'closedAt',
+      ];
     }
 
     match /approvals/{approvalId} {

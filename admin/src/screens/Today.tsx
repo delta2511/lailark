@@ -16,7 +16,8 @@ import { useProducts } from "../products/data";
 import type { Session } from "../session";
 import { ApprovalCard } from "../today/ApprovalCard";
 import { Clocks } from "../today/Clocks";
-import { clockRows, useOpenApprovals, waitingOnYou } from "../today/data";
+import { SendingCard } from "../today/SendingCard";
+import { clockRows, useOpenApprovals, useOpenSendingLists, waitingOnYou } from "../today/data";
 
 interface Props {
   readonly session: Session;
@@ -24,6 +25,8 @@ interface Props {
 
 export function Today({ session }: Props): JSX.Element {
   const approvals = useOpenApprovals();
+  // D32: messages the Owner has said yes to, still to be sent by hand.
+  const sending = useOpenSendingLists();
   const batches = useBatches();
   const products = useProducts();
 
@@ -58,7 +61,9 @@ export function Today({ session }: Props): JSX.Element {
   }
 
   // Brief 17.2: "An empty screen means the day is done."
-  if (waiting.length === 0 && clocks.length === 0) {
+  const toSend = sending.items.filter((a) => Array.isArray(a.recipients));
+
+  if (waiting.length === 0 && clocks.length === 0 && toSend.length === 0) {
     return (
       <div class="empty-state" data-testid="screen-today">
         <p>{COPY.todayEmptyLine1}</p>
@@ -92,6 +97,26 @@ export function Today({ session }: Props): JSX.Element {
           </ul>
         )}
       </section>
+
+      {toSend.length > 0 ? (
+        <section class="today-section" data-testid="today-sending">
+          <h2 class="section-heading">{TODAY.sendingHeading}</h2>
+          <ul class="approval-list">
+            {toSend.map((approval) => {
+              const batch = batchOf(approval.batchRef ?? "");
+              return (
+                <SendingCard
+                  key={approval.id}
+                  approval={approval}
+                  batch={batch}
+                  productName={productNameOf(batch)}
+                  role={session.role}
+                />
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       <Clocks rows={clocks} batchOf={batchOf} productNameOf={productNameOf} />
     </div>

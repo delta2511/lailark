@@ -82,6 +82,32 @@ const productCss = `
   text-decoration:none;
 }
 
+/* The notify-me beside a batch on the stove (brief section 7.5, D64). Built
+   from the same parts as the Buy control so nothing new is introduced: ink
+   button, no rust, no colour that reads as urgency. */
+.product-notify{ margin-top:var(--ds-space-4); max-width:24rem }
+.product-notify__label{
+  display:block; font-family:var(--ds-font-body); font-size:.92rem;
+  line-height:1.6; color:var(--ds-ink); margin-bottom:var(--ds-space-2);
+}
+.product-notify__row{ display:flex; flex-wrap:wrap; gap:var(--ds-space-2) }
+.product-notify__row input{
+  flex:1 1 10rem; min-width:0;
+  padding:var(--ds-space-3); border:1px solid var(--ds-hairline); border-radius:4px;
+  font-family:var(--ds-font-body); font-size:1rem; background:var(--ds-paper);
+  color:var(--ds-ink);
+}
+.product-notify__row button{
+  padding:var(--ds-space-3) var(--ds-space-5);
+  background:var(--ds-ink); color:var(--ds-paper); border:none; border-radius:4px;
+  font-family:var(--ds-font-body); font-size:1rem; font-weight:600; cursor:pointer;
+}
+.product-notify__row button[disabled]{ opacity:.6; cursor:default }
+.product-notify__problem, .product-notify__done{
+  font-family:var(--ds-font-body); font-size:.92rem; line-height:1.6;
+  color:var(--ds-ink); margin:var(--ds-space-3) 0 0; max-width:40ch;
+}
+
 .product-shipping{
   font-family:var(--ds-font-mono); font-size:.78rem; color:var(--ds-grey);
   margin:var(--ds-space-2) 0 0;

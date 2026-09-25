@@ -34,13 +34,25 @@ import { MRP_PAISE } from "@lailark/shared";
 //   {
 //     "products": {
 //       "<slug>": {
-//         "mode": "inStock" | "open" | "none",
+//         "mode": "inStock" | "open" | "cooking" | "none",
 //         "count": <int>,   // jars left (inStock) or jars paid (open)
 //         "total": <int>    // jars in the batch, or bookable jars (open)
 //       }
 //     }
 //   }
 const COUNTS_URL = "/api/counts";
+
+/**
+ * Brief §7.5, word for word: "the card reads 'Being cooked now. Unpaid jars
+ * go on sale when bottled'". Drafted in the brief, so it is copied rather
+ * than written (CLAUDE.md §5: customer copy is never invented here).
+ *
+ * The notify-me the same sentence of the brief asks for sits beside this
+ * line on the card and is built in `pickles/[slug]/NotifyMe.js`. Its three
+ * strings are D64, answered by Shefin during M3.8; nothing drafted them
+ * before that, which is why they were not invented here.
+ */
+export const BEING_COOKED = "Being cooked now. Unpaid jars go on sale when bottled.";
 
 // A batch is 15 to 40 jars (flow section 1), so anything past this is bad
 // data rather than a big batch. Refusing it keeps a broken payload from
@@ -67,7 +79,10 @@ function readProduct(payload, slug) {
   const entry = payload?.products?.[slug];
   if (!entry || typeof entry !== "object") return null;
   if (entry.mode === "none") return { mode: "none" };
-  if (entry.mode !== "inStock" && entry.mode !== "open") return null;
+  // M3.8: `cooking` is a real mode, not bad data. Brief §7.5: booking closed
+  // when the pot went on, and the card says so. Its marks are still drawn,
+  // because the paid count is true.
+  if (entry.mode !== "inStock" && entry.mode !== "open" && entry.mode !== "cooking") return null;
 
   // Checked on the raw values, never on Number(...) of them. Number(null),
   // Number(false), Number([]) and Number("") are all 0, and 0 is a perfectly
@@ -120,6 +135,16 @@ export function ProductCount({ slug }) {
     );
   } else if (entry.mode === "none") {
     body = <p className="home-count__note">Not in the kitchen just now.</p>;
+  } else if (entry.mode === "cooking") {
+    // Brief §7.5, word for word. The marks stay: these are the jars people
+    // booked before booking closed, and every count on the site is computed
+    // (CLAUDE.md §3).
+    body = (
+      <>
+        <JarMarks count={entry.count} total={entry.total} reading="paid" />
+        <p className="home-count__note">{BEING_COOKED}</p>
+      </>
+    );
   } else {
     const inStock = entry.mode === "inStock";
     body = (
@@ -218,6 +243,12 @@ export function readProductDetail(payload, slug) {
   const base = readProduct(payload, slug);
   if (!base) return null;
   if (base.mode === "none") return base;
+
+  // A cooking batch offers nothing and is priced by nothing: there is no Buy
+  // control, no jar picker and no dates to print, so the base reading is the
+  // whole of it. `available: 0` is carried so no caller can mistake a missing
+  // field for an unknown one.
+  if (base.mode === "cooking") return { ...base, available: 0 };
 
   const entry = payload?.products?.[slug] ?? {};
   // The product's own shipping rule, which `createCheckout` enforces. The

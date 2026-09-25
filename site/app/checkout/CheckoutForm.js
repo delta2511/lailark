@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useProductDetail, useShipping, canBuyToday } from "../_lib/counts";
+import { useSearch } from "../_lib/search";
 import JarMarks from "../ds/JarMarks";
 import {
   checkoutTotals,
@@ -80,21 +81,6 @@ function mintClientRef() {
   return typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
     : `cr-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-/**
- * `window.location.search`, read the way React wants a browser value read:
- * a snapshot that is `""` on the server, so the prerendered HTML and the
- * first client render agree and nothing hydrates twice.
- */
-const subscribeToNothing = () => () => {};
-const serverSearch = () => "";
-function useSearch() {
-  return useSyncExternalStore(
-    subscribeToNothing,
-    () => window.location.search,
-    serverSearch,
-  );
 }
 
 export default function CheckoutForm() {
@@ -187,6 +173,12 @@ export default function CheckoutForm() {
             consents: { updates: form.updates, marketing: form.marketing },
             expectedTotalPaise: totals.totalPaise,
             clientRef: clientRef.current ?? mintClientRef(),
+            // M3.8: `?s=<shareCode>`, recorded on the order as the link that
+            // brought this customer here. Sent on every tap, not only the
+            // first: a customer who dismissed the payment window and tapped
+            // Pay again used to have it forgotten (A194 iv), and the server
+            // now writes it onto an order that carries none.
+            shareCode: query.shareCode,
           },
         }),
       });
