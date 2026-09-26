@@ -1368,6 +1368,31 @@ break.
   codes**, and checks for stray emulator processes before believing a "port taken". Status:
   open.
 
+- A239 (M4.1, 26 Sep): **found by Shefin at his check, and the bug under it was not the
+  one it looked like.** The Shipment panel read "Packed, not yet booked" while the line
+  under the button read "This order has not been packed yet." That sentence was the
+  server's, not the generic fallback: `planShipOrder` refused anything not in `packed`,
+  which is also true of an order already `shipped`, and described every one of them as
+  "not packed yet". It reached the screen because a second tap of Mark shipped landed
+  after the first succeeded and before the live listener repainted, a window `busy` alone
+  did not close. Fixed on both sides: the server now says "This order has already been
+  marked shipped." / "This order has already been delivered." where that is what happened
+  (`planDeliverOrder` had the same flaw), and each form clears its error on `order.state`
+  and holds a `sent` flag keeping the button disabled until the listener catches up,
+  resetting on a real failure so a retry still works. The general point: an error that
+  collapses "too early" and "too late" into one sentence will eventually tell someone the
+  opposite of the truth. Status: open.
+- A240 (M4.1, 26 Sep): **a test that could never have passed, and why it was not caught.**
+  The first fix for A239 shipped a Playwright test filling `-5` into the packing cost to
+  raise a client-side refusal. `order-pack-cost` is `type="number" min="0"`, so a negative
+  value fails the browser's own constraint validation, the form's `submit` event never
+  fires, and no error is rendered; it failed on its first real run. It reached the
+  orchestrator unrun because the emulator ports were busy, which is exactly when a report
+  of "done" is worth least. The test now raises a genuine server refusal (the order's line
+  pointed at a batch that does not exist) and asserts it clears when the state moves.
+  `parsePaise`'s negative branch is unreachable from both cost inputs and kept as defence
+  in case a `min` attribute is ever dropped. Status: open.
+
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 
 Shefin walked the ten steps in `docs/milestones/MILESTONE-2-TEST-ROUND-2.md` and reported

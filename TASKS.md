@@ -562,7 +562,7 @@ and the live webhook before the production deploy.
       forbids anything expiring a paid order, so the state is correct. The screen must show
       the payment on a `held` order, or an Owner reading Orders alone will not see money
       that has arrived.
-- [ ] M4.1 [sonnet] (Shefin checks) Packing and India Post. To pack list by batch, jar numbers assigned
+- [x] M4.1 [sonnet] (Shefin checks) Packing and India Post. (b4b4853; A230 to A238 logged, A225 amended; Shefin checked on his laptop 26 Sep and found a stale refusal sitting under a changed panel, fixed with the double-submit window that caused it) To pack list by batch, jar numbers assigned
       in payment order, Packed with editable packing cost (default from Settings),
       India Post consignment number entry → Shipped, tracking link built from it,
       Delivered by hand. `shipments` collection. Brief §11.1, §11.3. Done when: an order
