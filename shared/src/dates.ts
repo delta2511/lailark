@@ -210,6 +210,46 @@ export function kolkataStartOfDay(input: CalDateInput): number {
   return toDayNumber(input) * MS_PER_DAY - KOLKATA_UTC_OFFSET_MINUTES * MS_PER_MINUTE;
 }
 
+const MONTH_ABBREVIATIONS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+/**
+ * `26 Sep, 2:15 pm`: an instant as the Asia/Kolkata calendar date and time
+ * of day, admin-facing (order cards, timelines). M3.9 round 3 needed a
+ * short, unambiguous "when was this placed" label for a narrow order card,
+ * and nothing in this file printed a time of day yet, only a calendar date.
+ *
+ * Built on the same integer arithmetic as {@link kolkataDate} rather than
+ * `Date#toLocaleString`, so it reads the same way regardless of the
+ * browser's own locale or timezone: the kitchen is in Kunnamangalam, a
+ * phone reporting a different zone should not change what an order card
+ * says.
+ */
+export function formatKolkataDateTime(instant: InstantInput): string {
+  const shifted = toEpochMillis(instant) + KOLKATA_UTC_OFFSET_MINUTES * MS_PER_MINUTE;
+  const date = fromDayNumber(Math.floor(shifted / MS_PER_DAY));
+  const msOfDay = ((shifted % MS_PER_DAY) + MS_PER_DAY) % MS_PER_DAY;
+  const totalMinutes = Math.floor(msOfDay / MS_PER_MINUTE);
+  const hour24 = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+  const period = hour24 < 12 ? "am" : "pm";
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  const minuteText = String(minute).padStart(2, "0");
+  return `${date.d} ${MONTH_ABBREVIATIONS[date.m - 1]}, ${hour12}:${minuteText} ${period}`;
+}
+
 /* -------------------------------------------------------------------------- */
 /* The business day (M2.8)                                                    */
 /* -------------------------------------------------------------------------- */

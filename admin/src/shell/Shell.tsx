@@ -2,7 +2,7 @@ import type { JSX } from "preact";
 import { useEffect } from "preact/hooks";
 
 import { COPY } from "../copy";
-import { navigate, useRoute, type RoutePath } from "../router";
+import { isOrderDetailRoute, navigate, useRoute, type MatchedRoute, type RoutePath } from "../router";
 import { Batches } from "../screens/Batches";
 import { More } from "../screens/More";
 import { MoreEmptyScreen } from "../screens/MoreEmptyScreen";
@@ -21,16 +21,24 @@ interface ShellProps {
   readonly onSignOut: () => void;
 }
 
-/** The five bottom-bar sections; everything under `/more/*` collapses to "More". */
+/**
+ * The five bottom-bar sections; everything under `/more/*` collapses to
+ * "More", and an order detail (`/orders/<id>`) collapses to "/orders", the
+ * same tab its list lives under.
+ */
 function activeTab(pathname: string): RoutePath {
   if (pathname === "/" || pathname === "/sell" || pathname === "/batches" || pathname === "/orders") {
     return pathname;
   }
+  if (pathname.startsWith("/orders/")) return "/orders";
   return "/more";
 }
 
-function Screen({ path, session, onSignOut }: ShellProps & { path: RoutePath }): JSX.Element {
-  switch (path) {
+function Screen({ route, session, onSignOut }: ShellProps & { route: MatchedRoute }): JSX.Element {
+  if (isOrderDetailRoute(route)) {
+    return <Orders orderId={route.orderId} session={session} />;
+  }
+  switch (route.path) {
     case "/":
       return <Today session={session} />;
     case "/sell":
@@ -38,7 +46,7 @@ function Screen({ path, session, onSignOut }: ShellProps & { path: RoutePath }):
     case "/batches":
       return <Batches session={session} />;
     case "/orders":
-      return <Orders />;
+      return <Orders orderId={null} session={session} />;
     case "/more":
       return <More role={session.role} />;
     case "/more/settings":
@@ -63,7 +71,11 @@ function Screen({ path, session, onSignOut }: ShellProps & { path: RoutePath }):
  */
 export function Shell({ session, onSignOut }: ShellProps): JSX.Element {
   const route = useRoute();
+  const onOrderDetail = isOrderDetailRoute(route);
   const isMoreSubPage = route.path !== "/more" && route.path.startsWith("/more/");
+  const showBack = isMoreSubPage || onOrderDetail;
+  const backTarget = onOrderDetail ? "/orders" : "/more";
+  const title = onOrderDetail ? COPY.orderDetailTitle : route.title;
 
   // Money is Owner and Viewer only (D13, brief section 17.12): Kitchen never
   // lands on it, deep link or not.
@@ -81,16 +93,16 @@ export function Shell({ session, onSignOut }: ShellProps): JSX.Element {
     <main class="shell" data-testid="app-shell">
       <OfflinePill />
       <header class="shell-header">
-        {isMoreSubPage ? (
-          <button type="button" class="back-button" onClick={() => navigate("/more")}>
+        {showBack ? (
+          <button type="button" class="back-button" onClick={() => navigate(backTarget)}>
             <ChevronLeftIcon size={20} />
             {COPY.back}
           </button>
         ) : null}
-        <h1 class="screen-title">{route.title}</h1>
+        <h1 class="screen-title">{title}</h1>
       </header>
       <div class="shell-content">
-        <Screen path={route.path} session={session} onSignOut={onSignOut} />
+        <Screen route={route} session={session} onSignOut={onSignOut} />
       </div>
       <BottomBar activePath={activeTab(route.path)} />
     </main>

@@ -8,6 +8,7 @@ import {
   daysInMonth,
   diffDays,
   formatCalDate,
+  formatKolkataDateTime,
   fromDayNumber,
   isAfter,
   isBefore,
@@ -191,6 +192,24 @@ describe("Asia/Kolkata", () => {
   it("refuses a nonsense instant", () => {
     expect(() => toEpochMillis(Number.NaN)).toThrow();
     expect(() => toEpochMillis(new Date("nope"))).toThrow(/invalid Date/);
+  });
+
+  it("formats an instant as the Kolkata date and time of day, on both sides of the midnight seam", () => {
+    // 2026-09-03T18:29:59Z is 2026-09-03 23:59:59 in Kolkata: still today.
+    expect(formatKolkataDateTime(Date.parse("2026-09-03T18:29:59Z"))).toBe("3 Sep, 11:59 pm");
+    // 2026-09-03T18:30:00Z is 2026-09-04 00:00:00 in Kolkata: tomorrow, midnight.
+    expect(formatKolkataDateTime(Date.parse("2026-09-03T18:30:00Z"))).toBe("4 Sep, 12:00 am");
+    // 2026-09-03T19:00:00Z is 2026-09-04 00:30 in Kolkata: just after the seam.
+    expect(formatKolkataDateTime(Date.parse("2026-09-03T19:00:00Z"))).toBe("4 Sep, 12:30 am");
+  });
+
+  it("formats noon and accepts a Firestore-shaped Timestamp", () => {
+    // 2026-09-04T06:30:00Z is 2026-09-04 12:00 noon in Kolkata.
+    const millis = Date.parse("2026-09-04T06:30:00Z");
+    expect(formatKolkataDateTime(millis)).toBe("4 Sep, 12:00 pm");
+    expect(
+      formatKolkataDateTime({ seconds: Math.floor(millis / 1000), nanoseconds: 0 }),
+    ).toBe("4 Sep, 12:00 pm");
   });
 });
 

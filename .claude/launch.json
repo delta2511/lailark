@@ -20,6 +20,17 @@
         "site/scripts/serve-out.mjs"
       ],
       "port": 4300
+    },
+    {
+      "name": "lailark-admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace",
+        "admin"
+      ],
+      "port": 5175
     }
   ]
 }

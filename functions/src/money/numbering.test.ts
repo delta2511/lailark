@@ -231,6 +231,20 @@ describe("the counter", () => {
     expect(await issueBill(store, ist(2026, 12, 1), "o-0000hh")).toBe("LK/26-27/0001");
   });
 
+  it("carries on past a document written in from outside, if its number was reserved", async () => {
+    // What `functions/scripts/seed-orders.mjs` leaves behind: a bill written
+    // straight into `documents`, and its counter wound past the serial that
+    // bill occupies. Anything that writes a document by id and does not do
+    // the second half wedges the series for good, because the counter is not
+    // advanced by the failed `tx.create` either.
+    const store = new FakeStore();
+    store.docs.set("documents/LK-26-27-0001", { kind: "bill", number: "LK/26-27/0001" });
+    store.docs.set("counters/LK-26-27", { next: 2 });
+
+    expect(await issueBill(store, ist(2026, 12, 1), "o-0000ll")).toBe("LK/26-27/0002");
+    expect(store.docs.get("counters/LK-26-27")?.next).toBe(3);
+  });
+
   it("refuses to write the same number twice, even if the counter fell behind", async () => {
     const store = new FakeStore();
     await issueBill(store, ist(2026, 12, 1), "o-0000ii");

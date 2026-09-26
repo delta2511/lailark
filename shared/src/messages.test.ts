@@ -28,14 +28,24 @@ const PRAWNS = {
   product: "Prawns and dates pickle",
   ingredient: "prawns",
   price: "₹599",
+  orderNumber: "o-9c2f1a",
+  total: "₹1,198",
+  orderLink: "https://lailark.in/o/abcdef0123456789abcdef0123456789",
 };
 
-describe("the three drafts", () => {
-  it("has one for each message the batch offers", () => {
-    expect([...CUSTOMER_MESSAGE_NAMES]).toEqual(["batchOpen", "halfReached", "backInStock"]);
+describe("the four drafts", () => {
+  it("has one for each message the admin can offer", () => {
+    expect([...CUSTOMER_MESSAGE_NAMES]).toEqual(["batchOpen", "halfReached", "backInStock", "billSent"]);
     for (const name of CUSTOMER_MESSAGE_NAMES) {
       expect(DEFAULT_CUSTOMER_MESSAGES[name].length).toBeGreaterThan(0);
     }
+  });
+
+  it("sends the bill with the order's own number, its total, and the order link (M3.9)", () => {
+    expect(customerMessage("billSent", PRAWNS)).toBe(
+      "Thank you, we have your order o-9c2f1a for ₹1,198. " +
+        "You can see the bill anytime at https://lailark.in/o/abcdef0123456789abcdef0123456789.",
+    );
   });
 
   it("opens a batch with the product and the price, and no date", () => {
@@ -69,10 +79,10 @@ describe("the three drafts", () => {
     );
   });
 
-  it("substitutes the product into every one of the three that names it", () => {
+  it("substitutes every placeholder each of the four names", () => {
     for (const name of CUSTOMER_MESSAGE_NAMES) {
       const rendered = customerMessage(name, { ...PRAWNS, product: "Koorka pickle" });
-      expect(rendered).not.toMatch(/\{product\}|\{ingredient\}|\{price\}/);
+      expect(rendered).not.toMatch(/\{product\}|\{ingredient\}|\{price\}|\{orderNumber\}|\{total\}|\{orderLink\}/);
       if (DEFAULT_CUSTOMER_MESSAGES[name].includes("{product}")) {
         expect(rendered).toContain("Koorka pickle");
       }
@@ -104,6 +114,15 @@ describe("the Owner's edit, settings/messages", () => {
     expect(customerMessage("batchOpen", PRAWNS, overrides)).toBe(
       customerMessage("batchOpen", PRAWNS),
     );
+  });
+
+  it("the bill message falls back the same way as the other three (M3.9)", () => {
+    const draft = customerMessage("billSent", PRAWNS);
+    expect(customerMessage("billSent", PRAWNS, undefined)).toBe(draft);
+    expect(customerMessage("billSent", PRAWNS, { billSent: "" })).toBe(draft);
+    expect(
+      customerMessage("billSent", PRAWNS, { billSent: "Order {orderNumber}: {total}. {orderLink}" }),
+    ).toBe("Order o-9c2f1a: ₹1,198. https://lailark.in/o/abcdef0123456789abcdef0123456789");
   });
 });
 
@@ -194,15 +213,24 @@ describe("what the drafts may not say", () => {
 
   it("invents no count and runs no countdown", () => {
     for (const [name, text] of RENDERED) {
-      // No bare number at all except inside the price, which is computed.
-      expect(text.replace(/₹[\d,]+/g, ""), name).not.toMatch(/\d/);
+      // No bare number at all except inside the price, the order's own
+      // number and its link, all three of which are computed, never typed.
+      const stripped = text
+        .replace(/₹[\d,]+/g, "")
+        .replace(new RegExp(PRAWNS.orderNumber, "g"), "")
+        .replace(new RegExp(PRAWNS.orderLink.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "");
+      expect(stripped, name).not.toMatch(/\d/);
       expect(text.toLowerCase(), name).not.toMatch(/hurry|last chance|only \d|left!|selling fast/);
     }
   });
 
   it("stays to one or two sentences", () => {
     for (const [name, text] of RENDERED) {
-      const sentences = text.split(".").filter((part) => part.trim() !== "");
+      // A link's own dots (lailark.in) are not sentence breaks, so they are
+      // collapsed before splitting; the sentence count is about prose, not
+      // about how many dots a URL happens to carry.
+      const withoutLink = text.replace(PRAWNS.orderLink, "ORDERLINK");
+      const sentences = withoutLink.split(".").filter((part) => part.trim() !== "");
       expect(sentences.length, name).toBeLessThanOrEqual(2);
       expect(sentences.length, name).toBeGreaterThanOrEqual(1);
     }

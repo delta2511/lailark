@@ -13,6 +13,10 @@
  * machine's and cannot be moved.
  */
 
+import { execFile } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+
 import { PRICE_IN_STOCK_PAISE, PRICE_OPEN_PAISE, toDocumentId } from "@lailark/shared";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -22,6 +26,7 @@ import {
   clearFirestore,
   db,
   mustTransition,
+  PROJECT,
   setPaidCount,
   waitFor,
   waitForState,
@@ -147,6 +152,25 @@ function fyLabel(now = new Date()): string {
 }
 
 const FY = fyLabel();
+
+const run = promisify(execFile);
+
+/**
+ * The real seed script, as a person runs it: a child process against this
+ * same emulator. Running it rather than re-describing it is the point, so a
+ * change to the script that stops reserving its numbers fails here.
+ */
+async function runSeedOrders(): Promise<void> {
+  const script = fileURLToPath(new URL("../scripts/seed-orders.mjs", import.meta.url));
+  await run(process.execPath, [script, "--emulator"], {
+    env: {
+      ...process.env,
+      GCLOUD_PROJECT: PROJECT,
+      FIRESTORE_EMULATOR_HOST: process.env.FIRESTORE_EMULATOR_HOST ?? "127.0.0.1:8080",
+      FIREBASE_AUTH_EMULATOR_HOST: process.env.FIREBASE_AUTH_EMULATOR_HOST ?? "127.0.0.1:9099",
+    },
+  });
+}
 
 /* -------------------------------------------------------------------------- */
 
@@ -468,5 +492,72 @@ describe("GST switched on before the tax exists", () => {
     );
 
     await db().collection("settings").doc("gst").set({ enabled: false, homeState: "KL" }, { merge: true });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* The seed script and the series it writes into                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `functions/scripts/seed-orders.mjs` writes a bill straight into
+ * `documents`, which is the one place outside `writeDocument` that occupies a
+ * bill number. A document's id **is** its number, so a seeded bill whose
+ * counter was left behind takes a number the counter still thinks is free:
+ * the next real sale builds the same id, its `tx.create` fails, the counter
+ * is not advanced by a failed transaction, and every sale after that fails
+ * the same way, for good.
+ *
+ * That is exactly what happened: with this seed in the emulator,
+ * `admin/tests/sell.spec.ts` failed eight of its eleven tests, every one of
+ * them a sale that never completed, while the same suite passed on a fresh
+ * emulator. The unit suite never saw it because the unit suite starts empty.
+ *
+ * So the script is run here, for real, and then a real sale is made after it.
+ * Both assertions are written to hold in any financial year: the invariant is
+ * that every serial the seed occupies is behind its counter's `next`, and the
+ * symptom is that selling still works afterwards.
+ */
+describe("the orders seed leaves the bill series usable", () => {
+  beforeAll(async () => {
+    await clearFirestore();
+    await seedProduct();
+    await seedCustomer(ASHA, "Asha");
+    await runSeedOrders();
+  });
+
+  it("winds the counter past every number it seeded", async () => {
+    const seeded = await db().collection("documents").get();
+    expect(seeded.size).toBeGreaterThan(0);
+
+    for (const doc of seeded.docs) {
+      // `LK-26-27-0001` -> counter `LK-26-27`, serial 1: the same split
+      // `store.ts` composes the id out of.
+      const parts = doc.id.split("-");
+      const series = parts.slice(0, -1).join("-");
+      const serial = Number(parts[parts.length - 1]);
+      expect(Number.isInteger(serial)).toBe(true);
+      const next = await counterNext(series);
+      expect(next, `counters/${series} must be past ${doc.id}`).not.toBeNull();
+      expect(next as number).toBeGreaterThan(serial);
+    }
+  });
+
+  it("lets the next real sale take a number and keep its bill", async () => {
+    const before = await db().collection("documents").get();
+    const taken = new Set(before.docs.map((doc) => doc.id));
+
+    await inStockBatch();
+    const sale = await sell("kitchen");
+
+    expect(sale.billNumber).toMatch(new RegExp(`^LK/${FY}/\\d{4,}$`));
+    expect(taken.has(toDocumentId(sale.billNumber))).toBe(false);
+    const doc = await documentDoc(sale.billNumber);
+    expect(doc?.kind).toBe("bill");
+    expect(doc?.orderId).toBe(sale.orderId);
+
+    // And the sale after it, so a wedge one number further along shows up too.
+    const second = await sell("kitchen");
+    expect(second.billNumber).not.toBe(sale.billNumber);
   });
 });

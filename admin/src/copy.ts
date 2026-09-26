@@ -47,6 +47,7 @@ export const COPY = {
   batchesEmptyLine2: "Batch 001 is on the jars; it arrives here in the next milestone.",
 
   ordersEmpty: "No orders yet.",
+  orderDetailTitle: "Order",
 
   back: "Back",
 
@@ -744,4 +745,91 @@ export const PAYMENT_LABEL: Record<string, string> = {
   cash: SELL.cash,
   upiToAccount: SELL.upiToAccount,
   paymentLink: SELL.paymentLink,
+  // M3.9: the two Razorpay methods Sell does not offer (web checkout, the
+  // counter QR), which an order read on the Orders screen can still carry.
+  razorpay: "Razorpay",
+  razorpayQr: "Razorpay QR",
 };
+
+/**
+ * The Orders screen, brief §17.5: groups, filters, search, and the order
+ * detail (customer, lines, payment, documents, shipment, tracking, kitchen
+ * note, Concerns, timeline). M3.9's scope is read only over `orders` (see
+ * the task): pack, courier, refund and Concerns actions are M4.1, M4.5 and
+ * M4.4, so every one of those sections below is drawn as an honest empty
+ * state rather than left out, so those tasks have a place to land.
+ */
+export const ORDERS = {
+  loading: "Loading...",
+  readDenied: "This screen could not be read. Ask Shefin to check your role.",
+  empty: "No orders yet.",
+  noneInGroup: "Nothing here.",
+
+  searchLabel: "Search",
+  searchPlaceholder: "Name, order number, bill number or pincode",
+
+  filterBatch: "Batch",
+  filterChannel: "Channel",
+  filterAll: "All",
+
+  /** Brief §9.1's channel names, admin-facing. */
+  channelLabel: {
+    web: "Web",
+    counter: "Counter",
+    phone: "Phone",
+    whatsapp: "WhatsApp",
+    abroad: "Abroad",
+  } as Record<string, string>,
+
+  /**
+   * A11's captured-while-held order (M3.6 round 2). The state chip alone
+   * would read "Held", which is what a hold that never got paid also reads:
+   * this badge is what tells the two apart at a glance, so an Owner scanning
+   * the list sees the money without opening the order.
+   */
+  paidWhileHeld: "Paid",
+
+  backToOrders: "Back to Orders",
+
+  /* ---- the detail screen's sections, brief §17.5 ---- */
+  customerHeading: "Customer",
+  deliveryHeading: "Delivery",
+  noDeliveryContact: "Handed over, no delivery address.",
+  channelHeading: "Channel",
+  linesHeading: "Lines",
+  jarNumbersLabel: "Jars",
+  jarNumbersNone: "Not packed yet.",
+  paymentHeading: "Payment",
+  paymentAmount: "Amount",
+  paymentMethod: "Method",
+  paymentStatus: "Status",
+  paymentReference: "Reference",
+  paymentRefunded: "Refunded so far",
+  documentsHeading: "Documents",
+  documentsNone: "No bill or receipt yet.",
+  shipmentHeading: "Shipment",
+  shipmentNone: "Not booked yet. Packing and courier booking arrive in M4.1.",
+  trackingHeading: "Tracking",
+  kitchenNoteHeading: "Kitchen note",
+  kitchenNoteNone: "None.",
+  concernsHeading: "Concerns",
+  concernsNone: "None raised. Concerns arrive as their own screen in M4.4.",
+  timelineHeading: "Timeline",
+
+  /** D32: the admin drafts, a person sends. Never automatic. */
+  sendBillHeading: "Send the bill",
+  sendBillPreview: "What this sends",
+  sendBillButton: "Open in WhatsApp",
+  sendBillNoToken:
+    "This order has no private link yet (it was written before M3.8). Ask Shefin before sending its bill by hand.",
+  sendBillNoPhone: "No phone number on this order to send it to.",
+  sendBillPopupBlocked: "Your phone stopped WhatsApp opening. Allow pop-ups for this site, then tap again.",
+
+  paymentStatusLabel: {
+    created: "Created",
+    authorized: "Authorized",
+    captured: "Captured",
+    partlyRefunded: "Partly refunded",
+    refunded: "Refunded",
+  } as Record<string, string>,
+} as const;

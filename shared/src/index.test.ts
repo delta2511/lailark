@@ -77,6 +77,7 @@ const EXPECTED_EXPORTS = [
   "toEpochMillis",
   "kolkataDate",
   "kolkataStartOfDay",
+  "formatKolkataDateTime",
   "BUSINESS_DAY_START_HOUR_IST",
   "businessDay",
   "businessDayKey",
@@ -248,6 +249,12 @@ const EXPECTED_EXPORTS = [
   "SHARE_CODE_LENGTH",
   "isShareCode",
   "shareLinkPath",
+  // orderGroups (M3.9): the Orders screen's grouping over the 17 order states
+  "ORDER_GROUPS",
+  "ORDER_GROUP_LABELS",
+  "orderGroupForState",
+  "statesInGroup",
+  "isShippingToday",
 ] as const;
 
 describe("the barrel", () => {

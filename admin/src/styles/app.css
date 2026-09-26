@@ -345,6 +345,17 @@ button.quiet {
   font-size: var(--font-size-small);
 }
 
+/*
+ * The drafted bill message (M3.9) carries the private order URL, one long
+ * unbreakable string, and this box exists so the Owner can read the whole
+ * message, link included, before he sends it. Scoped to this one element,
+ * not `.field-value` itself: that class is shared with every other detail
+ * screen's short field text, which should keep its normal wrapping.
+ */
+.bill-preview {
+  overflow-wrap: anywhere;
+}
+
 /* ---- reCAPTCHA host (M1.12) ---- */
 
 /*

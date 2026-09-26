@@ -387,6 +387,117 @@ export async function seedBatch(ref: string, overrides: Record<string, Json>): P
   await seedDocument(`batches/${ref}`, batchFields(overrides));
 }
 
+/**
+ * Every field an order document carries (`shared/src/types/orders.ts`), so a
+ * hand-seeded one never confuses the Orders screen (M3.9) with a missing
+ * key. Every order in this milestone was created by a real callable
+ * (`createCounterSale`, `createCheckout`, the Razorpay webhook), so this is
+ * test-only infrastructure: it lets a spec start from a state without
+ * re-running the whole checkout or counter-sale flow for every scenario, the
+ * same shortcut `seedBatch` already takes for batches.
+ */
+export function orderFields(overrides: Record<string, Json>): Record<string, Json> {
+  const now = timestampValue();
+  return {
+    number: "",
+    channel: "web",
+    customerPhone: "",
+    deliveryContact: null,
+    placeOfSupply: "KL",
+    state: "held",
+    lines: [],
+    batchRefs: [],
+    shippingFee: 0,
+    discount: null,
+    total: 0,
+    fulfilment: "ship",
+    payment: {
+      method: "razorpay",
+      status: "created",
+      razorpayIds: {},
+      markedPaidBy: null,
+      upiRef: null,
+      amount: 0,
+      refundedAmount: 0,
+    },
+    shareCodeUsed: null,
+    policyVersion: "1",
+    kitchenNote: null,
+    draft: false,
+    soldBy: null,
+    holdExpiresAt: null,
+    token: null,
+    createdBy: "seed",
+    createdAt: now,
+    updatedAt: now,
+    updatedBy: "seed",
+    ...overrides,
+  };
+}
+
+/** Seeds `orders/{id}` with admin rights, in whatever state a test needs to start from. */
+export async function seedOrder(id: string, overrides: Record<string, Json>): Promise<void> {
+  await seedDocument(`orders/${id}`, orderFields(overrides));
+}
+
+/**
+ * Every field a `documents/{id}` record carries
+ * (`shared/src/types/money.ts`), for the bill-number search test (brief
+ * §17.5): only the fields that test actually reads are filled in with
+ * anything other than a safe default.
+ */
+export function documentRecordFields(overrides: Record<string, Json>): Record<string, Json> {
+  const now = timestampValue();
+  const seller = {
+    name: "Lailark Kitchen",
+    addressLines: ["Kunnamangalam", "Kozhikode"],
+    supportPhone: "+917736110087",
+    fssai: "",
+    website: "www.lailark.in",
+    gstin: null,
+    handedOverText: "Handed over at Kunnamangalam",
+  };
+  return {
+    kind: "bill",
+    number: "",
+    orderId: "",
+    orderNumber: "",
+    issuedAt: now,
+    issuedOn: "2026-09-01",
+    lines: [],
+    taxable: 0,
+    cgst: 0,
+    sgst: 0,
+    igst: 0,
+    total: 0,
+    pdfPath: null,
+    voids: null,
+    cancelledBy: null,
+    seller,
+    customer: { name: "", phone: "", email: null },
+    deliveryText: "",
+    placeOfSupply: "KL",
+    channel: "web",
+    payment: { method: "", status: "", reference: null },
+    subtotal: 0,
+    discount: 0,
+    discountReason: null,
+    shippingFee: 0,
+    gstEnabled: false,
+    voided: null,
+    createdBy: "seed",
+    createdAt: now,
+    updatedAt: now,
+    updatedBy: "seed",
+    ...overrides,
+  };
+}
+
+/** Seeds `documents/{id}` with admin rights. */
+export async function seedDocumentRecord(id: string, overrides: Record<string, Json>): Promise<void> {
+  await seedDocument(`documents/${id}`, documentRecordFields(overrides));
+}
+
 /** Seeds a waiting approval against a batch, with an optional production clock. */
 export async function seedApproval(
   id: string,

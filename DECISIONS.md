@@ -1224,6 +1224,70 @@ break.
   time zone and `retryCount`. Cloud Scheduler actually firing it is not covered; the
   pubsub emulator would not prove that either, so it is checked once on staging by
   reading the function's logs five minutes apart. Status: open.
+- A220 (M3.9, 26 Sep): the map from the 17 `ORDER_STATES` to brief §17.5's 11 groups.
+  The brief names both tables and never joins them, so `shared/src/orderGroups.ts` is
+  this task's own reading: `draft`, `held` and `awaitingPayment` all read as "not paid
+  yet, still live" and share the Awaiting payment group, which is also what §9.1's own
+  "Next" column for Draft points at; the four concern-raising states become one Problem
+  group, matching `ORDER_STATES_RAISING_CONCERN`; the three terminal states become one
+  Closed group, matching `ORDER_STATES_TERMINAL` and §9.1's "nothing more expected".
+  Written as an exhaustive switch with an `assertNever`, so a state added later and not
+  taught a group fails the type check rather than vanishing from every tab. Status: open.
+- A221 (M3.9, 26 Sep): "Ships today" is a derived view (`isShippingToday`: `paidWaiting`
+  or `toPack`, fulfilment `ship`), not a twelfth state. Nothing in §9.1 names such a
+  state, and an order in it still belongs to its own state group. Status: open.
+- A222 (M3.9, 26 Sep): the bill message `billSent` in `shared/src/messages.ts`, "Thank
+  you, we have your order {orderNumber} for {total}. You can see the bill anytime at
+  {orderLink}." Customer-facing copy drafted nowhere in `docs/strategy/` (§13.4 and
+  §15.7 name the template, not its text), so a never-assume item under CLAUDE.md §5.
+  Handled on D24's precedent rather than escalated: Claude drafts, the draft is a
+  fallback, the Owner replaces it from `settings/messages` with no deploy, and nothing
+  sends itself (D32). **Shefin read this wording at the M3.9 check on 26 Sep and
+  approved it.** Status: confirmed.
+- A223 (M3.9, 26 Sep): `VITE_SITE_ORIGIN`, a new build-time env var for the customer
+  site's origin, which `orderUrl` needs to build the private order link the admin draws.
+  Falls back to the Firebase project actually selected for the build, the same literal
+  comparison `firebase.ts` already uses: `lailark.in` for production, the staging
+  project's own `.web.app` otherwise. Status: open.
+- A224 (M3.9, 26 Sep): `orderGroups.ts` lives in `shared/` rather than `admin/`, since a
+  reporting or reconciliation function could want the same grouping; documents are shown
+  to Kitchen as "not visible to your role" (the rule is `seesMoney()`), reusing the
+  existing denied-read copy; and all admin strings, file, function and test names across
+  the task. Status: open.
+- A225 (M3.9, 26 Sep): `functions/scripts/seed-orders.mjs` fabricates 11 orders and one
+  bill for a person testing the screen. Names, phone numbers and pincodes are invented
+  and are never real people; ten orders point at batch 001's real ref and one at a
+  synthetic ref that has no batch document, purely so the batch filter has two options.
+  It writes `orders` and `documents` directly, which CLAUDE.md §3 reserves for functions,
+  and so refuses the production project id unless `--force` is passed. Status: open.
+- A226 (M3.9 round 3, 26 Sep): the order card's date format, `26 Sep, 2:15 pm`, built on
+  the same integer arithmetic as `kolkataDate` rather than `toLocaleString`, so it reads
+  as Asia/Kolkata whatever timezone the phone claims. Admin-facing, assumable under
+  CLAUDE.md §5. Status: open.
+- A227 (M3.9 round 3, 26 Sep): the Orders list opens on **All**, not "Ships today".
+  Shefin asked for a way to see every order together and M3.9's own done-when is that
+  every order is findable, so the list opens showing everything, newest first. Kept as
+  one named constant (`DEFAULT_TAB`) so it is a one-line change back. Status: confirmed
+  by Shefin at the M3.9 check, 26 Sep.
+- A228 (M3.9 round 3, 26 Sep): **a defect this task introduced and fixed, logged because
+  the class of bug matters more than this instance.** `seed-orders.mjs` created
+  `documents/LK-26-27-0001` without advancing `counters/LK-26-27`. A document's id *is*
+  its bill number ("number-as-id is what makes 'never reused' true", `issue.ts`), so the
+  next real bill claimed serial 1, its `tx.create` collided, and because the counter never
+  moved forward **every counter sale failed from then on** - the exact wedge `issue.ts`
+  carries a comment warning about. Found by the orchestrator when `sell.spec.ts` failed 8
+  of 11 with the sale never completing; a subagent had reported those failures as
+  pre-existing and blamed phone-number collisions, which was wrong. The seed now reserves
+  the numbers it consumes in the same transaction, idempotently, taking the max so a
+  counter a real bill has already pushed past is never wound back. Covered by a test that
+  runs the real script against the emulator and then makes two real counter sales, with a
+  negative control confirming it fails without the fix. Status: open.
+- A229 (M3.9 round 3, 26 Sep): **not fixed, needs a fast-follow task.**
+  `seed-batch-001.mjs` has a milder form of A228: it writes batch `001` without advancing
+  `counters/batch`. The first real bottling aborts loudly ("The counter is behind; try
+  again.") rather than silently wedging, but it does not self-heal, because the aborted
+  transaction does not advance the counter either, so every retry fails identically until
+  someone repairs `counters/batch` by hand. Status: open.
 
 
 ### The Milestone 2 round-two break (24 Sep 2026, S)

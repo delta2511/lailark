@@ -24,18 +24,28 @@
  * arranging the prawns now." The template below renders exactly that for
  * prawns, and the same shape for squid, beef or koorka, because the only part
  * that changes is the ingredient.
+ *
+ * **M3.9 adds a fourth, `billSent`.** Brief §17.5 draws a `wa.me` link on the
+ * Orders screen that sends a customer their bill and private order link, but
+ * the wording for it was never drafted anywhere in `docs/strategy/` (brief
+ * §13.4 and §15.7 name the template, not its text), which makes it a
+ * never-assume item under CLAUDE.md section 5. D24 is the precedent that
+ * settles the mechanism rather than the words: Claude drafts, the draft below
+ * is a fallback, the Owner can replace it from `settings/messages` with no
+ * deploy, and nothing here sends anything by itself (D32: the admin only
+ * ever prefills a `wa.me` link for a person to tick sent).
  */
 
 import { formatINR } from "./money.js";
 
-/** The three messages a batch can offer. The `settings/messages` keys. */
-export const CUSTOMER_MESSAGE_NAMES = ["batchOpen", "halfReached", "backInStock"] as const;
+/** The four messages the admin can offer. The `settings/messages` keys. */
+export const CUSTOMER_MESSAGE_NAMES = ["batchOpen", "halfReached", "backInStock", "billSent"] as const;
 export type CustomerMessageName = (typeof CUSTOMER_MESSAGE_NAMES)[number];
 
 /**
- * What a template may substitute. Every one of these is read off the batch or
- * the product, never typed by hand, so a message cannot claim a number the
- * data does not have.
+ * What a template may substitute. Every one of these is read off the batch,
+ * the product or the order, never typed by hand, so a message cannot claim a
+ * number the data does not have.
  */
 export interface CustomerMessageValues {
   /** The product as a customer knows it, "Prawns and dates pickle". */
@@ -44,6 +54,12 @@ export interface CustomerMessageValues {
   readonly ingredient: string;
   /** The price this message is about, already rendered: "₹599". */
   readonly price: string;
+  /** M3.9: the order's own human number, "o-7f3a2c" (A90). */
+  readonly orderNumber: string;
+  /** M3.9: the order's total, already rendered: "₹1,198". */
+  readonly total: string;
+  /** M3.9: the private order page, as an absolute URL (`shared/src/links.ts`). */
+  readonly orderLink: string;
 }
 
 /**
@@ -76,9 +92,18 @@ export const DEFAULT_CUSTOMER_MESSAGES: Readonly<Record<CustomerMessageName, str
   backInStock:
     "The jars left over from our last batch of {product} are on sale at {price}. " +
     "There are only a few.",
+
+  /**
+   * M3.9. Sent by hand from the Orders screen once a bill exists (D32): the
+   * `wa.me` link this fills carries the private order page so the customer
+   * can find the same bill again without asking. One sentence for the money,
+   * one for the link. No promised date: nothing here is a delivery estimate,
+   * it is a receipt.
+   */
+  billSent: "Thank you, we have your order {orderNumber} for {total}. " + "You can see the bill anytime at {orderLink}.",
 };
 
-const PLACEHOLDER = /\{(product|ingredient|price)\}/g;
+const PLACEHOLDER = /\{(product|ingredient|price|orderNumber|total|orderLink)\}/g;
 
 /**
  * Substitutes `{product}`, `{ingredient}` and `{price}`.
