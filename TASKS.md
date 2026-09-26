@@ -551,7 +551,7 @@ and the live webhook before the production deploy.
       page showing a URL slug where the product name belongs (A214), which round 1 shipped
       **with a passing test over it** and round 2 only half fixed. Round 3 also refused a
       specified fix it measured to be unreachable, and corrected the ledger instead (A215).
-- [ ] M3.9 [sonnet] (Shefin checks) Orders screen in admin. Brief §17.5 groups, filters, search, order
+- [x] M3.9 [sonnet] (Shefin checks) Orders screen in admin. (e6a287b; A220 to A229 logged; Shefin checked on his laptop 26 Sep and asked for the date/time and the All tab, both built in round 3; a bill-series wedge this task introduced was found and fixed, A228) Brief §17.5 groups, filters, search, order
       detail with lines, jar numbers, payment, documents, kitchen note, timeline.
       Actions that exist so far. Done when: every order created in M2 and M3 is
       findable and readable.
