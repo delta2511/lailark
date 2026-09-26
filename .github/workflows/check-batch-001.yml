@@ -6,6 +6,27 @@ name: Live /batch/001
 # allowlist (docs/cloud-sessions.md). A GitHub runner can reach it, so the live half
 # of the check runs here instead of by hand.
 #
+# What it compares: this job builds the site from the checked-out commit and diffs the
+# deployed /batch/001 body, byte for byte, against the built site/out/batch/001.html.
+# It also checks that /batch/1 and /batch/01 still 301 to /batch/001.
+#
+# Why that comparison means anything (M3.4b): site/next.config.mjs pins the Next build
+# id to a constant via generateBuildId. Before that, Next minted a random build id per
+# build and embedded it in every page, so a fresh build of identical source differed
+# from the deployed artifact by exactly those 21 bytes — this job would have failed
+# every single run while telling you nothing about the page. With the id pinned, the
+# bytes are a function of the page's content alone, so a difference here is a real
+# content difference. Do not change that constant into a commit sha or a tree hash:
+# this job builds the default branch fresh, so a build id tracking the commit would go
+# red on every commit that touched the site but not the /batch/001 page.
+#
+# WHEN THIS FIRST RUNS: GitHub fires `schedule:` only from the default branch. This
+# workflow was added on milestone-3-launch (M3.11), so as of M3.4b it has never run
+# once and cannot. The daily check starts the day milestone-3-launch merges into main;
+# `workflow_dispatch` below is likewise only offered on the default branch. Until that
+# merge, the only /batch/001 verification is scripts/deploy.mjs's post-deploy guard and
+# `npm run check:batch-001` run by hand.
+#
 # Exit codes from scripts/check-batch-001.mjs:
 #   0  live page matches the built record
 #   1  the D28 ingredient-line difference only, which means a deploy is owed. Noted,

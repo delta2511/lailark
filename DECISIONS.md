@@ -1483,7 +1483,7 @@ break.
 - A250 (M3.4a, 26 Sep): **the byte-for-byte check cannot do the job it was built for, and
   the daily one has never run.** Found while verifying A248. `site/next.config` pins no
   `generateBuildId`, so Next mints a random build id per build and embeds it in the page;
-  two builds of identical source differ by exactly those 20 bytes (`cmp -l`, 26 Sep). The
+  two builds of identical source differ by exactly those 21 bytes (`cmp -l`, 26 Sep). The
   check therefore passes only when the local build is the exact artifact deployed, and
   cannot distinguish "the jar page changed" from "someone rebuilt" - the one distinction it
   exists to make. Separately, `.github/workflows/check-batch-001.yml` lives only on
@@ -1571,6 +1571,68 @@ break.
   issues"). Whether the function resolves the secret at runtime or a fresh instance picked
   up the latest version is **not established**, and is recorded as unknown rather than
   guessed. A clean functions deploy would make the binding deterministic. Status: open.
+
+- A258 (M3.4b, 26 Sep): **the pinned Next build id is a constant, not the commit sha and
+  not a hash of the source tree.** `site/next.config.mjs` now sets
+  `generateBuildId: () => "lailark"`. The choice is the whole point of the task, so it is
+  recorded rather than left in the diff: the daily guard builds the default branch fresh
+  and compares against whatever is currently deployed, so a build id that tracked the
+  commit or the tree would go red on every commit that touched the site but not the
+  `/batch/001` page, which is exactly the false signal A250 found. A constant makes the
+  bytes a function of the page's content alone. Proven reproducible rather than assumed:
+  the build id was the only nondeterminism, and three clean builds produce a
+  byte-identical `site/out/batch/001.html` and a byte-identical whole `site/out` tree,
+  including the `.txt` RSC payloads. The tester also built under `TZ=UTC LC_ALL=C` and
+  under `TZ=Pacific/Pago_Pago LC_ALL=de_DE.UTF-8` and got the same bytes, which matters
+  because the page carries formatted dates and the GitHub runner is not on IST: the daily
+  check will not go red against a Mac-built deploy for locale reasons. Zero content bytes
+  moved: the record built before the change is identical to the one after, once the single
+  build-id token is normalised. Status: open.
+- A259 (M3.4b, 26 Sep): **pinning the id makes `/_next/static/lailark/*` a stable path
+  whose contents change from build to build**, which is safe only because
+  `firebase.json` serves `**` with `Cache-Control: no-cache` and grants
+  `max-age=2592000, immutable` only to `jpg|jpeg|png|svg|ico|mp4`. Checked on the live
+  staging site, not assumed. Anyone who later adds an `immutable` rule for
+  `/_next/static/**` reintroduces a real stale-chunk bug. Said in as many words in the
+  config comment so it is read at the point of change. Status: open.
+- A260 (M3.4b, 26 Sep): **a test that asserts a constant with a partial-match regex is not
+  a guard.** The first version of `scripts/test/site-build-id.test.mjs` matched
+  `generateBuildId:\s*\(\)\s*=>\s*["'][^"']+["']` anywhere in the line, so
+  `() => "lailark-" + (process.env.VERCEL_GIT_COMMIT_SHA || "")` satisfied it; the
+  blocklist missed it too, because `/\bgit\b/` finds no word boundary inside `_GIT_`.
+  Found by the fresh tester's own mutation probe, not by the four mutations it was asked
+  to run. It would have passed all four tests in CI, where a build precedes the tests and
+  the built record therefore carries the mutated id. Fixed by anchoring the declaration at
+  both ends so the entire right-hand side must be one bare quoted string, and the
+  blocklist is now explicitly second-line only. Verified: mutation D fails the declaration
+  test even when `site/out` was built with the mutated config. The general point, worth
+  more than this test: a mutation probe the tester invents is worth more than the
+  mutations it was handed. Status: open.
+- A261 (M3.4b, 26 Sep): the blocklist scans the config **with comments stripped**, because
+  the config's own prose legitimately says "not the commit sha, not a hash of the source
+  tree" and a `/sha/i` pattern over the raw source would fail on the explanation of the
+  rule it enforces. Test structure, assume-freely under CLAUDE.md §5. Status: open.
+- A262 (M3.4b, 26 Sep): **the workflow is not moved to the default branch; the honest
+  statement is written down instead.** The task allowed either. A merge to `main` is
+  Shefin's and happens at the milestone break, so M3.4b made the workflow correct for the
+  day it lands (its header now states what it compares, why the comparison means something
+  now, and that it has never run) and wrote the plain statement into
+  `docs/cloud-sessions.md` §4: the daily live check starts the day `milestone-3-launch`
+  merges into `main`, and not before. M5.11's task text now carries the two lines the
+  launch checklist owes Shefin. Status: open.
+- A263 (M3.4b, 26 Sep): **one-time cost, outstanding for Shefin.** Pinning the id moved the
+  bytes of every built page, so `npm run check:batch-001` exits 2 against both staging
+  (`tree-quiz-74e04`) and production (`lailark.in`) until the customer site is deployed
+  once from this branch. Verified that the live/repo difference is exactly the 21 build-id
+  bytes and **zero content bytes**, on staging, by normalising that one token. So the
+  second half of M3.4b's done-when ("`check:batch-001` passes against staging from a fresh
+  build that was not the one deployed") cannot be closed from this session: it needs a
+  staging deploy, which is Shefin's to run. Status: open.
+- A264 (M3.4b, 26 Sep): the "20 bytes" figure in A250 and in M3.4b's task text was wrong.
+  The random build id is 21 characters, 21 differing byte positions, and the staging length
+  delta of 14 = 21 - 7 confirms it independently. Corrected in both ledgers and in all
+  three files that repeated it. Small, but the word "exactly" made it load-bearing in the
+  one paragraph that justifies the change. Status: settled.
 
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 

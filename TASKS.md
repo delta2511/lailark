@@ -616,13 +616,15 @@ and the live webhook before the production deploy.
       the path and the comparison, so the two can never drift again. Done when: a dry-run
       deploy exercises the guard, a deliberately altered record makes it fail loudly, and
       `npm run test:scripts` covers both.
-- [ ] M3.4b [opus] `/batch/001` cannot actually be verified byte for byte, and the daily
-      check has never run. Two findings from M3.4a on 26 Sep, both on the rule CLAUDE.md
+- [x] M3.4b [opus] `/batch/001` cannot actually be verified byte for byte, and the daily
+      check has never run. (A258 to A264 logged; fresh adversarial tester PASS, its own
+      mutation probe found a hole in the new test's regex and round 2 closed it; the
+      staging half of the done-when needs a deploy from Shefin, A263) Two findings from M3.4a on 26 Sep, both on the rule CLAUDE.md
       §3 calls inviolable.
       **One: the record is not reproducible.** `site/next.config` sets no
       `generateBuildId`, so Next mints a random build id per build and embeds it in the
       page (`"b":"cinf8BLfkW-HIO6Y99sub"` one build, `"b":"TjLjwRXR-wY7Idtzb-H0J"` the
-      next). Two builds of identical source differ by exactly those 20 bytes, proven with
+      next). Two builds of identical source differ by exactly those 21 bytes, proven with
       `cmp -l`. Every byte-for-byte check therefore only passes when the local build is
       the very artifact that was deployed: it passed against staging right after the
       deploy on 26 Sep and failed an hour later purely because the site had been rebuilt.
@@ -681,8 +683,19 @@ and the live webhook before the production deploy.
       things only Shefin can tick: before international payments are enabled on the
       Razorpay account, the captured currency must be parsed and a non-INR capture
       refused. Today `currency` is dropped, so a capture of `amount: 64900, currency:
-      "USD"` sells a ₹649 jar.** Print the production deploy commands; do not run
-      them. Then stop.
+      "USD"` sells a ₹649 jar.**
+      **From M3.4b, `LAUNCH.md` must also carry two `/batch/001` lines Shefin ticks, not
+      the build.** One: the daily live check
+      (`.github/workflows/check-batch-001.yml`) has never run and cannot, because GitHub
+      fires `schedule:` only from the default branch and the workflow lives only on
+      `milestone-3-launch`. It starts the day that branch merges into `main`, and the
+      checklist says so plainly and asks him to confirm the first run went green. Two:
+      pinning the Next build id (M3.4b) changed the bytes of every built page, so
+      `npm run check:batch-001` exits 2 against both staging and production until the
+      customer site is deployed once from this branch. That is a one-time cost, and the
+      checklist names it so the first red check after launch is not read as drift on the
+      one page printed on 22 jars.
+      Print the production deploy commands; do not run them. Then stop.
 
 ---
 

@@ -85,6 +85,30 @@ to `.github/workflows/check-batch-001.yml`, which runs daily on a GitHub runner 
 can be dispatched by hand against staging or production. Getting `lailark.in`
 allowlisted would close this properly.
 
+**Two things about that byte comparison, found in M3.4a and fixed in M3.4b.**
+
+*The record is reproducible now, and was not before.* `site/next.config.mjs` set no
+`generateBuildId`, so Next minted a random build id per build and embedded it in every
+page. Two builds of identical source differed by exactly those 21 bytes, which meant
+the check only ever passed when the local build was the very artifact that had been
+deployed: it passed against staging right after the deploy on 26 Sep and failed an hour
+later purely because the site had been rebuilt. It could not tell "the jar page changed"
+from "someone rebuilt". M3.4b pins the build id to the constant `"lailark"`, so
+`site/out/batch/001.html` is byte-identical across clean builds of the same source and a
+difference the check reports is a real content difference. The constant is deliberate:
+a commit sha or a tree hash would make the daily workflow, which builds fresh and
+compares against whatever is deployed, go red on every commit that touched the site but
+not the `/batch/001` page. `scripts/test/site-build-id.test.mjs` guards this.
+
+*The daily workflow has not run yet, and cannot until the merge.* GitHub fires
+`schedule:` only from the default branch, and `.github/workflows/check-batch-001.yml`
+lives only on `milestone-3-launch` (added by M3.11). **So the daily live check starts
+the day `milestone-3-launch` merges into `main`, and not before.** `workflow_dispatch`
+is likewise only offered on the default branch. Until that merge the only `/batch/001`
+verification is `scripts/deploy.mjs`'s post-deploy guard, which runs on every real
+deploy, and `npm run check:batch-001` run by hand from the Mac. Checking that the
+workflow has actually run once belongs on the launch checklist, not in a cloud session.
+
 **Showing anyone the dev server.** It is localhost-only inside the container: the
 `192.0.2.2` address Next advertises is RFC 5737 documentation space, there is no
 default route, and no port forward exists for app ports. So the `(Shefin checks)`
