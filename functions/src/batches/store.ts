@@ -28,6 +28,7 @@ import {
   ORDER_STATES_TERMINAL,
 } from "@lailark/shared";
 
+import { orderTookJars } from "../orders/paid";
 import type {
   BatchUpdateView,
   BatchView,
@@ -333,22 +334,19 @@ export async function ordersInBatch(
   for (const doc of found.docs) {
     const state = String(doc.get("state") ?? "");
     if (!terminal.includes(state)) open += 1;
-    // M2.8: a voided sale did not happen (brief 7A.6). Its payment block is
-    // left as it was, because it is the record of what was taken at the
-    // counter, so "was this paid" cannot be answered from `payment` alone.
-    // Leaving it in `paid` would keep its jars counted against the customer's
-    // per-person allowance for the life of the batch, so a mistyped sale
-    // would cost them an allowance they never used. Every other terminal
-    // state is left in: a `closed` order really did take its jars.
-    if (state === "voided") continue;
-    if (doc.get("payment.status") === "captured" || doc.get("paidAt") !== undefined) {
-      paid.push({
-        id: doc.id,
-        customerPhone: (doc.get("customerPhone") as string | undefined) ?? null,
-        jars: jarsInBatch(doc, batchRef),
-        paidAtMillis: millisOf(doc.get("paidAt")) ?? 0,
-      });
-    }
+    // M3.6c, A203: the one predicate, in `orders/paid.ts`. It asks the
+    // order's own state and `paidAt`, and never `payment.status`, which
+    // `writePaymentOnly` writes onto a refused capture that sold nothing.
+    // Counting one of those would count jars a customer asked for as jars
+    // they own, and refuse them at their next checkout. `voided` is excluded
+    // there too, for the reason brief 7A.6 gives.
+    if (!orderTookJars(doc)) continue;
+    paid.push({
+      id: doc.id,
+      customerPhone: (doc.get("customerPhone") as string | undefined) ?? null,
+      jars: jarsInBatch(doc, batchRef),
+      paidAtMillis: millisOf(doc.get("paidAt")) ?? 0,
+    });
   }
   return { paid, open };
 }

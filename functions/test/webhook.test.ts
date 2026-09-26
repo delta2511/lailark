@@ -119,10 +119,14 @@ async function leaveJarsFree(ref: string, free: number): Promise<void> {
   await db().collection("batches").doc(ref).update({ paidCount: capacity - free, heldJars: {} });
 }
 
-/** A real web checkout, through the real callable, holding one jar. */
-async function startCheckout(over: Record<string, unknown> = {}) {
+/**
+ * A real web checkout, through the real callable, asking for one jar, with
+ * whatever came back: the result on a hold taken, the error on a refusal.
+ * M3.6c reads the refusal, so it cannot go through `startCheckout`.
+ */
+async function attemptCheckout(over: Record<string, unknown> = {}) {
   const customerPhone = nextCustomer();
-  const out = await callFunction("createCheckout", null, {
+  return callFunction("createCheckout", null, {
     productSlug: PRODUCT,
     qty: 1,
     customerName: "Asha",
@@ -133,6 +137,11 @@ async function startCheckout(over: Record<string, unknown> = {}) {
     clientRef: `cr-${Math.random().toString(36).slice(2)}`,
     ...over,
   });
+}
+
+/** The same checkout, insisting it worked: a refusal fails the test here. */
+async function startCheckout(over: Record<string, unknown> = {}) {
+  const out = await attemptCheckout(over);
   if (!out.result) throw new Error(`checkout failed: ${JSON.stringify(out.error)}`);
   return out.result as {
     orderId: string;
@@ -1167,4 +1176,187 @@ describe("what a reclaimed jar is bounded by", () => {
     expect((await db().collection("concerns").get()).size).toBe(0);
     await assertNeverOversold();
   }, 120_000);
+});
+
+/* -------------------------------------------------------------------------- */
+/* M3.6c: A203, the refused-capture phantom claim                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A capture that is refused records the money and sells nothing: the order
+ * stays `held`, with `payment.status: "captured"`, no `paidAt`, no bill and
+ * not one jar on `paidCount` (§21.1, A201, A184). Those jars were never the
+ * customer's, so they may not be counted against that customer's per-person
+ * allowance.
+ *
+ * Before M3.6c they were, for the life of the batch: `ordersInBatch` read
+ * `payment.status`, so a refused customer was told at their next checkout
+ * that they already had their jars, and each refusal inflated the next. The
+ * harm was strictly too tight, which is why it could sit here unnoticed: it
+ * refused paying customers rather than overselling.
+ *
+ * Both halves are proven here, because a fix that only loosened would be
+ * worse than the bug: an undercount of paid jars oversells the batch.
+ */
+describe("A203: a capture that sold nothing is not a jar the customer owns", () => {
+  let ref = "";
+
+  beforeAll(async () => {
+    await clearFirestore();
+    await seedProduct();
+  }, 120_000);
+
+  beforeEach(async () => {
+    ref = await inStockBatch();
+  }, 120_000);
+
+  afterAll(drainWorker, 60_000);
+
+  async function lapse(orderId: string): Promise<void> {
+    await db()
+      .collection("batches")
+      .doc(ref)
+      .update({ [`heldJars.${orderId}.expiresAt`]: new Date(Date.now() - 60_000) });
+  }
+
+  /** CLAUDE.md §3, read straight off the batch: `paid + live holds <= capacity`. */
+  async function assertNeverOversold(): Promise<void> {
+    const batch = await batchDoc(ref);
+    const capacity = (batch.bottledJars as number) ?? (batch.bookableJars as number);
+    expect((batch.paidCount as number) + liveHeldJars(batch.heldJars, Date.now()))
+      .toBeLessThanOrEqual(capacity);
+  }
+
+  async function capture(
+    started: { orderId: string; razorpayOrderId: string; totalPaise: number },
+    paymentId: string,
+  ) {
+    return applyCapturedPayment(db(), {
+      paymentId,
+      razorpayOrderId: started.razorpayOrderId,
+      amountPaise: started.totalPaise,
+      orderId: started.orderId,
+      method: "upi",
+    });
+  }
+
+  it("leaves the refused customer's allowance untouched, so they can buy again", async () => {
+    // One jar left, one jar per person, and one customer about to have a very
+    // bad fifteen minutes.
+    await leaveJarsFree(ref, 1);
+    await db().collection("batches").doc(ref).update({ perPersonLimitOverride: 1 });
+    const customerPhone = nextCustomer();
+
+    const first = await startCheckout({ batchRef: ref, customerPhone });
+    // The Razorpay window sits open past the hold, and while it does, somebody
+    // else takes the jar: the ordinary §9.3 race, through the real callable.
+    await lapse(first.orderId);
+    const other = await startCheckout({ batchRef: ref });
+
+    const refused = await capture(first, "pay_a203_refused");
+    expect(refused.outcome).toBe("hold-gone");
+    expect(refused.jars).toBe(0);
+    expect(refused.documentNumber).toBeNull();
+
+    // Exactly the state A201 and A184 want: money recorded, nothing sold.
+    const refusedOrder = await orderDoc(first.orderId);
+    expect(refusedOrder.state).toBe("held");
+    expect((refusedOrder.payment as { status: string }).status).toBe("captured");
+    expect(refusedOrder.paidAt ?? null).toBeNull();
+    expect(refusedOrder.billNumber ?? null).toBeNull();
+    expect(
+      (await db().collection("concerns").doc(`capture-hold-gone-${first.orderId}`).get()).exists,
+    ).toBe(true);
+
+    // The other customer's hold lapses in turn and is swept, so there is a
+    // jar again. The refused order is left where it is: its payment is
+    // captured, and A184 keeps the sweep off it.
+    await lapse(other.orderId);
+    await sweepExpiredHolds(db());
+    expect((await orderDoc(other.orderId)).state).toBe("expired");
+    expect((await orderDoc(first.orderId)).state).toBe("held");
+    expect(liveHeldJars((await batchDoc(ref)).heldJars, Date.now())).toBe(0);
+
+    // The whole point. This customer owns no jar in this batch, so a limit of
+    // one per person must let them try again. Before M3.6c this came back
+    // "This batch is limited to 1 jar per person and you already have 1."
+    const again = await attemptCheckout({ batchRef: ref, customerPhone });
+    expect(again.result, JSON.stringify(again.error)).toBeTruthy();
+
+    // And it really is a sale this time.
+    const applied = await capture(
+      again.result as { orderId: string; razorpayOrderId: string; totalPaise: number },
+      "pay_a203_applied",
+    );
+    expect(applied.outcome).toBe("applied");
+    expect(applied.jars).toBe(1);
+    const paidOrder = await orderDoc((again.result as { orderId: string }).orderId);
+    expect(paidOrder.state).toBe("toPack");
+    expect(paidOrder.paidAt).toBeTruthy();
+
+    await assertNeverOversold();
+    for (const doc of (await db().collection("concerns").get()).docs) await doc.ref.delete();
+  }, 180_000);
+
+  it("still counts a real capture against the limit, and cannot be oversold", async () => {
+    // The other half: the fix must not have loosened the limit itself.
+    await leaveJarsFree(ref, 4);
+    await db().collection("batches").doc(ref).update({ perPersonLimitOverride: 1 });
+    const customerPhone = nextCustomer();
+    const paidBefore = (await batchDoc(ref)).paidCount as number;
+
+    const bought = await startCheckout({ batchRef: ref, customerPhone });
+    const applied = await capture(bought, "pay_a203_counts");
+    expect(applied.outcome).toBe("applied");
+    expect((await batchDoc(ref)).paidCount).toBe(paidBefore + 1);
+
+    // One jar owned, one jar allowed, three jars still on the shelf.
+    const again = await attemptCheckout({ batchRef: ref, customerPhone });
+    expect(again.result).toBeFalsy();
+    expect(again.error.message).toMatch(/limited to 1 jar per person/);
+    expect(again.error.message).toMatch(/already have 1/);
+
+    // Somebody else is not affected by it.
+    const other = await attemptCheckout({ batchRef: ref });
+    expect(other.result, JSON.stringify(other.error)).toBeTruthy();
+
+    // Scoped to this batch: a concern left by another test is not this
+    // test's business, and nothing here should have raised one.
+    expect((await db().collection("concerns").where("batchRef", "==", ref).get()).size).toBe(0);
+    await assertNeverOversold();
+  }, 180_000);
+
+  it("cannot be oversold by a crowd of lapsed captures and fresh checkouts", async () => {
+    // Three jars, no per-person limit in the way, and six things racing for
+    // them: three lapsed captures claiming afresh, three live checkouts.
+    await leaveJarsFree(ref, 3);
+    await db().collection("batches").doc(ref).update({ perPersonLimitOverride: 9 });
+    const capacity = (await batchDoc(ref)).bottledJars as number;
+
+    const stale = [] as Array<{ orderId: string; razorpayOrderId: string; totalPaise: number }>;
+    for (let i = 0; i < 3; i += 1) {
+      const started = await startCheckout({ batchRef: ref });
+      await lapse(started.orderId);
+      stale.push(started);
+    }
+
+    await Promise.all([
+      ...stale.map((started, i) => capture(started, `pay_a203_race_${i}`)),
+      ...[0, 1, 2].map(() => attemptCheckout({ batchRef: ref })),
+    ]);
+
+    const batch = await batchDoc(ref);
+    const sold = batch.paidCount as number;
+    const held = liveHeldJars(batch.heldJars, Date.now());
+    expect(sold + held).toBeLessThanOrEqual(capacity);
+    // And every jar that was paid for is a jar that moved: no phantom claim
+    // left a jar counted twice, and none left one uncounted.
+    const paid = await db().collection("orders").where("batchRefs", "array-contains", ref).get();
+    const jarsOnPaidOrders = paid.docs
+      .filter((doc) => doc.get("paidAt") != null)
+      .reduce((n, doc) => n + Number((doc.get("lines") as Array<{ qty: number }>)[0]?.qty ?? 0), 0);
+    expect(sold).toBe(capacity - 3 + jarsOnPaidOrders);
+
+    for (const doc of (await db().collection("concerns").get()).docs) await doc.ref.delete();
+  }, 180_000);
 });

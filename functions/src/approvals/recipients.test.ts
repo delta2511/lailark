@@ -1,16 +1,21 @@
 /**
  * Who a batch message is for (D32), and the one thing this list must never
  * do: put somebody on it whose payment bought no jar (A203).
+ *
+ * The predicate itself moved to `orders/paid.ts` in M3.6c, where the batch
+ * counter now reads it too; its own cases moved with it, to
+ * `orders/paid.test.ts`. What is left here is the list, which still proves
+ * through `planRecipients` that a refused capture stays off it.
  */
 
 import { describe, expect, it } from "vitest";
 import type { DocumentSnapshot } from "firebase-admin/firestore";
 
-import { orderTookJars, planRecipients } from "./recipients";
+import { planRecipients } from "./recipients";
 
 const BATCH = "b-abc123";
 
-/** A `DocumentSnapshot` as far as these two functions read one. */
+/** A `DocumentSnapshot` as far as `planRecipients` reads one. */
 function order(fields: Record<string, unknown>): DocumentSnapshot {
   const data: Record<string, unknown> = {
     state: "paidWaiting",
@@ -27,36 +32,6 @@ function order(fields: Record<string, unknown>): DocumentSnapshot {
     },
   } as unknown as DocumentSnapshot;
 }
-
-describe("whether an order really took jars", () => {
-  it("yes for every paid state of brief §9.1", () => {
-    for (const state of ["paidWaiting", "toPack", "packed", "shipped", "delivered"]) {
-      expect(orderTookJars(order({ state }))).toBe(true);
-    }
-  });
-
-  it("yes for an order the sale path stamped `paidAt` on", () => {
-    expect(orderTookJars(order({ state: "closed", paidAt: 1 }))).toBe(true);
-  });
-
-  it("no for a held order carrying a captured payment (A203)", () => {
-    // The M3.6 case: the money arrived, the capture sold nothing, the order
-    // sits in `held` with a concern against it. Telling that customer "half
-    // the batch is paid for" would be telling them something untrue.
-    expect(
-      orderTookJars(order({ state: "held", payment: { status: "captured" } })),
-    ).toBe(false);
-  });
-
-  it("no for a voided counter sale, which did not happen", () => {
-    expect(orderTookJars(order({ state: "voided", paidAt: 1 }))).toBe(false);
-  });
-
-  it("no for a checkout nobody paid for", () => {
-    expect(orderTookJars(order({ state: "held" }))).toBe(false);
-    expect(orderTookJars(order({ state: "expired" }))).toBe(false);
-  });
-});
 
 describe("the sending list", () => {
   it("is one row per customer, with their jars added up", () => {

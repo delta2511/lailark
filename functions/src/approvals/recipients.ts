@@ -22,19 +22,20 @@
  * list somebody is halfway through working down, and a tick is never undone
  * by a rebuild.
  *
- * **Who counts as paid is decided here, narrowly.** It is deliberately *not*
- * `ordersInBatch`'s predicate, which answers yes to a capture that sold
- * nothing (A203, left unfixed by D62): that counter is too loose, and a list
+ * **Who counts as paid is one question, asked in one place.** It used to be
+ * asked here, narrowly, precisely because `ordersInBatch`'s predicate was too
+ * loose: it answered yes to a capture that sold nothing (A203), and a list
  * built on it would send "half the batch is paid for" to somebody whose
- * payment was refused and refunded. The test here is the order's own state
- * having reached a paid state, or `paidAt` being set, which only the path
- * that really completes a sale writes.
+ * payment was refused. M3.6c fixed that counter instead, so both now call
+ * `orderTookJars` in `orders/paid.ts`: the order's own state having reached a
+ * paid state, or `paidAt` being set, which only the path that really
+ * completes a sale writes.
  */
 
 import type { DocumentSnapshot, Firestore, Transaction } from "firebase-admin/firestore";
-import { ORDER_STATES_PAID } from "@lailark/shared";
 
 import { ORDERS } from "../batches/store";
+import { orderTookJars } from "../orders/paid";
 
 /** One row of the sending list, as it is written to the approval. */
 export interface PlannedRecipient {
@@ -42,24 +43,6 @@ export interface PlannedRecipient {
   readonly name: string;
   readonly jars: number;
   readonly sentAt: null;
-}
-
-/**
- * Whether this order really took jars, as narrowly as it can be asked.
- *
- * `paidAt` is written by the path that completes a sale and deliberately not
- * by `writePaymentOnly`, which records the money on a capture that sold
- * nothing. `ORDER_STATES_PAID` is the order's own run through brief §9.1. An
- * order sitting in `held` with `payment.status: "captured"` is exactly the
- * A203 case, and it is **not** one of these: the money arrived, no jar moved,
- * and the Owner has a concern about it. Messaging that customer "half the
- * batch is paid for" would be wrong.
- */
-export function orderTookJars(doc: DocumentSnapshot): boolean {
-  const state = String(doc.get("state") ?? "");
-  if (state === "voided") return false;
-  if ((ORDER_STATES_PAID as readonly string[]).includes(state)) return true;
-  return doc.get("paidAt") !== undefined && doc.get("paidAt") !== null;
 }
 
 /** The jars this order holds in this batch. Lines name the batch by reference. */

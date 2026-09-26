@@ -515,6 +515,30 @@ and the live webhook before the production deploy.
       refusal path walks in through another one.
       **M5.11 must put this at the top of the Milestone 3 test note.** M3.8 builds on the
       same counter and must not deepen it.
+- [x] M3.6c [opus] The refused-capture phantom claim (A203). (A241 to A245 logged; fresh adversarial tester PASS with mutation testing) Split out of the stuck M3.6
+      on 26 Sep by Shefin's decision, to be fixed before M4.5 builds the refund path on
+      the same counter. `ordersInBatch` (`functions/src/batches/store.ts`) counts an order
+      as paid when `payment.status === "captured" || paidAt !== undefined`, and
+      `writePaymentOnly` (`functions/src/webhooks/capture.ts`) writes exactly that status
+      onto every refused capture, which stays `state: "held"` with no `billNumber`, no
+      `paidAt` and no count moved. So the jars a refused customer *asked* for are counted
+      as jars they *own*, for the life of the batch. `createCheckout` then answers "This
+      batch is limited to 2 jars per person and you already have 2" to someone who owns
+      none, and nothing in the admin explains it, because the blocking order reads as
+      `held` everywhere a person looks. The Owner's concern sentence overcounts the same
+      way, each refusal inflating the next. The harm is strictly too tight: it cannot
+      oversell and cannot move money wrongly, it refuses paying customers and misinforms
+      the Owner. The fix is one predicate: "paid" must mean the order actually took jars,
+      gated on `paidAt` or on the order state having reached a paid state
+      (`ORDER_STATES_PAID`), never on `payment.status` alone. It must satisfy all three
+      consumers: `readStockClaim` at checkout (`batches/holds.ts`), `customerJarsInBatch`
+      on the reclaim, and the recipients list in `approvals/recipients.ts`, whose own
+      comment already names this defect. Every legitimate paid path (online capture,
+      counter sale, payment link) must still count, and `voided` must stay excluded as it
+      is now. Done when: a refused capture leaves the customer's allowance untouched and
+      they can check out again; a real capture still counts; a fresh adversarial tester
+      drives refusal, capture and counter sale against the emulator and finds no
+      overcount, no undercount and no oversell.
 - [x] M3.8 [opus] Open batch mechanics end to end. **Note from M3.5a (A194 iv): a
       resumed checkout silently drops `shareCode` and `batchRef` from the request, so a
       customer who books through a share link, dismisses the payment window and taps Pay
@@ -570,7 +594,12 @@ and the live webhook before the production deploy.
       Packing cost default is read from the settings document (the Settings screen is
       fast-follow). On Shipped, the order shows the shipped message from brief §15.7
       with a prefilled `wa.me` link for the Kitchen to send by hand (D32).
-- [ ] M4.5 [opus] Refund recording, trimmed for launch (D31). Brief §12.3, done from the
+- [ ] M4.5 [opus] Refund recording, trimmed for launch (D31). **Note from the M3.6c
+      tester: `refunded` counts as having taken jars in `orderTookJars` (A241), which is
+      right per brief §9.1 only so long as a refund does not put the jar back on
+      `paidCount`. If this task returns the jar to the count, the predicate and
+      `paidCount` will disagree and the customer keeps an allowance they no longer hold.
+      Decide which one moves, and make them agree.** Brief §12.3, done from the
       order screen (Concerns are fast-follow): record a refund made in the Razorpay
       dashboard (matched from the `refund.processed` webhook in M3.6), by UPI with its
       reference, or in cash with a note. Refund note or credit note document issued

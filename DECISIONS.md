@@ -1393,6 +1393,51 @@ break.
   `parsePaise`'s negative branch is unreachable from both cost inputs and kept as defence
   in case a `min` attribute is ever dropped. Status: open.
 
+- A241 (M3.6c, 26 Sep): A203 is fixed by one named predicate, `orderTookJars` in
+  `functions/src/orders/paid.ts`, which every consumer now calls: `ordersInBatch`
+  (`batches/store.ts`), feeding the per-person limit at checkout, the limit on the reclaim
+  and the Owner's concerns, and the sending list in `approvals/recipients.ts`, which had
+  its own correct copy and a comment saying the counter was wrong. "Paid" now means the
+  order reached an `ORDER_STATES_PAID` state **or** carries `paidAt`; `payment.status` is
+  never read. `voided` is excluded first (brief §7A.6). Both limbs are kept rather than
+  `paidAt` alone: a paid path that forgot the stamp would stop counting, and a paid order
+  that walked on into `closed` or `refunded` would stop counting under the state test
+  alone. It lives in a new module because `orders/store.ts` already imports
+  `batches/store.ts` and either home would make the import circular. File, module and
+  function names are assume-freely under CLAUDE.md §5. Status: open.
+- A242 (M3.6c, 26 Sep): `writePaymentOnly` is deliberately left writing
+  `payment.status: "captured"` onto a refused capture. It is the honest record that
+  Razorpay took the money, and A184 and A201 depend on it: once captured, the sweep and
+  `releaseHold` must leave the order alone. A203 was a **reading** problem, not a data
+  problem. What remains is that an order sitting in `held` with a captured payment and an
+  open `capture-*` concern is unreadable as anything in the Orders screen. That is an
+  admin badge and a concern link, no customer wording, and belongs in a follow-up rather
+  than here. Status: open.
+- A243 (M3.6c, 26 Sep): **the task's own premise was wrong, in the safe direction, and the
+  correction matters for M4.5.** M3.6c was filed saying an undercount here could oversell.
+  The fresh tester traced the capacity arithmetic and found `ordersInBatch().paid` never
+  feeds it: `readStockClaim` and `readHoldToPaid` both compute availability from
+  `batch.paidCount` plus live `heldJars`. So this predicate can loosen the **per-person**
+  limit and thin the Owner's concern list, but it cannot oversell a batch. The strictness
+  of the predicate is still right; the stated stakes were higher than the truth. Status:
+  open.
+- A244 (M3.6c, 26 Sep): **two of the builder's own tests prove nothing, kept knowingly.**
+  Mutation testing by the fresh tester (the old predicate plus four plausible wrong fixes,
+  restored one at a time) showed `paid.test.ts` bites hard, but in the emulator block only
+  the first test fails under the old predicate; the other two pass under every mutant.
+  They are legitimate guards against the opposite error, a fix that loosened, so they stay,
+  but they must never be cited as evidence A203 is fixed. Three `paid.test.ts` cases are
+  likewise documentation rather than coverage. The tester added
+  `functions/test/a203-tester.test.ts`, whose five tests were each checked to fail under
+  the old predicate except the `voided` one, which was already correct. The habit worth
+  keeping: a test that passes before and after the fix has not tested the fix. Status: open.
+- A245 (M3.6c, 26 Sep): latent, not live. `paidAtMillis` falls back to `0`
+  (`batches/store.ts`) for an order in a paid state with no `paidAt`, which would sort it
+  as the oldest in `yieldShortfallAllocation`, where brief §7.7 takes the shortfall off the
+  most recently paid. No path in the repo can produce such an order today, because `paidAt`
+  is only ever written together with a paid state. Recorded so that a future path which
+  sets a paid state without the stamp is known to land here. Status: open.
+
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 
 Shefin walked the ten steps in `docs/milestones/MILESTONE-2-TEST-ROUND-2.md` and reported
