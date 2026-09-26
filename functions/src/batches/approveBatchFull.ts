@@ -43,6 +43,13 @@ import {
 
 export const approveBatchFull = onCall(
   {
+    // A callable's own auth is the Firebase Auth token this function checks
+    // for itself, not IAM: Cloud Run must therefore let an anonymous request
+    // reach it, or the SDK's call is refused before any of our code runs.
+    // The CLI applies this on create, and a function whose first build failed
+    // never got it (A254), so every export states it rather than inheriting
+    // whatever a past deploy happened to leave behind.
+    invoker: "public",
     region: REGION,
     maxInstances: DEFAULT_MAX_INSTANCES,
     // App Check arrives with M5.9; until then the role claim is the gate.

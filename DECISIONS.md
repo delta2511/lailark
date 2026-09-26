@@ -1525,6 +1525,22 @@ break.
   The general point: a test that mutates a shared file is a race in any concurrent runner,
   and it will surface on the day an unrelated file is added. Status: open.
 
+- A254 (26 Sep): **checkout was refused before our code ran, and the cause was a function
+  that had never successfully built.** Shefin hit "Something went wrong on our side" at the
+  address step. The logs showed seven Cloud Run refusals: "The request was not
+  authenticated. Empty Authorization header value." A callable's own auth is the Firebase
+  Auth token the function checks for itself, not IAM, so Cloud Run has to let an anonymous
+  request reach it; the Firebase CLI applies that binding **on create**. `createCheckout`
+  was created at 11:12 by the deploy whose build failed (A246), so the resource existed
+  with no binding, and the later successful deploy was an *update*, which does not reapply
+  it. `api` was unaffected because it got its binding from an earlier successful deploy.
+  The same gap applied to M4.1's `packOrder`, `shipOrder` and `deliverOrder`, created in
+  that same failed deploy, so admin packing would have failed on staging next.
+  Fixed by stating `invoker: "public"` on all twelve HTTP-facing exports rather than
+  inheriting whatever a past deploy happened to leave behind. The general point: a failed
+  build leaves a resource that looks deployed (A247) *and* is missing the IAM a create
+  would have applied, and a later update never repairs it. Status: open.
+
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 
 Shefin walked the ten steps in `docs/milestones/MILESTONE-2-TEST-ROUND-2.md` and reported
