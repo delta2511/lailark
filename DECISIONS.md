@@ -1541,6 +1541,37 @@ break.
   build leaves a resource that looks deployed (A247) *and* is missing the IAM a create
   would have applied, and a later update never repairs it. Status: open.
 
+- A255 (26 Sep): **stating `invoker: "public"` in code did not fix the live services.** The
+  option compiles and deploys, but the CLI applies the IAM binding on **create**, not on
+  update. Read straight off the Cloud Run policies after the deploy: `api` had
+  `roles/run.invoker=[allUsers]`, `createcheckout` and `packorder` had **no bindings at
+  all**. Granted `allUsers` the invoker role on the eleven services missing it, through the
+  Cloud Run API with the user's ADC (his `gcloud` is broken on Python 3.9), with his
+  explicit go-ahead. Public invoker is the correct state for a Firebase callable: its
+  security is the Auth token each function checks for itself, and IAM only decides whether
+  a request may reach the code. The code change stays, because it states the intent and
+  does apply on a fresh create. Status: open.
+- A256 (26 Sep): **the first real Razorpay payment on staging, and what it proved.** Two
+  test purchases, 4 jars, went through Razorpay while our webhook was rejecting every
+  delivery with `bad signature`: the secret set during the interrupted
+  `functions:secrets:set` did not match the one on the Razorpay webhook. Both orders were
+  nonetheless recovered by `reconcilePayments`, which is M3.6's own second done-when
+  ("a payment with no webhook is recovered by the reconciliation job") proven on real
+  traffic rather than in the emulator. Receipts `LKR-26-27-0001` and `0002` were issued and
+  `counters/LKR-26-27` advanced to 3, so the numbering discipline A228 is about held.
+  After a new secret version, the webhook landed (`razorpay-TgisU77MyYr7t7`,
+  `payment.captured`) for orders reconciliation had **already** paid, and changed nothing:
+  `paidCount` stayed 4, no second receipt, the counter did not move. That is A184 and the
+  `alreadyPaid` short circuit proven live.
+  **The operational lesson for the launch checklist:** reconciliation masks a broken
+  webhook completely. Every order looked perfect while every delivery was failing. A
+  healthy order is not evidence the webhook works; only `webhookEvents` is. Status: open.
+- A257 (26 Sep): secret version 2 took effect although the redeploy meant to pick it up
+  failed on a Google-side transient ("Cloud Runtime Config is currently experiencing
+  issues"). Whether the function resolves the secret at runtime or a fresh instance picked
+  up the latest version is **not established**, and is recorded as unknown rather than
+  guessed. A clean functions deploy would make the binding deterministic. Status: open.
+
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 
 Shefin walked the ten steps in `docs/milestones/MILESTONE-2-TEST-ROUND-2.md` and reported
