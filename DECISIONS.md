@@ -1438,6 +1438,31 @@ break.
   is only ever written together with a paid state. Recorded so that a future path which
   sets a paid state without the stamp is known to land here. Status: open.
 
+- A246 (26 Sep): **the functions deploy to staging had never worked, and nothing said so.**
+  Shefin registered the Razorpay webhook and deployed. `firebase functions:list` showed
+  `razorpayWebhook` present, but the URL answered Google's own 404 HTML, not the
+  function's own 405. The audit log gave it: `CreateFunction` succeeded and then
+  `Build failed with status: FAILURE`, `npm error Cannot read properties of null (reading
+  'edgesOut')`. The resource exists with no serving revision, which looks identical to a
+  deployed function in every listing. M4.1's three callables were in the same state.
+  Root cause, bisected locally by copying `functions/` without `node_modules` and running
+  `npm install` as Cloud Build does: `vitest@5.0.1`'s long list of optional peers crashes
+  npm 10.9.4's arborist in `#loadPeerSet`. Runtime dependencies alone install cleanly;
+  adding `eslint`, `typescript` or `typescript-eslint` is fine; adding `vitest` crashes.
+  Fixed by stripping `devDependencies` in `scripts/pack-shared.mjs` when it packs, and
+  restoring them byte for byte after: none of them has a runtime role, because
+  `functions.predeploy` already compiles locally and what deploys is `lib/`.
+  `.npmrc legacy-peer-deps` was rejected as too broad, and a `functions/package-lock.json`
+  because `npm ci` still resolves devDependencies. Status: open.
+- A247 (26 Sep): **a deployed-looking function may not be deployed.** `functions:list`
+  reports the resource, and the CLI reports a `cloudfunctions.net` URI, for a function
+  whose build failed and which serves nothing. The cheap check that tells the truth is to
+  call the URL and look at *whose* 404 it is: Google's HTML page means no revision is
+  serving, while this codebase's own functions answer with their own status and body
+  (`razorpayWebhook` answers 405 "POST only" to a GET, and `api` answers
+  `{"ok":false,"error":"not found"}`). Worth doing after every functions deploy, and worth
+  writing into the launch checklist in M5.11. Status: open.
+
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 
 Shefin walked the ten steps in `docs/milestones/MILESTONE-2-TEST-ROUND-2.md` and reported

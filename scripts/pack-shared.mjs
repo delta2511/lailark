@@ -24,6 +24,17 @@
 // *string* does not touch node_modules, so the symlink — and therefore the
 // emulator, `npm test`, `npm run build` and CI — keeps working through the pack/
 // restore cycle without needing a reinstall.
+//
+// Packing also strips functions/package.json's devDependencies (eslint, typescript,
+// typescript-eslint, vitest), restoring them byte-for-byte on --restore. Cloud Build
+// runs `npm install` inside the uploaded functions/ alone, and vitest@5.0.1's long
+// list of optional peers crashes npm 10.9.4's arborist there ("Cannot read properties
+// of null (reading 'edgesOut')" in @npmcli/arborist's #loadPeerSet), which fails the
+// deploy's Cloud Build step outright. None of these packages have a runtime role:
+// functions.predeploy already runs `npm --prefix functions run build` locally, so
+// what deploys is compiled lib/, not source. Do not put devDependencies back into
+// what pack() ships without first confirming npm can install the resulting graph
+// standalone (a scratch copy of functions/ without node_modules, `npm install`).
 
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
@@ -34,6 +45,10 @@ const ROOT = resolve(new URL("..", import.meta.url).pathname);
 const FUNCTIONS_DIR = resolve(ROOT, "functions");
 const VENDOR_DIR = resolve(FUNCTIONS_DIR, "vendor");
 const PKG_PATH = resolve(FUNCTIONS_DIR, "package.json");
+// Where the stripped devDependencies are stashed between pack() and restore(). Lives
+// inside functions/vendor/ (already gitignored) so it never shows up in git status,
+// and it is a plain file, not a .tgz, so clearVendorTarballs() never touches it.
+const DEV_DEPS_STASH_PATH = resolve(VENDOR_DIR, ".devDependencies.json");
 const WORKSPACE_SPEC = "0.0.0";
 
 function run(cmd, args) {
@@ -75,9 +90,18 @@ function pack() {
   }
   const pkg = readPkg();
   pkg.dependencies["@lailark/shared"] = `file:vendor/${tarball}`;
+  // Stash devDependencies (if still present, i.e. this isn't a re-pack) so restore()
+  // can put them back byte-for-byte, then strip them from what ships to Cloud Build.
+  // See the header comment for why: they have no runtime role and vitest's optional
+  // peers crash npm's arborist when Cloud Build installs functions/ standalone.
+  if (pkg.devDependencies) {
+    writeFileSync(DEV_DEPS_STASH_PATH, `${JSON.stringify(pkg.devDependencies, null, 2)}\n`);
+    delete pkg.devDependencies;
+  }
   writePkg(pkg);
   console.log(`\npacked shared/ -> functions/vendor/${tarball}`);
   console.log(`functions/package.json "@lailark/shared" -> "file:vendor/${tarball}"`);
+  console.log(`functions/package.json devDependencies stripped (stashed in functions/vendor/.devDependencies.json)`);
 }
 
 function restore() {
@@ -85,16 +109,20 @@ function restore() {
   const pkg = readPkg();
   if (pkg.dependencies?.["@lailark/shared"] !== WORKSPACE_SPEC) {
     pkg.dependencies["@lailark/shared"] = WORKSPACE_SPEC;
-    writePkg(pkg);
     changed = true;
   }
+  if (!pkg.devDependencies && existsSync(DEV_DEPS_STASH_PATH)) {
+    pkg.devDependencies = JSON.parse(readFileSync(DEV_DEPS_STASH_PATH, "utf8"));
+    changed = true;
+  }
+  if (changed) writePkg(pkg);
   if (existsSync(VENDOR_DIR)) {
     rmSync(VENDOR_DIR, { recursive: true, force: true });
     changed = true;
   }
   console.log(
     changed
-      ? "restored functions/package.json to the workspace link (\"0.0.0\") and removed functions/vendor/"
+      ? "restored functions/package.json to the workspace link (\"0.0.0\") with devDependencies back, and removed functions/vendor/"
       : "already restored: functions/package.json is on the workspace link, no functions/vendor/",
   );
 }
