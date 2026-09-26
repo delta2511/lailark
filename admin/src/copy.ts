@@ -808,8 +808,57 @@ export const ORDERS = {
   documentsHeading: "Documents",
   documentsNone: "No bill or receipt yet.",
   shipmentHeading: "Shipment",
-  shipmentNone: "Not booked yet. Packing and courier booking arrive in M4.1.",
+  shipmentNone: "Not packed yet.",
   trackingHeading: "Tracking",
+  trackingNone: "No tracking yet.",
+  trackingLinkLabel: "Track on India Post",
+
+  /* ---- M4.1: packing, India Post, delivered ---- */
+  courierLabel: {
+    shiprocket: "Shiprocket",
+    indiaPost: "India Post",
+  } as Record<string, string>,
+  shipmentStatusLabel: {
+    created: "Packed, not yet booked",
+    labelled: "Label printed",
+    pickupScheduled: "Pickup scheduled",
+    picked: "Picked up by courier",
+    inTransit: "In transit",
+    outForDelivery: "Out for delivery",
+    delivered: "Delivered",
+    undelivered: "Undelivered",
+    rto: "Returned to sender",
+    lost: "Lost",
+  } as Record<string, string>,
+  shipmentCourier: "Courier",
+  shipmentAwb: "Consignment number",
+  shipmentPackingCost: "Packing cost",
+  shipmentCourierCost: "Courier cost",
+  shipmentStatus: "Status",
+
+  packHeading: "Pack this order",
+  packCostLabel: "Packing cost",
+  packButton: "Mark packed",
+  packRefused: "This order could not be packed. Check its state and try again.",
+
+  shipHeading: "Book India Post",
+  shipConsignmentLabel: "Consignment number",
+  shipConsignmentPlaceholder: "EE123456789IN",
+  shipCourierCostLabel: "Courier cost (optional)",
+  shipButton: "Mark shipped",
+  shipRefused: "That did not go through. Check the consignment number and try again.",
+
+  deliverByHandButton: "Delivered by hand",
+  deliverButton: "Mark delivered",
+  deliverRefused: "This order could not be marked delivered.",
+
+  /** D32: the admin drafts, a person sends. Never automatic. */
+  sendShipMessageHeading: "Send the dispatch message",
+  sendShipMessagePreview: "What this sends",
+  sendShipMessageButton: "Open in WhatsApp",
+  sendShipMessageNoTracking: "No consignment number yet, so there is nothing to send.",
+  sendShipMessageNoPhone: "No phone number on this order to send it to.",
+
   kitchenNoteHeading: "Kitchen note",
   kitchenNoteNone: "None.",
   concernsHeading: "Concerns",

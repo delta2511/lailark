@@ -18,7 +18,7 @@
  * line rather than an empty list a Kitchen reader might mistake for "no
  * bill yet".
  */
-import type { DocumentRecord, Order } from "@lailark/shared";
+import type { DocumentRecord, Order, Shipment } from "@lailark/shared";
 import { collection, doc, onSnapshot, orderBy, query, where, type Unsubscribe } from "firebase/firestore";
 import { useEffect, useState } from "preact/hooks";
 
@@ -27,10 +27,12 @@ import type { Live } from "../products/data";
 
 export const ORDERS_COLLECTION = "orders";
 export const DOCUMENTS_COLLECTION = "documents";
+export const SHIPMENTS_COLLECTION = "shipments";
 
 /** A document as the screen holds it: its id, and the fields it carries. */
 export type OrderDoc = Partial<Order> & { readonly id: string };
 export type DocumentDoc = Partial<DocumentRecord> & { readonly id: string };
+export type ShipmentDoc = Partial<Shipment> & { readonly id: string };
 
 /** Every order, newest first: the same "newest first" rule brief 17.4 gives batches. */
 export function useOrders(): Live<OrderDoc> {
@@ -151,7 +153,50 @@ export function useAllDocuments(): Live<DocumentDoc> {
 }
 
 /**
- * `settings/messages` (D24): the Owner's own wording for the four customer
+ * M4.1's `shipments/{orderId}` (one per order, `functions/src/shipments/
+ * store.ts`'s `shipmentIdFor`): the packing cost, courier, consignment
+ * number and delivery stamp `packOrder`/`shipOrder`/`deliverOrder` write.
+ * `isAdmin()`-readable, so every role sees it; nothing here writes it, the
+ * same read-only shape `useOrder` already has.
+ */
+export interface SingleShipmentRead {
+  readonly shipment: ShipmentDoc | null;
+  readonly loading: boolean;
+  readonly denied: boolean;
+}
+
+export function useShipment(orderId: string | null): SingleShipmentRead {
+  const [state, setState] = useState<SingleShipmentRead>({
+    shipment: null,
+    loading: orderId !== null,
+    denied: false,
+  });
+
+  useEffect(() => {
+    if (orderId === null) {
+      setState({ shipment: null, loading: false, denied: false });
+      return undefined;
+    }
+    setState({ shipment: null, loading: true, denied: false });
+    const stop: Unsubscribe = onSnapshot(
+      doc(db, SHIPMENTS_COLLECTION, orderId),
+      (snap) => {
+        setState({
+          shipment: snap.exists() ? ({ id: snap.id, ...snap.data() } as ShipmentDoc) : null,
+          loading: false,
+          denied: false,
+        });
+      },
+      () => setState({ shipment: null, loading: false, denied: true }),
+    );
+    return stop;
+  }, [orderId]);
+
+  return state;
+}
+
+/**
+ * `settings/messages` (D24): the Owner's own wording for the five customer
  * messages, read here only so the bill draft (`billMessage.ts`) can prefer it
  * over the fallback in `DEFAULT_CUSTOMER_MESSAGES`, the same way brief §8.2's
  * batch messages already do. `null` while it is loading or has never been

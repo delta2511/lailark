@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  indiaPostTrackingUrl,
+  isIndiaPostConsignment,
   isOrderToken,
   isShareCode,
   ORDER_TOKEN_LENGTH,
@@ -73,5 +75,42 @@ describe("share links", () => {
       `/pickles/prawns-and-dates?${SHARE_CODE_PARAM}=k3n9x2p1a7`,
     );
     expect(shareLinkPath("prawns-and-dates", null)).toBe("/pickles/prawns-and-dates");
+  });
+});
+
+describe("India Post consignment numbers (M4.1)", () => {
+  it("accepts two letters, nine digits, two letters", () => {
+    expect(isIndiaPostConsignment("EE123456789IN")).toBe(true);
+  });
+
+  it("refuses anything else, so a bad tracking link is never drawn", () => {
+    expect(isIndiaPostConsignment("ee123456789in")).toBe(false);
+    expect(isIndiaPostConsignment("EE12345678IN")).toBe(false);
+    expect(isIndiaPostConsignment("EE1234567890IN")).toBe(false);
+    expect(isIndiaPostConsignment("123456789012E")).toBe(false);
+    expect(isIndiaPostConsignment("")).toBe(false);
+    expect(isIndiaPostConsignment(null)).toBe(false);
+    expect(isIndiaPostConsignment(123456789)).toBe(false);
+  });
+
+  it("builds India Post's tracking page, and null for a number that is not one", () => {
+    expect(indiaPostTrackingUrl("EE123456789IN")).toBe("https://www.indiapost.gov.in/");
+    expect(indiaPostTrackingUrl("not-a-consignment")).toBeNull();
+    expect(indiaPostTrackingUrl(null)).toBeNull();
+  });
+
+  /**
+   * The tracking page used to be a deep link
+   * (`.../trackconsignment.aspx?ConsignmentNo=...`), and that path is dead:
+   * it is a SharePoint URL from the site India Post has since replaced, and
+   * it returns 502 whether or not a consignment number is on it. This test
+   * exists so nobody re-adds a query string here without opening a real
+   * tracking link from a phone first.
+   */
+  it("never puts the consignment number on the URL as a query parameter", () => {
+    const url = indiaPostTrackingUrl("EE123456789IN");
+    expect(url).not.toBeNull();
+    expect(url).not.toContain("EE123456789IN");
+    expect(url).not.toContain("?");
   });
 });

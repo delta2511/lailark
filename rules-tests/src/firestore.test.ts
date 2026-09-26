@@ -903,10 +903,16 @@ describe("customers", () => {
 });
 
 describe("shipments", () => {
-  it("take a packing cost from either staff role", async () => {
-    await assertSucceeds(patch(who.kitchen, "shipments/sh-1", { packingCost: 4000 }));
-    await assertSucceeds(patch(who.owner, "shipments/sh-1", { courierCost: 9000 }));
-    await assertSucceeds(write(who.kitchen, "shipments/new-1", { ...base, orderId: ORDER_ID }));
+  // M4.1: packing, courier booking and delivery each move a jar count on the
+  // batch (jarsAssigned, inside a transaction) and the order's own state, so
+  // they moved from a staff-writable field to `packOrder`/`shipOrder`/
+  // `deliverOrder`, three callables, exactly the way `orders/{orderId}` was
+  // always server-only. No client, staff included, may touch this collection
+  // directly any more.
+  it("are never written by a client: packing is a function", async () => {
+    await assertFails(patch(who.kitchen, "shipments/sh-1", { packingCost: 4000 }));
+    await assertFails(patch(who.owner, "shipments/sh-1", { courierCost: 9000 }));
+    await assertFails(write(who.kitchen, "shipments/new-1", { ...base, orderId: ORDER_ID }));
   });
 
   it("keep the courier's own event trail off the client", async () => {

@@ -105,6 +105,14 @@ export interface Batch extends BaseDoc {
   readonly heldJars: Readonly<Record<string, BatchHold>>;
   readonly bottledJars: number;
   readonly writtenOff: number;
+  /**
+   * M4.1: how many of this batch's jars already carry a jar number. Jar
+   * numbers are assigned at packing, in payment order (A228: the counter and
+   * the thing it numbers move in the same transaction), so this is the next
+   * jar number minus one, never touched outside `packOrder`'s transaction on
+   * this document. A batch with no packed order yet reads this as 0.
+   */
+  readonly jarsAssigned: number;
   readonly source: string | null;
   readonly landedOn: IsoDate | null;
   readonly cookedOn: IsoDate | null;

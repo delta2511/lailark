@@ -627,6 +627,16 @@ notes are folded into M5.11.
       sales, totals by method, jars by batch, cash counted, difference, the UPI-to-account
       list. `dayCloses/{date}`. Done when: a day with two cash sales closes correctly.
       Until then: count the cash against the Orders screen at the end of the day.
+- [ ] M3.9a [sonnet] `seed-batch-001.mjs` advances `counters/batch` (A229). The seed
+      writes batch `001` without moving the counter, so the first real bottling aborts
+      with "The counter is behind; try again." and does not self-heal: the aborted
+      transaction does not advance the counter either, so every retry fails identically
+      until someone repairs `counters/batch` by hand. This is A228's bug in a milder
+      form, and A228's fix is the pattern: reserve the numbers the seed consumes in the
+      same transaction, idempotently, taking the max so a counter a real bottling has
+      already pushed past is never wound back. Done when: the seed runs against a fresh
+      emulator and a real bottling straight after it takes the next number, with a
+      negative control proving it aborts without the fix.
 - [ ] M3.6b [sonnet] Daily settlement pull to `settlements` (brief §9.2, §21.1), split
       out of M3.6. Until then: check settlements in the Razorpay dashboard.
 - [ ] M3.7 [sonnet] Razorpay QR at the counter and Payment Links. QR for the exact

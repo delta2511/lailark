@@ -94,3 +94,55 @@ export function shareLinkPath(productSlug: string, shareCode: unknown): string {
   const path = `/pickles/${encodeURIComponent(productSlug)}`;
   return isShareCode(shareCode) ? `${path}?${SHARE_CODE_PARAM}=${shareCode}` : path;
 }
+
+/* -------------------------------------------------------------------------- */
+/* India Post, brief §11.1 and §11.3 (M4.1)                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * An India Post consignment number: two letters, nine digits, two letters,
+ * for example `"EE123456789IN"`. Upper case only: the receipt prints it upper
+ * case, and a lower-case type-in is a typo, not a different valid form, so it
+ * is refused rather than silently upper-cased on the way in (the Kitchen
+ * screen can offer to upper-case what was typed; this module never guesses).
+ */
+const INDIA_POST_CONSIGNMENT = /^[A-Z]{2}[0-9]{9}[A-Z]{2}$/;
+
+export const INDIA_POST_CONSIGNMENT_LENGTH = 13;
+
+/** True for a string that could be an India Post consignment number. */
+export function isIndiaPostConsignment(value: unknown): value is string {
+  return typeof value === "string" && INDIA_POST_CONSIGNMENT.test(value);
+}
+
+/**
+ * India Post's tracking page, plain, with nothing appended to it.
+ *
+ * There used to be a deep-link attempt here
+ * (`.../trackconsignment.aspx?ConsignmentNo=<code>`), and it was wrong: that
+ * path is `_layouts/15/...aspx`, a SharePoint URL from the site India Post
+ * has since replaced. The current indiapost.gov.in is a Next.js app whose
+ * "Track 'N' Trace" tool is a client-side widget on the homepage with no href
+ * and no form action pointing at a per-consignment URL at all, so there is
+ * nothing to deep-link to: `?ConsignmentNo=...` on that old path returns 502
+ * every time, with or without a query string, not intermittently. Checked
+ * from a real browser, not guessed at.
+ *
+ * So this hands the customer the page the widget actually lives on, and the
+ * message that draws it (`shipped` in `messages.ts`) carries the consignment
+ * number as its own value for them to paste in, rather than a link that
+ * silently fails. Do not put a query string back on this without opening it
+ * from a phone first: a customer message is not the place to find out a
+ * "canonical" path was retired.
+ */
+export const INDIA_POST_TRACKING_PAGE = "https://www.indiapost.gov.in/";
+
+/**
+ * India Post's tracking page, or null when `consignmentNumber` is not a
+ * valid one. `orderUrl` above refuses the same way for a bad token: a link
+ * drawn for nothing to track is not a link worth drawing.
+ */
+export function indiaPostTrackingUrl(consignmentNumber: unknown): string | null {
+  if (!isIndiaPostConsignment(consignmentNumber)) return null;
+  return INDIA_POST_TRACKING_PAGE;
+}

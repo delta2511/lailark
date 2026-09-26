@@ -22,3 +22,4 @@ export {
   onOrderWritten,
   transitionBatch,
 } from "./batches";
+export { deliverOrder, packOrder, shipOrder } from "./shipments";

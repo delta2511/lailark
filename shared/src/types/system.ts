@@ -74,6 +74,14 @@ export interface ShelfLifeSettings {
 export interface CourierSettings {
   readonly preferred: Courier;
   readonly fallback: Courier;
+  /**
+   * M4.1, brief §11.3 step 4: the packing cost prefilled when an order is
+   * packed, editable for that one shipment. The Settings screen that writes
+   * this is fast-follow (M4.1's own note), so the document may not exist yet;
+   * a missing document or field falls back to `DEFAULT_PACKING_COST_PAISE`
+   * (`functions/src/shipments/shipments.ts`).
+   */
+  readonly defaultPackingCost: Paise;
 }
 
 /** `settings/prefixes`. Brief section 17.11: the bill prefixes. */

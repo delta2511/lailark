@@ -249,6 +249,11 @@ const EXPECTED_EXPORTS = [
   "SHARE_CODE_LENGTH",
   "isShareCode",
   "shareLinkPath",
+  // links (M4.1): India Post's own consignment number and tracking page
+  "INDIA_POST_CONSIGNMENT_LENGTH",
+  "isIndiaPostConsignment",
+  "INDIA_POST_TRACKING_PAGE",
+  "indiaPostTrackingUrl",
   // orderGroups (M3.9): the Orders screen's grouping over the 17 order states
   "ORDER_GROUPS",
   "ORDER_GROUP_LABELS",

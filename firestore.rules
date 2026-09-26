@@ -103,6 +103,7 @@ service cloud.firestore {
         'halfApprovedAt',
         'halfReachedAt',
         'heldJars',
+        'jarsAssigned',
         'paidCount',
         'pausedFrom',
         'perPersonLimit',
@@ -558,11 +559,20 @@ service cloud.firestore {
     // Packing and booking a courier are both staff jobs (17.12), and
     // "edit packing cost" is explicitly Kitchen's. `packingCost` and
     // `courierCost` are money but they are money *out*, typed by hand from a
-    // receipt, not a customer payment, so they are not on the server-only
-    // list. The courier booking itself is a callable.
+    // receipt, not a customer payment.
+    //
+    // M4.1 (packing): a shipment is created and moved by `packOrder`,
+    // `shipOrder` and `deliverOrder` (`functions/src/shipments/`), never by a
+    // client, because every one of them assigns jar numbers on the batch
+    // document inside a transaction (A228: a numbered resource is only ever
+    // consumed and advanced together) and every one of them moves the order's
+    // own state, which `orders/{orderId}` above already puts on the server
+    // alone. A field-limited client rule was considered (the comment used to
+    // say so) and dropped: `packingCost` changing on its own, with no state
+    // move and no jar numbers, is not a shipment doing anything.
     match /shipments/{shipmentId} {
       allow read: if isAdmin();
-      allow create, update: if isStaff();
+      allow create, update: if false;
       allow delete: if false;
 
       match /events/{eventId} {

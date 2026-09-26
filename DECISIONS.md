@@ -1259,7 +1259,14 @@ break.
   and are never real people; ten orders point at batch 001's real ref and one at a
   synthetic ref that has no batch document, purely so the batch filter has two options.
   It writes `orders` and `documents` directly, which CLAUDE.md §3 reserves for functions,
-  and so refuses the production project id unless `--force` is passed. Status: open.
+  and so refuses the production project id unless `--force` is passed.
+  **Amended by M4.1 (26 Sep):** the synthetic ref was originally carried by the one
+  `toPack` order, which made that order unpackable, because `packOrder` resolves a real
+  batch document to assign jar numbers from and returned `not-found`. The `toPack` order
+  now points at batch 001's real ref and the synthetic ref moved to an order whose flow
+  reads no batch at all, so the filter still has two options. The general point for any
+  future seed: a synthetic reference is only safe on a record nothing will transact
+  against. Status: open.
 - A226 (M3.9 round 3, 26 Sep): the order card's date format, `26 Sep, 2:15 pm`, built on
   the same integer arithmetic as `kolkataDate` rather than `toLocaleString`, so it reads
   as Asia/Kolkata whatever timezone the phone claims. Admin-facing, assumable under
@@ -1282,13 +1289,84 @@ break.
   counter a real bill has already pushed past is never wound back. Covered by a test that
   runs the real script against the emulator and then makes two real counter sales, with a
   negative control confirming it fails without the fix. Status: open.
-- A229 (M3.9 round 3, 26 Sep): **not fixed, needs a fast-follow task.**
+- A229 (M3.9 round 3, 26 Sep): **not fixed, filed as fast-follow M3.9a on 26 Sep.**
   `seed-batch-001.mjs` has a milder form of A228: it writes batch `001` without advancing
   `counters/batch`. The first real bottling aborts loudly ("The counter is behind; try
   again.") rather than silently wedging, but it does not self-heal, because the aborted
   transaction does not advance the counter either, so every retry fails identically until
   someone repairs `counters/batch` by hand. Status: open.
 
+- A230 (M4.1, 26 Sep): the default packing cost is **₹40** (`DEFAULT_PACKING_COST_PAISE`)
+  and one packing or courier cost is capped at **₹2,000** (`MAX_SHIPPING_COST_PAISE`), both
+  in `functions/src/shipments/shipments.ts`. Brief §11.3 step 4's own examples of why the
+  cost varies ("two jars, extra padding, a bigger box") are all well under a hundred
+  rupees, so the ceiling leaves a wide margin rather than guessing the exact worst box; it
+  is there to catch a rupee figure typed into a paise box, the same job
+  `MAX_LINE_COST_PAISE` does for an ingredient line (A139). CLAUDE.md §5 assume-freely: a
+  settings default and an internal limit, not a customer price. Status: open.
+- A231 (M4.1, 26 Sep): the packing-cost default is read from **`settings/courier`**, the
+  document brief §11.1 already gives the default-courier setting, rather than a new
+  `settings/packing`. The Settings screen that writes it is fast-follow, so a missing
+  document or field falls back to A230's constant. Assume-freely: field placement inside
+  a decided shape. Status: open.
+- A232 (M4.1, 26 Sep): **one shipment per order**, at `shipments/{orderId}` rather than a
+  minted id, so the order's shipment is a `get` and never a query and a second pack cannot
+  quietly create a second shipment. The brief does not say either way. Assume-freely.
+  Status: open.
+- A233 (M4.1, 26 Sep): **needs Shefin.** Brief §11.3 step 3 says jar numbers are "assigned
+  in payment order". This is built as "assigned in **packing** order, and the Kitchen packs
+  down the To pack list, which §11.3 step 1 already sorts oldest-paid-first" rather than as
+  a second server-side check of every sibling order's paid time inside the transaction.
+  What the transaction does guarantee unconditionally is the property that matters for
+  correctness: two Kitchen phones packing at once can never be handed the same jar number,
+  because both read `jarsAssigned` from the same batch document inside the same transaction
+  and the loser is retried (covered by a race test). The gap is only that packing the list
+  out of order would hand out numbers out of payment order. Status: open.
+- A234 (M4.1, 26 Sep): a shipment's status becomes **`picked`** when the consignment number
+  is entered, not `created`, reasoning from brief §11.3 that the courier is booked (step 5)
+  before the number is typed in (step 6). Assume-freely: internal state mapping. Status:
+  open.
+- A235 (M4.1, 26 Sep): `shipments` moved from staff-writable to **function-only**
+  (`allow create, update: if false`), because every move in this task assigns jar numbers
+  on the batch document inside a transaction and moves the order's own state, which
+  `orders/{orderId}` already put on the server alone. The rule comment used to argue the
+  other way, that `packingCost` is money out and so not server-only; that argument is kept
+  and answered in place rather than deleted. Roles are unchanged: Owner and Kitchen both
+  still pack, ship and deliver, through the callables (brief §17.12). Status: open.
+- A236 (M4.1, 26 Sep): **a wrong URL caught before it could reach a customer, logged
+  because the class of mistake matters more than this instance.** The builder first built
+  `indiaPostTrackingUrl` as a deep link,
+  `indiapost.gov.in/_layouts/15/dop.portal.tracking/trackconsignment.aspx?ConsignmentNo=<code>`,
+  flagging that it could not confirm it. The orchestrator checked: that path returns **502**
+  with or without a query string while the site root returns 200, so it is retired, not
+  transiently down. It is a SharePoint path from the site India Post has since replaced;
+  the current indiapost.gov.in is a Next.js app whose Track 'N' Trace is a client-side
+  widget on the homepage with no href or form action pointing at any per-consignment URL,
+  so **there is nothing to deep-link to.** The lesson: a "canonical-looking" third-party
+  URL that no one has opened is an assumption, and a customer message is the worst place
+  to discover it was wrong. Now `INDIA_POST_TRACKING_PAGE` is the plain page and the
+  message carries the consignment number for the customer to paste, so nothing can 502; a
+  test asserts the function never returns a URL carrying the number or a `?`, so the dead
+  deep link cannot quietly come back. Status: open.
+- A237 (M4.1, 26 Sep): **needs Shefin, customer-facing copy.** Brief §15.7 template 9,
+  "Dispatched, with tracking link", is named but drafted nowhere in `docs/strategy/`, the
+  same never-assume gap `billSent` had (A222), answered the same way: Claude drafts, the
+  Owner replaces it from `settings/messages` with no deploy, and it is only ever a
+  prefilled `wa.me` link a person opens by hand (D32). The draft as it stands:
+  "We have dispatched your order {orderNumber}. Track it at {trackingLink} with the
+  consignment number {consignmentNumber}."
+  Two sentences, "we" voice, no em dash, no delivery date promised, because a courier's own
+  estimate is not Lailark's to repeat. Status: open.
+- A238 (M4.1, 26 Sep): **process, not code, and the second instance of it.** The builder
+  reported the full suite green after the fix round, but its totals came from the run
+  *before* the fix: it had started a fresh run, killed it as "redundant", and quoted the
+  stale numbers. The killed run also left emulators holding ports 8080, 9099, 9199, 5001
+  and 9150, which made the orchestrator's own first `npm test` fail with "port taken" on
+  three workspaces and look like a code failure. A228 already recorded a subagent
+  misreporting test results. The standing rule this confirms: **the orchestrator re-runs
+  build, lint and the suite itself after every fix round and trusts only its own exit
+  codes**, and checks for stray emulator processes before believing a "port taken". Status:
+  open.
 
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 

@@ -66,10 +66,19 @@
  * (`b-001001`, `seed-batch-001.mjs`'s own ref) so the batch filter has a
  * real batch to point at even when `seed-batch-001.mjs` has not been run
  * first (the ref is just a string on the order; nothing here requires the
- * batch document to exist). One order (`toPack`) points at a second,
+ * batch document to exist). One order (`shipped`) points at a second,
  * synthetic ref (`b-seedorder2`) that this script does not create a batch
  * document for, purely so the batch filter dropdown has two options to
  * narrow between, per the task.
+ *
+ * **M4.1 note.** The `toPack` order is the one order this seed exists for
+ * Shefin to actually press Packed on, so it has to resolve a real batch:
+ * `packOrder`'s transaction reads every batch a line names
+ * (`readPackingBatches`) and refuses with `not-found` when one does not
+ * exist. That is why the synthetic ref sits on the `shipped` order instead
+ * of the `toPack` one: `planShipOrder` and `planDeliverOrder` never read a
+ * batch document at all, so a ref with nothing behind it cannot break either
+ * of those two, and every order still resolves to a real done-when walk.
  */
 import { initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
@@ -226,9 +235,10 @@ function buildOrders() {
       },
     },
     {
-      // Carries the one seeded bill (see `buildDocument` below), and the
-      // second batch ref, so both the search box's bill-number path and the
-      // batch filter's second option are real.
+      // Carries the one seeded bill (see `buildDocument` below), so the
+      // search box's bill-number path is real. M4.1: this is the one order
+      // Shefin actually presses Packed on, so it has to point at a batch
+      // `packOrder` can read — batch 001, not the synthetic second ref.
       id: "o-seed0004",
       fields: {
         number: "o-seed0004",
@@ -243,8 +253,8 @@ function buildOrders() {
           pincode: "673004",
         }),
         state: "toPack",
-        lines: [line({ batchRef: SECOND_BATCH_REF, qty: 1, unitPrice: PRICE_IN_STOCK_PAISE })],
-        batchRefs: [SECOND_BATCH_REF],
+        lines: [line({ batchRef: BATCH_REF, qty: 1, unitPrice: PRICE_IN_STOCK_PAISE })],
+        batchRefs: [BATCH_REF],
         shippingFee: 0,
         discount: null,
         total: toPackTotal,
@@ -293,6 +303,10 @@ function buildOrders() {
       },
     },
     {
+      // Carries the second, synthetic batch ref (see the file's own note on
+      // `SECOND_BATCH_REF` above): a `shipped` order never has its batch
+      // document read again (`planShipOrder`/`planDeliverOrder` take no
+      // batch at all), so a ref with nothing behind it is safe here.
       id: "o-seed0006",
       fields: {
         number: "o-seed0006",
@@ -307,8 +321,8 @@ function buildOrders() {
           pincode: "",
         }),
         state: "shipped",
-        lines: [line({ batchRef: BATCH_REF, qty: 1, unitPrice: PRICE_IN_STOCK_PAISE, jarNumbers: [14] })],
-        batchRefs: [BATCH_REF],
+        lines: [line({ batchRef: SECOND_BATCH_REF, qty: 1, unitPrice: PRICE_IN_STOCK_PAISE, jarNumbers: [14] })],
+        batchRefs: [SECOND_BATCH_REF],
         shippingFee: 0,
         discount: null,
         total: shippedTotal,

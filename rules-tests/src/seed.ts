@@ -58,6 +58,7 @@ export const BATCH_DOC = {
   fullApprovedAt: null,
   pausedReason: null,
   pausedFrom: null,
+  jarsAssigned: 0,
   costs: { jarsLids: 0, boxInserts: 0, labelling: 0, gasPower: 0 },
   pnl: {
     revenue: 0,

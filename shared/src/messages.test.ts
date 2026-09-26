@@ -31,14 +31,29 @@ const PRAWNS = {
   orderNumber: "o-9c2f1a",
   total: "₹1,198",
   orderLink: "https://lailark.in/o/abcdef0123456789abcdef0123456789",
+  trackingLink: "https://www.indiapost.gov.in/",
+  consignmentNumber: "EE123456789IN",
 };
 
-describe("the four drafts", () => {
+describe("the five drafts", () => {
   it("has one for each message the admin can offer", () => {
-    expect([...CUSTOMER_MESSAGE_NAMES]).toEqual(["batchOpen", "halfReached", "backInStock", "billSent"]);
+    expect([...CUSTOMER_MESSAGE_NAMES]).toEqual([
+      "batchOpen",
+      "halfReached",
+      "backInStock",
+      "billSent",
+      "shipped",
+    ]);
     for (const name of CUSTOMER_MESSAGE_NAMES) {
       expect(DEFAULT_CUSTOMER_MESSAGES[name].length).toBeGreaterThan(0);
     }
+  });
+
+  it("dispatches with the order's own number, the tracking page and the consignment number (M4.1)", () => {
+    expect(customerMessage("shipped", PRAWNS)).toBe(
+      "We have dispatched your order o-9c2f1a. " +
+        "Track it at https://www.indiapost.gov.in/ with the consignment number EE123456789IN.",
+    );
   });
 
   it("sends the bill with the order's own number, its total, and the order link (M3.9)", () => {
@@ -79,10 +94,12 @@ describe("the four drafts", () => {
     );
   });
 
-  it("substitutes every placeholder each of the four names", () => {
+  it("substitutes every placeholder each of the five names", () => {
     for (const name of CUSTOMER_MESSAGE_NAMES) {
       const rendered = customerMessage(name, { ...PRAWNS, product: "Koorka pickle" });
-      expect(rendered).not.toMatch(/\{product\}|\{ingredient\}|\{price\}|\{orderNumber\}|\{total\}|\{orderLink\}/);
+      expect(rendered).not.toMatch(
+        /\{product\}|\{ingredient\}|\{price\}|\{orderNumber\}|\{total\}|\{orderLink\}|\{trackingLink\}|\{consignmentNumber\}/,
+      );
       if (DEFAULT_CUSTOMER_MESSAGES[name].includes("{product}")) {
         expect(rendered).toContain("Koorka pickle");
       }
@@ -218,7 +235,9 @@ describe("what the drafts may not say", () => {
       const stripped = text
         .replace(/₹[\d,]+/g, "")
         .replace(new RegExp(PRAWNS.orderNumber, "g"), "")
-        .replace(new RegExp(PRAWNS.orderLink.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "");
+        .replace(new RegExp(PRAWNS.orderLink.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "")
+        .replace(new RegExp(PRAWNS.trackingLink.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "")
+        .replace(new RegExp(PRAWNS.consignmentNumber, "g"), "");
       expect(stripped, name).not.toMatch(/\d/);
       expect(text.toLowerCase(), name).not.toMatch(/hurry|last chance|only \d|left!|selling fast/);
     }
@@ -229,7 +248,9 @@ describe("what the drafts may not say", () => {
       // A link's own dots (lailark.in) are not sentence breaks, so they are
       // collapsed before splitting; the sentence count is about prose, not
       // about how many dots a URL happens to carry.
-      const withoutLink = text.replace(PRAWNS.orderLink, "ORDERLINK");
+      const withoutLink = text
+        .replace(PRAWNS.orderLink, "ORDERLINK")
+        .replace(PRAWNS.trackingLink, "TRACKINGLINK");
       const sentences = withoutLink.split(".").filter((part) => part.trim() !== "");
       expect(sentences.length, name).toBeLessThanOrEqual(2);
       expect(sentences.length, name).toBeGreaterThanOrEqual(1);

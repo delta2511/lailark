@@ -31,6 +31,7 @@ const ALL_BATCH_FIELDS = [
   "heldJars",
   "bottledJars",
   "writtenOff",
+  "jarsAssigned",
   "source",
   "landedOn",
   "cookedOn",

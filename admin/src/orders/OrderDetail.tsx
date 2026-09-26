@@ -12,6 +12,7 @@
  */
 import {
   formatINR,
+  indiaPostTrackingUrl,
   ORDER_GROUP_LABELS,
   orderGroupForState,
   type Paise,
@@ -23,7 +24,9 @@ import { useState } from "preact/hooks";
 import { ORDERS, PAYMENT_LABEL } from "../copy";
 import { Timeline } from "../timeline/Timeline";
 import { billMessageFor } from "./billMessage";
-import { useDocumentsForOrder, useMessageOverrides, type OrderDoc } from "./data";
+import { useDocumentsForOrder, useMessageOverrides, useShipment, type OrderDoc } from "./data";
+import { PackingSection } from "./PackingSection";
+import { shipMessageFor } from "./shipMessage";
 
 interface Props {
   readonly order: OrderDoc;
@@ -44,8 +47,11 @@ function Field({ label, value, testId, numeric }: { readonly label: string; read
 
 export function OrderDetail({ order, role, siteOrigin }: Props): JSX.Element {
   const documents = useDocumentsForOrder(order.id);
+  const shipment = useShipment(order.id);
   const overrides = useMessageOverrides();
   const [popupBlocked, setPopupBlocked] = useState(false);
+  const [shipPopupBlocked, setShipPopupBlocked] = useState(false);
+  const canPack = role === "owner" || role === "kitchen";
 
   /**
    * Opened in a new tab, same reasoning as the bill link on Sell
@@ -61,11 +67,20 @@ export function OrderDetail({ order, role, siteOrigin }: Props): JSX.Element {
     else opened.opener = null;
   }
 
+  function openShipWhatsApp(waLink: string): void {
+    setShipPopupBlocked(false);
+    const opened = window.open(waLink, "_blank");
+    if (opened === null) setShipPopupBlocked(true);
+    else opened.opener = null;
+  }
+
   const group = order.state ? orderGroupForState(order.state) : null;
   const groupLabel = group ? ORDER_GROUP_LABELS[group] : (order.state ?? "");
   const paidWhileHeld = group === "awaitingPayment" && order.payment?.status === "captured";
 
   const bill = billMessageFor(order, siteOrigin, overrides);
+  const shipMessage = shipMessageFor(order, shipment.shipment, overrides);
+  const trackingLink = indiaPostTrackingUrl(shipment.shipment?.awb ?? null);
 
   return (
     <div class="detail" data-testid="order-detail">
@@ -205,16 +220,102 @@ export function OrderDetail({ order, role, siteOrigin }: Props): JSX.Element {
         </ul>
       )}
 
-      {/* ---- Shipment and tracking: M4.1 lands here ---- */}
+      {/* ---- Shipment, brief §17.5, M4.1 ---- */}
       <p class="section-heading">{ORDERS.shipmentHeading}</p>
-      <p class="field-value" data-testid="order-shipment-none">
-        {ORDERS.shipmentNone}
-      </p>
+      {shipment.shipment ? (
+        <div class="fill-numbers" data-testid="order-shipment">
+          <Field
+            label={ORDERS.shipmentCourier}
+            value={
+              shipment.shipment.courier
+                ? (ORDERS.courierLabel[shipment.shipment.courier] ?? shipment.shipment.courier)
+                : ""
+            }
+            testId="order-shipment-courier"
+          />
+          <Field
+            label={ORDERS.shipmentAwb}
+            value={shipment.shipment.awb ?? ""}
+            testId="order-shipment-awb"
+          />
+          <Field
+            label={ORDERS.shipmentPackingCost}
+            value={typeof shipment.shipment.packingCost === "number" ? formatINR(shipment.shipment.packingCost as Paise) : ""}
+            testId="order-shipment-packing-cost"
+            numeric
+          />
+          <Field
+            label={ORDERS.shipmentCourierCost}
+            value={typeof shipment.shipment.courierCost === "number" ? formatINR(shipment.shipment.courierCost as Paise) : ""}
+            testId="order-shipment-courier-cost"
+            numeric
+          />
+          <Field
+            label={ORDERS.shipmentStatus}
+            value={
+              shipment.shipment.status
+                ? (ORDERS.shipmentStatusLabel[shipment.shipment.status] ?? shipment.shipment.status)
+                : ""
+            }
+            testId="order-shipment-status"
+          />
+        </div>
+      ) : (
+        <p class="field-value" data-testid="order-shipment-none">
+          {ORDERS.shipmentNone}
+        </p>
+      )}
 
+      {/* ---- Tracking, brief §17.5, M4.1 ---- */}
       <p class="section-heading">{ORDERS.trackingHeading}</p>
-      <p class="field-value" data-testid="order-tracking-none">
-        {ORDERS.shipmentNone}
-      </p>
+      {trackingLink ? (
+        <a class="field-value" data-testid="order-tracking-link" href={trackingLink} target="_blank" rel="noreferrer">
+          {ORDERS.trackingLinkLabel}
+        </a>
+      ) : (
+        <p class="field-value" data-testid="order-tracking-none">
+          {ORDERS.trackingNone}
+        </p>
+      )}
+
+      {/* ---- Pack, ship, deliver: M4.1, brief §11.1 and §11.3. Owner and
+               Kitchen both may act (§17.12's role matrix row for this task);
+               a Viewer only ever sees the sections above. ---- */}
+      {canPack ? (
+        <PackingSection order={order} />
+      ) : null}
+
+      {/* ---- Send the dispatch message, D32: drafted, never sent
+               automatically ---- */}
+      {shipMessage.hasTracking ? (
+        <>
+          <p class="section-heading">{ORDERS.sendShipMessageHeading}</p>
+          <p class="field-label">{ORDERS.sendShipMessagePreview}</p>
+          <p class="field-value bill-preview" data-testid="order-ship-message-preview">
+            {shipMessage.text}
+          </p>
+          {shipMessage.waLink ? (
+            <>
+              <button
+                type="button"
+                data-testid="order-ship-message-send"
+                onClick={() => openShipWhatsApp(shipMessage.waLink as string)}
+              >
+                {ORDERS.sendShipMessageButton}
+              </button>
+              {shipPopupBlocked ? (
+                <p class="error" data-testid="order-ship-message-popup-blocked">
+                  {ORDERS.sendBillPopupBlocked}
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p class="field-value" data-testid="order-ship-message-no-phone">
+              {ORDERS.sendShipMessageNoPhone}
+            </p>
+          )}
+        </>
+      ) : null}
 
       {/* ---- Kitchen note ---- */}
       <p class="section-heading">{ORDERS.kitchenNoteHeading}</p>

@@ -34,12 +34,26 @@
  * is a fallback, the Owner can replace it from `settings/messages` with no
  * deploy, and nothing here sends anything by itself (D32: the admin only
  * ever prefills a `wa.me` link for a person to tick sent).
+ *
+ * **M4.1 adds a fifth, `shipped`.** Brief §15.7 template 9, "Dispatched, with
+ * tracking link", is named but its wording is not drafted anywhere in
+ * `docs/strategy/` either, so it is the same never-assume item as `billSent`
+ * was, answered the same way: Claude drafts, the Owner can replace it, and it
+ * is only ever a prefilled `wa.me` link the Kitchen opens by hand (D32) after
+ * entering the India Post consignment number. No delivery date is promised:
+ * a courier's own estimate is not Lailark's to repeat.
  */
 
 import { formatINR } from "./money.js";
 
-/** The four messages the admin can offer. The `settings/messages` keys. */
-export const CUSTOMER_MESSAGE_NAMES = ["batchOpen", "halfReached", "backInStock", "billSent"] as const;
+/** The five messages the admin can offer. The `settings/messages` keys. */
+export const CUSTOMER_MESSAGE_NAMES = [
+  "batchOpen",
+  "halfReached",
+  "backInStock",
+  "billSent",
+  "shipped",
+] as const;
 export type CustomerMessageName = (typeof CUSTOMER_MESSAGE_NAMES)[number];
 
 /**
@@ -60,6 +74,15 @@ export interface CustomerMessageValues {
   readonly total: string;
   /** M3.9: the private order page, as an absolute URL (`shared/src/links.ts`). */
   readonly orderLink: string;
+  /**
+   * M4.1: India Post's tracking page. Plain, with nothing appended (see
+   * `indiaPostTrackingUrl` in `links.ts` for why there is no deep link to
+   * append): the customer needs {@link consignmentNumber} alongside it to do
+   * anything with the page.
+   */
+  readonly trackingLink: string;
+  /** M4.1: the India Post consignment number itself, for the customer to paste in. */
+  readonly consignmentNumber: string;
 }
 
 /**
@@ -101,9 +124,25 @@ export const DEFAULT_CUSTOMER_MESSAGES: Readonly<Record<CustomerMessageName, str
    * it is a receipt.
    */
   billSent: "Thank you, we have your order {orderNumber} for {total}. " + "You can see the bill anytime at {orderLink}.",
+
+  /**
+   * M4.1, brief §15.7 template 9. Sent by hand once the Kitchen enters the
+   * India Post consignment number (D32).
+   *
+   * India Post's tracking page carries no per-consignment link (see
+   * `indiaPostTrackingUrl` in `links.ts`: the deep link this used to draft
+   * was a dead SharePoint path that India Post's own rebuild retired), so the
+   * page alone tells the customer nothing. The message gives both: the
+   * number to paste into the page's own tracking box, and the page itself.
+   * One sentence for what happened, one for both of those together. No
+   * delivery date: a courier's own estimate is not Lailark's to promise.
+   */
+  shipped:
+    "We have dispatched your order {orderNumber}. " +
+    "Track it at {trackingLink} with the consignment number {consignmentNumber}.",
 };
 
-const PLACEHOLDER = /\{(product|ingredient|price|orderNumber|total|orderLink)\}/g;
+const PLACEHOLDER = /\{(product|ingredient|price|orderNumber|total|orderLink|trackingLink|consignmentNumber)\}/g;
 
 /**
  * Substitutes `{product}`, `{ingredient}` and `{price}`.

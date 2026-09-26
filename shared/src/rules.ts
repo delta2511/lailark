@@ -57,6 +57,7 @@ export const PROTECTED_BATCH_FIELDS = [
   "halfApprovedAt",
   "halfReachedAt",
   "heldJars",
+  "jarsAssigned",
   "paidCount",
   "pausedFrom",
   "perPersonLimit",
