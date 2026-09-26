@@ -446,7 +446,12 @@ and the live webhook before the production deploy.
       so a resumed refusal is byte-identical to a first-attempt one on all three reasons.
       A refused correction keeps the hold and the `clientRef`. Consents are not carried
       (D57). A191 to A194.
-- [ ] ⚠ M3.6 [opus] Razorpay webhook and reconciliation, trimmed for launch (D29). HTTP
+- [ ] M3.6 [opus] Razorpay webhook and reconciliation, trimmed for launch (D29).
+      **Un-stuck on 26 Sep: A203, the defect it was stuck on, is fixed by M3.6c (e7ca77c),
+      verified by a fresh adversarial tester with mutation testing. The `⚠ stuck` marker
+      and D62 are spent. What is left is not a code failure: Shefin still owes the real
+      walk on staging, below, because Razorpay's own payload and signature are the one
+      thing no test here can prove. Do not tick this task until he has done it.** HTTP
       function verifying the signature, `webhookEvents` dedupe, `payment.captured` → hold
       becomes Paid, bill or receipt issued (M2.9), order events written;
       `refund.processed` matched to an order (M4.5 records it); scheduled 15-minute
