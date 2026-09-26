@@ -599,6 +599,44 @@ and the live webhook before the production deploy.
       Packing cost default is read from the settings document (the Settings screen is
       fast-follow). On Shipped, the order shows the shipped message from brief §15.7
       with a prefilled `wa.me` link for the Kitchen to send by hand (D32).
+- [x] M3.4a [sonnet] The deploy-time `/batch/001` guard has been dead since M3.4. (A248 to A250 logged; the guard now calls the real checker, and the redirects are checked on deploy for the first time) Found
+      on 26 Sep when a staging deploy ended in `ENOENT ... site/public/batch/001/index.html`.
+      `scripts/deploy.mjs` still reads the record from `site/public/batch/001/index.html`,
+      a path that stopped existing when M3.4 (1755855) moved the page to the
+      `site/app/batch/[nnn]` route. `scripts/check-batch-001.mjs` was updated in that same
+      commit and is correct (`site/out/batch/001.html`); `deploy.mjs` has not been touched
+      since M1.8a. So the check CLAUDE.md §3 requires on every deploy has been throwing
+      instead of verifying, and it throws *after* the deploy has already gone out. The page
+      itself is fine: `npm run check:batch-001 -- --url https://tree-quiz-74e04.web.app`
+      passed byte-identical on 26 Sep, with `/batch/1` and `/batch/01` both 301. Fix by
+      making `deploy.mjs` call `check-batch-001.mjs` rather than keeping a second copy of
+      the path and the comparison, so the two can never drift again. Done when: a dry-run
+      deploy exercises the guard, a deliberately altered record makes it fail loudly, and
+      `npm run test:scripts` covers both.
+- [ ] M3.4b [opus] `/batch/001` cannot actually be verified byte for byte, and the daily
+      check has never run. Two findings from M3.4a on 26 Sep, both on the rule CLAUDE.md
+      §3 calls inviolable.
+      **One: the record is not reproducible.** `site/next.config` sets no
+      `generateBuildId`, so Next mints a random build id per build and embeds it in the
+      page (`"b":"cinf8BLfkW-HIO6Y99sub"` one build, `"b":"TjLjwRXR-wY7Idtzb-H0J"` the
+      next). Two builds of identical source differ by exactly those 20 bytes, proven with
+      `cmp -l`. Every byte-for-byte check therefore only passes when the local build is
+      the very artifact that was deployed: it passed against staging right after the
+      deploy on 26 Sep and failed an hour later purely because the site had been rebuilt.
+      So the check cannot tell "the jar page changed" from "someone rebuilt", which is the
+      one distinction it exists to make.
+      **Two: the daily guard has never run.** `.github/workflows/check-batch-001.yml`
+      lives only on `milestone-3-launch` (added by M3.11, a90c8ab) and GitHub fires
+      `schedule:` only from the default branch, so it has not run once and cannot until
+      the branch merges. Worse, once merged it would fail every run, because it builds the
+      site fresh and then compares against the already-deployed page.
+      Fix both: pin the build id so a build of the same source is reproducible (a content
+      hash or the commit sha via `generateBuildId`), which makes the byte comparison mean
+      what it claims; and get the workflow onto the default branch, or say plainly in the
+      launch checklist that the daily check starts only at the merge. Done when: two
+      consecutive clean builds of the same commit produce a byte-identical
+      `site/out/batch/001.html`, and `npm run check:batch-001` passes against staging from
+      a fresh build that was not the one deployed.
 - [ ] M4.5 [opus] Refund recording, trimmed for launch (D31). **Note from the M3.6c
       tester: `refunded` counts as having taken jars in `orderTookJars` (A241), which is
       right per brief §9.1 only so long as a refund does not put the jar back on

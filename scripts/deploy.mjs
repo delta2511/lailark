@@ -13,20 +13,33 @@
 // preview channel and prints a temporary URL; live deploys to the real site.
 //
 // Production live deploys ask for a typed "yes". After a live customer deploy the
-// script fetches /batch/001 and fails loudly (exit 2) if it is not a byte-for-byte
-// match for site/public/batch/001/index.html.
+// script runs scripts/check-batch-001.mjs's own checkBatch001() against the deployed
+// URL (the same record comparison and /batch/1, /batch/01 redirect checks that
+// `npm run check:batch-001` runs) and fails loudly (exit 2) on any mismatch, wrong
+// status, unreachable URL, or bad redirect. This guard used to keep its own copy of
+// the record path and comparison; that copy drifted out of date at M3.4 and threw
+// ENOENT on every real deploy, so M3.4a made it call the one real implementation
+// instead. See check-batch-001.mjs for what "the record" is and how it is built.
 //
 // Set LAILARK_DEPLOY_DRY_RUN=1 to print every command this script would run without
 // executing it, and to skip the /batch/001 network check. Used by scripts/test/.
+//
+// Set LAILARK_DEPLOY_VERIFY_BATCH001_URL=<url> to skip straight to running only that
+// /batch/001 guard against <url> and exit, without building, prompting, or deploying
+// anything. Test-only: lets scripts/test/ exercise the real (non-dry-run) guard
+// against a local fake server instead of a live deploy.
 
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline";
 import { stdin, stdout, argv, env, exit } from "node:process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { checkBatch001 } from "./check-batch-001.mjs";
 
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
 const DRY_RUN = env.LAILARK_DEPLOY_DRY_RUN === "1";
+const VERIFY_ONLY_URL = env.LAILARK_DEPLOY_VERIFY_BATCH001_URL;
 const PROJECTS = { staging: "staging", production: "default" };
 // Read project ids from .firebaserc rather than hard-coding them, so a future
 // repoint (like this one, lailark-staging -> tree-quiz-74e04) is one file.
@@ -35,7 +48,6 @@ const BATCH_URL = {
   default: "https://lailark.in/batch/001",
   staging: `https://${FIREBASERC.projects.staging}.web.app/batch/001`,
 };
-const BATCH_RECORD = resolve(ROOT, "site/public/batch/001/index.html");
 
 /** The Firebase/GCP project id a deploy `--project <alias>` targets, per .firebaserc. */
 function projectIdFor(projectAlias) {
@@ -135,35 +147,37 @@ function hasBuildScript(pkgPath) {
   }
 }
 
-// Fetches url and compares the body byte for byte against the printed-jar record.
-// Exits 2 (loudly) on any mismatch, wrong status, or network failure.
+// Runs the real /batch/001 check (scripts/check-batch-001.mjs's checkBatch001: the
+// record comparison plus the /batch/1 and /batch/01 redirect checks) against url.
+// Exits 2 (loudly) on any mismatch, wrong status, bad redirect, or network failure.
+// This used to be its own copy of the record path and byte comparison; that copy
+// pointed at a file that stopped existing at M3.4 (site/public/batch/001/index.html)
+// and threw ENOENT on every real deploy instead of ever running the check. M3.4a
+// replaced it with the one real implementation so the two cannot drift again.
 async function verifyBatch001(url) {
-  const expected = readFileSync(BATCH_RECORD);
-  let res;
-  try {
-    res = await fetch(url);
-  } catch (e) {
-    console.error(`\n!!! could not reach ${url}: ${e.message}. Printed jars point here. Fix before anything else.`);
-    exit(2);
-    return;
-  }
-  if (res.status !== 200) {
-    console.error(`\n!!! ${url} returned ${res.status}. Printed jars point here. Fix before anything else.`);
-    exit(2);
-    return;
-  }
-  const actual = Buffer.from(await res.arrayBuffer());
-  if (!actual.equals(expected)) {
+  const code = await checkBatch001(url);
+  if (code !== 0) {
     console.error(
-      `\n!!! ${url} does not match ${BATCH_RECORD} byte for byte (${actual.length} vs ${expected.length} bytes). Printed jars point here. Fix before anything else.`,
+      `\n!!! ${url} failed the /batch/001 check above. Printed jars point here. Fix before anything else.`,
     );
     exit(2);
     return;
   }
-  console.log(`\n${url} → 200, byte-identical to the record. Good.`);
+  console.log(`\n${url} passed the /batch/001 check. Good.`);
 }
 
 async function main() {
+  // Test-only fast path: run just the /batch/001 guard against a given URL and stop,
+  // no prompts, no build, no firebase command. See LAILARK_DEPLOY_VERIFY_BATCH001_URL
+  // in the header comment; scripts/test/ uses this to exercise the real (non-dry-run)
+  // guard against a local fake server.
+  if (VERIFY_ONLY_URL) {
+    await verifyBatch001(VERIFY_ONLY_URL);
+    console.log("\ndone.");
+    exit(0);
+    return;
+  }
+
   const rl = createInterface({ input: stdin, output: stdout });
   const { ask, raw } = createPrompter(rl);
 
@@ -289,7 +303,7 @@ async function main() {
   // The one check that must never be skipped.
   if (mode === "live" && targets.includes("customer") && BATCH_URL[alias]) {
     if (DRY_RUN) {
-      console.log(`\n(dry run) would verify ${BATCH_URL[alias]} against ${BATCH_RECORD}`);
+      console.log(`\n(dry run) would verify ${BATCH_URL[alias]} via scripts/check-batch-001.mjs`);
     } else {
       await verifyBatch001(BATCH_URL[alias]);
     }

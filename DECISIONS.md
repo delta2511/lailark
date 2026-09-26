@@ -1463,6 +1463,36 @@ break.
   `{"ok":false,"error":"not found"}`). Worth doing after every functions deploy, and worth
   writing into the launch checklist in M5.11. Status: open.
 
+- A248 (M3.4a, 26 Sep): the deploy-time `/batch/001` guard had been dead since M3.4.
+  `deploy.mjs` read the record from `site/public/batch/001/index.html`, a path M3.4
+  (1755855) removed when it moved the page to the `site/app/batch/[nnn]` route;
+  `check-batch-001.mjs` was corrected in that same commit, `deploy.mjs` was not, and had
+  not been touched since M1.8a. So the check CLAUDE.md §3 demands on every deploy threw
+  `ENOENT` instead of running, and threw *after* the deploy had already gone out. Fixed by
+  deleting the duplicate path and comparison from `deploy.mjs` and having it call
+  `checkBatch001` from the real checker, so the two cannot drift again. The page itself was
+  never wrong: the standalone checker passed byte-identical against staging on 26 Sep.
+  Status: open.
+- A249 (M3.4a, 26 Sep): `deploy.mjs` exits 2 for any non-zero result from the shared
+  checker, including the case the standalone tool reports as 1 ("the repo is ahead, a
+  deploy is owed"). At deploy time that distinction is meaningless, because the deploy just
+  shipped the very record being checked, so a difference there means something is actually
+  wrong and must stay loud. Admin-facing exit codes are assume-freely under CLAUDE.md §5.
+  A side effect worth naming: the redirect checks for `/batch/1` and `/batch/01` now run on
+  every deploy, which they never did before. Status: open.
+- A250 (M3.4a, 26 Sep): **the byte-for-byte check cannot do the job it was built for, and
+  the daily one has never run.** Found while verifying A248. `site/next.config` pins no
+  `generateBuildId`, so Next mints a random build id per build and embeds it in the page;
+  two builds of identical source differ by exactly those 20 bytes (`cmp -l`, 26 Sep). The
+  check therefore passes only when the local build is the exact artifact deployed, and
+  cannot distinguish "the jar page changed" from "someone rebuilt" - the one distinction it
+  exists to make. Separately, `.github/workflows/check-batch-001.yml` lives only on
+  `milestone-3-launch`, and GitHub fires `schedule:` only from the default branch, so the
+  daily guard has never run once and would fail every run if it did, since it builds fresh
+  and compares against the deployed page. Filed as M3.4b. Until then the honest statement
+  is that `/batch/001` is checked by hand at deploy time and not watched daily.
+  Status: open.
+
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 
 Shefin walked the ten steps in `docs/milestones/MILESTONE-2-TEST-ROUND-2.md` and reported
