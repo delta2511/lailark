@@ -1493,6 +1493,38 @@ break.
   is that `/batch/001` is checked by hand at deploy time and not watched daily.
   Status: open.
 
+- A251 (26 Sep): `functions/scripts/seed-open-batch.mjs` makes one product sellable on a
+  real project so a Razorpay test payment can be made at all. Staging had 7 products, 2
+  admin users and nothing else, so `/api/counts` answered `"mode":"none"` everywhere and
+  checkout had no jar to sell. It writes one ingredient, one single-main recipe (one main,
+  not two, to keep D41 and A134's weight summing out of it) and one batch of
+  `prawns-and-dates` created `draft` then moved to `open`, idempotent by document id, and
+  refuses the production id without `--force` like its siblings. Prices are not invented:
+  ₹599 open and ₹649 in stock come from shared's own constants and are MRP-checked, and
+  the per-person limit is `batchMaths`'s computed quarter, not a typed number.
+  **It consumes no counter**, which was checked rather than assumed: D21c puts `batchNo`
+  at bottling, so an open batch has none, and a test asserts `counters` is still empty
+  after two runs. That is A228 and A229's trap avoided rather than repeated. A re-run
+  leaves a batch that has moved on to cooking alone, so booking can never be reopened at
+  ₹599 on a pot that is on the stove. Status: open.
+- A252 (26 Sep): it does **not** raise the `approval:broadcast` that a real Draft -> Open
+  raises. Nothing sends without the Owner, so no customer message is lost; a seeded one
+  would only put a card in Today asking Shefin to broadcast a batch that exists to test a
+  payment. Reversible in one line if the fidelity is wanted. Status: open.
+- A253 (26 Sep): **a latent race in the script suite, exposed by adding a third test file.**
+  `scripts/test/check-batch-001.test.mjs` proved its "build output missing" case by
+  `renameSync`-ing the real `site/out/batch/001.html` aside for the duration of one test.
+  `node --test` runs test *files* concurrently, so `deploy-batch001-guard.test.mjs`, which
+  drives the real checker against a local server, could read a record that was not there,
+  hit `checkRecord`'s early exit and print no result line at all. Measured at 1 failure in
+  3 runs. Fixed by removing the shared mutable state rather than serialising around it:
+  the record path is now injectable (`LAILARK_CHECK_RECORD_PATH`, the same test-only
+  override pattern `deploy.mjs` already uses) and the test points at a path that never
+  existed, so the real artifact is never touched. Files still run concurrently. Verified by
+  22 consecutive green runs, 12 by the builder and 10 by the orchestrator independently.
+  The general point: a test that mutates a shared file is a race in any concurrent runner,
+  and it will surface on the day an unrelated file is added. Status: open.
+
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 
 Shefin walked the ten steps in `docs/milestones/MILESTONE-2-TEST-ROUND-2.md` and reported

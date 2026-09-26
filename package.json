@@ -28,6 +28,7 @@
     "seed:users": "node functions/scripts/seed-users.mjs",
     "seed:products": "node functions/scripts/seed-products.mjs",
     "seed:orders": "node functions/scripts/seed-orders.mjs",
+    "seed:open-batch": "node functions/scripts/seed-open-batch.mjs",
     "emulators:hosting": "firebase emulators:start --only hosting,auth,functions"
   }
 }

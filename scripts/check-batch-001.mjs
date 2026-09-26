@@ -70,18 +70,18 @@ function setExitCode(state, code) {
   if (code > state.exitCode) state.exitCode = code;
 }
 
-async function checkRecord(base, state) {
+async function checkRecord(base, state, recordPath) {
   const url = `${base}/batch/001`;
-  if (!existsSync(RECORD_PATH)) {
+  if (!existsSync(recordPath)) {
     console.error(
-      `Build output not found at ${RECORD_PATH}.\n` +
+      `Build output not found at ${recordPath}.\n` +
         `Run "npm run build" (or "npm run build --workspace site") first, then re-run this check.`,
     );
     setExitCode(state, 2);
     exit(2);
     return;
   }
-  const expected = readFileSync(RECORD_PATH);
+  const expected = readFileSync(recordPath);
   let res;
   try {
     res = await fetch(url, { redirect: "manual" });
@@ -203,10 +203,18 @@ async function checkRedirect(base, path, state) {
 // still fatal via process.exit(2) inside checkRecord (see there) — that keeps this
 // CLI's existing "run npm run build first" behaviour unchanged, and a deploy always
 // builds site/ before calling this, so it is not expected to fire from deploy.mjs.
-export async function checkBatch001(base) {
+//
+// `recordPath` defaults to the real build output (RECORD_PATH) for every real caller
+// (the CLI below and scripts/deploy.mjs). It exists only so a test can point the
+// checker at a path that does not exist, to exercise the "build output missing"
+// message, without touching the one real file the rest of the suite reads (M3.4a
+// follow-up — `node --test` runs test files concurrently, and a test that renamed the
+// real file aside for its duration raced any other test file driving the real checker
+// against a live server; see scripts/test/check-batch-001.test.mjs).
+export async function checkBatch001(base, recordPath = RECORD_PATH) {
   console.log(`checking ${base} ...\n`);
   const state = { exitCode: 0 };
-  await checkRecord(base, state);
+  await checkRecord(base, state, recordPath);
   await checkRedirect(base, "/batch/1", state);
   await checkRedirect(base, "/batch/01", state);
   return state.exitCode;
@@ -214,7 +222,14 @@ export async function checkBatch001(base) {
 
 async function main() {
   const base = baseUrl();
-  const exitCode = await checkBatch001(base);
+  // Test-only override, same pattern as scripts/deploy.mjs's
+  // LAILARK_DEPLOY_VERIFY_BATCH001_URL: lets scripts/test/check-batch-001.test.mjs
+  // point the CLI at a record path that does not exist, to exercise the "build output
+  // missing" message, without moving the real site/out/batch/001.html that every other
+  // test in the concurrently-run suite reads. Unset in every real invocation, so
+  // `npm run check:batch-001` (bare, --project, --url) always uses RECORD_PATH.
+  const recordPath = process.env.LAILARK_CHECK_RECORD_PATH || RECORD_PATH;
+  const exitCode = await checkBatch001(base, recordPath);
   if (exitCode > 0) {
     if (exitCode === 1) {
       console.error("\nD28 difference found.");

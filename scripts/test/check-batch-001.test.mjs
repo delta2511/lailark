@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, readFileSync, renameSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
 
@@ -51,9 +51,12 @@ function startServer(body) {
 // child needs to talk to the http server we run in *this* process, so a synchronous
 // spawn deadlocks (the server can't service the request until spawnSync returns, and
 // spawnSync won't return until the child gets its response). Use async spawn instead.
-function runCheck(baseUrl) {
+function runCheck(baseUrl, env = {}) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(process.execPath, [CHECK_SCRIPT, "--url", baseUrl], { cwd: ROOT });
+    const child = spawn(process.execPath, [CHECK_SCRIPT, "--url", baseUrl], {
+      cwd: ROOT,
+      env: { ...process.env, ...env },
+    });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (c) => (stdout += c.toString()));
@@ -170,24 +173,26 @@ test("--project staging targets the staging project's URL from .firebaserc, not 
 });
 
 test("fails with a clear message when the build output is missing", async () => {
-  // Moves the real build output aside for the duration of this one test, so
-  // the script has to hit its "run npm run build first" guard, then puts it
-  // back: this test must never leave the repo without the file other tests
-  // in this suite depend on.
-  const movedAside = `${RECORD_PATH}.movedForTest`;
-  renameSync(RECORD_PATH, movedAside);
+  // Points the checker at a record path that does not exist, via the same
+  // env-var-override pattern scripts/deploy.mjs uses for its own test-only URL
+  // override, so the script has to hit its "run npm run build first" guard. This used
+  // to rename the real build output aside for the duration of the test and put it
+  // back afterwards, but `node --test` runs test files concurrently, and any other
+  // test file driving the real checker (e.g. scripts/test/deploy-batch001-guard.test.mjs)
+  // could read the record mid-rename and get a false "file missing" failure. Never
+  // touching the real file removes the race entirely.
+  const missingPath = `${RECORD_PATH}.does-not-exist-for-test`;
+  assert.ok(!existsSync(missingPath), "the path used for this test must not already exist");
+  const server = await startServer(RECORD); // unreachable if the guard fires first
+  const { port } = server.address();
   try {
-    const server = await startServer(RECORD); // unreachable if the guard fires first
-    const { port } = server.address();
-    try {
-      const { status, stderr } = await runCheck(`http://127.0.0.1:${port}`);
-      assert.equal(status, 2);
-      assert.match(stderr, /Build output not found/);
-      assert.match(stderr, /npm run build/);
-    } finally {
-      server.close();
-    }
+    const { status, stderr } = await runCheck(`http://127.0.0.1:${port}`, {
+      LAILARK_CHECK_RECORD_PATH: missingPath,
+    });
+    assert.equal(status, 2);
+    assert.match(stderr, /Build output not found/);
+    assert.match(stderr, /npm run build/);
   } finally {
-    renameSync(movedAside, RECORD_PATH);
+    server.close();
   }
 });
