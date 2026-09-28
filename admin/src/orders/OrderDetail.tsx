@@ -4,11 +4,10 @@
  * (courier, number, cost, packing cost), tracking, kitchen note, Concerns,
  * timeline."
  *
- * M3.9's scope is read only (see the task): pack, courier booking, refund
- * recording and Concerns are later milestones (M4.1, M4.5, M4.4). Every
- * section the brief names is drawn here regardless, several of them as an
- * honest empty state, so those tasks have somewhere to land rather than
- * inventing their own section the first time they are built.
+ * M3.9 drew this read only; M4.1 added the packing panel and M4.5 the refund
+ * panel. Concerns are still a later milestone (M4.4) and sit here as an honest
+ * empty state, so that task has somewhere to land rather than inventing its own
+ * section.
  */
 import {
   formatINR,
@@ -26,6 +25,7 @@ import { Timeline } from "../timeline/Timeline";
 import { billMessageFor } from "./billMessage";
 import { useDocumentsForOrder, useMessageOverrides, useShipment, type OrderDoc } from "./data";
 import { PackingSection } from "./PackingSection";
+import { RefundSection } from "./RefundSection";
 import { shipMessageFor } from "./shipMessage";
 
 interface Props {
@@ -322,6 +322,11 @@ export function OrderDetail({ order, role, siteOrigin }: Props): JSX.Element {
       <p class="field-value" data-testid="order-kitchen-note">
         {order.kitchenNote && order.kitchenNote.trim() !== "" ? order.kitchenNote : ORDERS.kitchenNoteNone}
       </p>
+
+      {/* ---- Record a refund: M4.5, brief §12.3 and D31. **Owner only**,
+               because money moves; `recordRefund` refuses anybody else at the
+               server too, which is where it counts. ---- */}
+      {role === "owner" ? <RefundSection order={order} /> : null}
 
       {/* ---- Concerns: M4.4 lands here ---- */}
       <p class="section-heading">{ORDERS.concernsHeading}</p>

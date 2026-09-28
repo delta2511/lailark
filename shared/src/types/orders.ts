@@ -7,6 +7,7 @@ import type {
   OrderState,
   PaymentMethod,
   PaymentStatus,
+  RefundMethod,
 } from "../states.js";
 import type { ActorId, BaseDoc, PhoneE164, Timestamp } from "./base.js";
 
@@ -59,6 +60,79 @@ export interface OrderPayment {
   readonly refundedAmount: Paise;
 }
 
+/**
+ * **D65.** The Owner's mark that this refund was a refusal: he sent the money
+ * back because he chose not to serve this person, not because anything went
+ * wrong with the sale.
+ *
+ * The jar still goes back on sale either way ("refusing a person is not a
+ * reason to lose a jar out of a 15-to-40 jar batch"), but a refusal keeps
+ * that person's per-person allowance for the batch **spent**, so they cannot
+ * simply buy the same jar again. It may be set when the refund is recorded
+ * and it may be added or changed afterwards, because an order refunded first
+ * and understood later must still be markable.
+ */
+export interface OrderRefusal {
+  readonly reason: string;
+  readonly at: Timestamp;
+  readonly by: ActorId;
+}
+
+/**
+ * What the gateway told us before anyone recorded it: a `refund.processed`
+ * webhook that M3.6 matched to this order (`functions/src/webhooks/refund.ts`).
+ *
+ * It is a **to-do marker, not money**: nothing on `payment` is touched by the
+ * webhook, because the refund is not recorded until the Owner records it on
+ * the order screen (brief 12.3). `recordRefund` clears this when it records
+ * the refund with the same `razorpayRefundId`.
+ */
+export interface GatewayRefundPending {
+  readonly razorpayRefundId: string;
+  readonly razorpayPaymentId: string;
+  readonly amount: Paise;
+  readonly seenAt: Timestamp;
+}
+
+/**
+ * `orders/{id}.refund`: everything a recorded refund leaves on the order.
+ * Brief 12.3, M4.5. Written only by functions, like every other money field.
+ *
+ * `totalPaise` deliberately repeats `payment.refundedAmount`, which is the
+ * field the Orders screen has always read. Both are written in the same
+ * commit by the same function; this one exists so that the questions
+ * `orders/paid.ts` asks (have the jars come back, has the whole thing been
+ * returned, and was it a refusal) can be answered off one map without also
+ * needing the order's total.
+ */
+export interface OrderRefundRecord {
+  /** Cumulative paise returned across every refund recorded on this order. */
+  readonly totalPaise: Paise;
+  /**
+   * True once the whole of `payment.amount` has been returned. Only a full
+   * refund moves the order to `refunded`, puts jars back, and frees the
+   * per-person allowance (D65).
+   */
+  readonly fullyRefunded: boolean;
+  /** Jars this order's refunds have put back on their batch's paid count. */
+  readonly jarsReturned: number;
+  /**
+   * Brief 12.3: "The gateway fee on the original payment is not returned. The
+   * P&L records it." Null means nobody has told us what it was, which is a
+   * different fact from zero and must not be added up as zero.
+   */
+  readonly gatewayFeeUnreturned: Paise | null;
+  /** D65. Null unless the Owner marked this refund a refusal. */
+  readonly refusal: OrderRefusal | null;
+  /** The refund note or credit note numbers issued against this order. */
+  readonly documentNumbers: readonly string[];
+  readonly lastMethod: RefundMethod;
+  readonly lastRecordedAt: Timestamp;
+  readonly lastRecordedBy: ActorId;
+  /** A gateway refund seen but not yet recorded, or null. */
+  readonly gatewayPending: GatewayRefundPending | null;
+}
+
 /** `orders/{id}`. Money fields on this document are written only by functions. */
 export interface Order extends BaseDoc {
   /** The human order number. Not the bill number. */
@@ -100,4 +174,9 @@ export interface Order extends BaseDoc {
    * M3.8.
    */
   readonly token: string | null;
+  /**
+   * M4.5, brief 12.3: what the refunds recorded on this order came to. Absent
+   * on every order that has never been refunded, which is almost all of them.
+   */
+  readonly refund?: OrderRefundRecord | null;
 }

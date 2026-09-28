@@ -642,12 +642,19 @@ and the live webhook before the production deploy.
       consecutive clean builds of the same commit produce a byte-identical
       `site/out/batch/001.html`, and `npm run check:batch-001` passes against staging from
       a fresh build that was not the one deployed.
-- [ ] M4.5 [opus] Refund recording, trimmed for launch (D31). **Note from the M3.6c
+- [x] M4.5 [opus] Refund recording, trimmed for launch (D31). (A265 to A282 logged; D65 asked and answered before the task; two adversarial testers, the first FAIL with three defects and two mutation-proved test gaps, the second PASS after two fix rounds; **the staging half of the done-when is owed, A282**). **Note from the M3.6c
       tester: `refunded` counts as having taken jars in `orderTookJars` (A241), which is
       right per brief §9.1 only so long as a refund does not put the jar back on
       `paidCount`. If this task returns the jar to the count, the predicate and
       `paidCount` will disagree and the customer keeps an allowance they no longer hold.
-      Decide which one moves, and make them agree.** Brief §12.3, done from the
+      Decide which one moves, and make them agree.**
+      **Decided by Shefin on 28 Sep, D65: the refund reverses both.** The jar returns to
+      `paidCount` if it is not packed, and a `refunded` order stops counting toward that
+      person's per-person limit for the batch, so they may buy again. The exception: a
+      refund **marked as a refusal** keeps the allowance spent, while the jar still goes
+      back on sale. The refusal reason is recorded on the order, may be set when the
+      refund is recorded, and may be added afterwards. So `orderTookJars` reads the
+      refusal mark, not the state alone, which amends A241. Brief §12.3, done from the
       order screen (Concerns are fast-follow): record a refund made in the Razorpay
       dashboard (matched from the `refund.processed` webhook in M3.6), by UPI with its
       reference, or in cash with a note. Refund note or credit note document issued

@@ -27,15 +27,21 @@
  * loose: it answered yes to a capture that sold nothing (A203), and a list
  * built on it would send "half the batch is paid for" to somebody whose
  * payment was refused. M3.6c fixed that counter instead, so both now call
- * `orderTookJars` in `orders/paid.ts`: the order's own state having reached a
+ * `orderHoldsJars` in `orders/paid.ts`: the order's own state having reached a
  * paid state, or `paidAt` being set, which only the path that really
  * completes a sale writes.
+ *
+ * **M4.5 and D65** split that predicate in two, and this list takes the jars
+ * half. "Half the batch is paid for" goes to the people who are actually
+ * holding jars: a refund that gave its jar back put that jar on sale for
+ * somebody else, so the person refunded is not on the list, whether or not the
+ * Owner marked the refund a refusal.
  */
 
 import type { DocumentSnapshot, Firestore, Transaction } from "firebase-admin/firestore";
 
 import { ORDERS } from "../batches/store";
-import { orderTookJars } from "../orders/paid";
+import { jarsOnLine, orderHoldsJars } from "../orders/paid";
 
 /** One row of the sending list, as it is written to the approval. */
 export interface PlannedRecipient {
@@ -51,7 +57,9 @@ function jarsInBatch(doc: DocumentSnapshot, batchRef: string): number {
   if (!Array.isArray(lines)) return 0;
   let total = 0;
   for (const line of lines as Array<Record<string, unknown>>) {
-    if (line?.batchRef === batchRef && typeof line?.qty === "number") total += line.qty;
+    // `jarsOnLine`, the same test `ordersInBatch` and the refund path apply, so
+    // the number in a customer's message is the number on the count.
+    if (line?.batchRef === batchRef) total += jarsOnLine(line?.qty);
   }
   return total;
 }
@@ -68,7 +76,7 @@ export function planRecipients(
 ): PlannedRecipient[] {
   const byPhone = new Map<string, number>();
   for (const doc of docs) {
-    if (!orderTookJars(doc)) continue;
+    if (!orderHoldsJars(doc)) continue;
     const phone = doc.get("customerPhone");
     if (typeof phone !== "string" || phone === "") continue;
     byPhone.set(phone, (byPhone.get(phone) ?? 0) + jarsInBatch(doc, batchRef));
@@ -88,7 +96,7 @@ export async function readRecipients(
   const phones = [
     ...new Set(
       found.docs
-        .filter((doc) => orderTookJars(doc))
+        .filter((doc) => orderHoldsJars(doc))
         .map((doc) => doc.get("customerPhone"))
         .filter((phone): phone is string => typeof phone === "string" && phone !== ""),
     ),

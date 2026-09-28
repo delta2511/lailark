@@ -874,6 +874,73 @@ export const ORDERS = {
   sendBillNoPhone: "No phone number on this order to send it to.",
   sendBillPopupBlocked: "Your phone stopped WhatsApp opening. Allow pop-ups for this site, then tap again.",
 
+  /* ---- M4.5: recording a refund, brief §12.3. Owner only ---- */
+
+  /**
+   * Admin wording, which CLAUDE.md §5 says may be assumed freely. It is
+   * written to say plainly that nothing here *makes* a refund happen (D31):
+   * the money has already gone back, and this writes it into the ledger.
+   */
+  refundHeading: "Record a refund",
+  refundNotOwner: "Only Shefin can record a refund.",
+  refundIntro:
+    "The refund happens in the Razorpay dashboard, by UPI, or in cash. Record it here so the books and the jar count are true.",
+  refundPaidLabel: "Paid on this order",
+  refundReturnedLabel: "Returned so far",
+  refundLeftLabel: "Left to refund",
+  refundNothingLeft: "The whole payment has been returned. Nothing more can be refunded on this order.",
+  refundNothingPaid: "No money has arrived on this order, so there is nothing to refund.",
+
+  refundMethodLabel: "How the money went back",
+  refundMethodOption: {
+    razorpay: "Razorpay dashboard",
+    upi: "UPI to their account",
+    cash: "Cash, handed back",
+  } as Record<string, string>,
+
+  refundAmountLabel: "Amount",
+  refundRazorpayIdLabel: "Razorpay refund id",
+  refundRazorpayIdPlaceholder: "rfnd_...",
+  refundReferenceLabel: "UPI reference",
+  refundNoteLabel: "Note",
+  refundNotePlaceholder: "What happened, in a line",
+  refundGatewayFeeLabel: "Gateway fee Razorpay kept (optional)",
+  refundGatewayFeeHint:
+    "Razorpay does not return its fee on the original payment. Type it in and the batch P&L carries it.",
+
+  refundRefusalLabel: "This was a refusal (optional)",
+  refundRefusalPlaceholder: "Why this person was refused",
+  refundRefusalHint:
+    "A refusal puts the jar back on sale but keeps this person's allowance for the batch spent, so they cannot buy it again. Leave it blank for an ordinary refund.",
+
+  refundButton: "Record the refund",
+  refundButtonHint: "Hold to record",
+  refundBadAmount: "The amount must be a number of rupees, above zero.",
+  refundBadFee: "The gateway fee must be a number of rupees, zero or more.",
+  refundRefused: "That refund was not recorded. Read the reason, fix it and hold again.",
+
+  refundDoneJarsBack: "Recorded. The jar is back on sale.",
+  refundDoneNoJars: "Recorded. No jar went back on sale.",
+
+  refundGatewayPendingHeading: "Razorpay has already refunded this",
+  refundGatewayPendingPrefill: "Use these details",
+
+  refundHistoryHeading: "Refunds on this order",
+  refundHistoryNone: "None recorded.",
+
+  refusalHeading: "Refusal mark",
+  refusalNone: "Not marked as a refusal. This customer may buy from the batch again.",
+  refusalSet: "Marked as a refusal, so this customer's allowance for the batch stays spent.",
+  refusalSaveButton: "Save the mark",
+  refusalClearButton: "Take the mark off",
+  refusalRefused: "That mark was not saved. Read the reason and try again.",
+
+  refundHeldBackBecause: {
+    "partial-refund": "Only part of the payment was returned, so no jar went back on sale.",
+    "already-packed": "This order was already packed, so its jars did not go back on sale.",
+    "took-no-jars": "This order never took a jar off the count, so none went back.",
+  } as Record<string, string>,
+
   paymentStatusLabel: {
     created: "Created",
     authorized: "Authorized",

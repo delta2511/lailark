@@ -176,6 +176,38 @@ export const ORDER_STATES_PAID = [
   "delivered",
 ] as const;
 
+/**
+ * The states in which this order's jars have been written into a box, handed
+ * over, or sent, so a refund cannot put them back on the batch's paid count.
+ *
+ * **M4.5, brief section 12.3:** "jar returns to the count if not packed". This
+ * is the "packed" side of that sentence, spelled out state by state rather
+ * than left to a reader:
+ *
+ *  - `packed`, `shipped`, `delivered`: section 9.1's own words for a box with
+ *    jar numbers written on its contents, a box with a courier, and a box the
+ *    customer has. None of those jars is in the kitchen to sell again.
+ *  - `deliveryProblem` and `claim`: the order got past packing, and where the
+ *    jar is now (undeliverable, RTO, lost, broken) is the return inspection's
+ *    question, not a refund's. Handing the count a jar nobody has looked at
+ *    would sell a jar that may be in a courier's van.
+ *
+ * Every other state is before packing. `readyForCollection` is deliberately
+ * **not** here: a counter sale waiting to be collected has no jar numbers
+ * written and the jars are on the kitchen shelf, so a refund does put them
+ * back. `paused` and `changeRequested` are not here either, because either
+ * can be reached from before packing; M4.5 asks the order's jar numbers as
+ * well as its state, so an order that was packed and then paused still keeps
+ * its jars (see `refundPlan.ts`).
+ */
+export const ORDER_STATES_PACKED_OR_BEYOND = [
+  "packed",
+  "shipped",
+  "delivered",
+  "deliveryProblem",
+  "claim",
+] as const;
+
 /** `created -> authorized -> captured -> (refund recorded)`. Section 9.2. */
 export const PAYMENT_STATUSES = [
   "created",

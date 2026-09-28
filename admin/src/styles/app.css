@@ -1159,3 +1159,53 @@ button.undo-toast-button:focus-visible {
   text-align: left;
   font-size: var(--font-size-small);
 }
+
+/* ---- Hold-to-confirm (M4.5, brief 17.1) ---------------------------------- */
+
+/* Brief 17.1: the only "are you sure" in this app is a hold, for an action
+   that leaves the system. The bar fills across the button while the finger is
+   down. Ink on paper like every other primary button: never rust, which is a
+   number colour only (CLAUDE.md section 3). */
+
+.hold-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+button.hold-confirm-button {
+  position: relative;
+  overflow: hidden;
+  min-height: calc(var(--tap) + var(--space-3));
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.hold-confirm-label {
+  position: relative;
+  z-index: 1;
+}
+
+/* Nothing at rest, so a button that is not being held looks like any other. */
+.hold-confirm-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--paper);
+  opacity: 0.28;
+}
+
+button.hold-confirm-button.holding .hold-confirm-fill {
+  width: 100%;
+  transition: width var(--hold-ms, 1200ms) linear;
+}
+
+/* A person who has asked for less motion still needs to see that the hold is
+   working, so the fill becomes a single step at the halfway point rather than
+   a slide: the information stays, the animation goes. */
+@media (prefers-reduced-motion: reduce) {
+  button.hold-confirm-button.holding .hold-confirm-fill {
+    transition: none;
+    width: 100%;
+  }
+}

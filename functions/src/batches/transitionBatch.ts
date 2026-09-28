@@ -48,6 +48,7 @@ import {
   messagesSettings,
   nextBatchNo,
   ordersInBatch,
+  type OrdersInBatch,
   readExisting,
   recipeMainLines,
   siblingBatches,
@@ -58,7 +59,6 @@ import {
 import {
   approvalId,
   type BatchView,
-  type PaidOrderView,
   parseTransitionRequest,
   planTransition,
   type SiblingBatch,
@@ -116,7 +116,7 @@ export const transitionBatch = onCall(
 
         // Only the rows that need them pay for these reads.
         let siblings: SiblingBatch[] = [];
-        let orders: { paid: PaidOrderView[]; open: number } = { paid: [], open: 0 };
+        let orders: OrdersInBatch = { holdsJars: [], spentAllowance: [], open: 0 };
         let mainLines: readonly MainBatchLine[] = [];
         let productName: string | null = null;
         let mainIngredientName: string | null = null;
@@ -192,7 +192,13 @@ export const transitionBatch = onCall(
           caller,
           batch,
           siblings,
-          paidOrders: orders.paid,
+          // The **jars** list (M4.5, D65): `paidOrders` feeds brief §7.7's
+          // `jarsShort = paidCount - jarCount` and D23's pause concerns, both
+          // of which are about who is holding a jar. Handing it the allowance
+          // list would land a yield shortfall on a refunded, refused customer
+          // who is owed nothing, while the customer holding a paid jar that
+          // will not exist heard nothing. See `orders/paid.ts`.
+          paidOrders: orders.holdsJars,
           mainLines,
           productName,
           mainIngredientName,

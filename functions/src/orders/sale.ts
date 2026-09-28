@@ -808,6 +808,35 @@ export function checkSeller(caller: {
   return { ok: true, role: caller.role as Role, uid: caller.uid };
 }
 
+/**
+ * Owner only, for a call that moves money **out** again: recording a refund
+ * (M4.5, brief §12.3 and §17.12's role matrix, where every refund row is the
+ * Owner's). Kitchen sells and packs; Kitchen does not send money back.
+ *
+ * It lives beside {@link checkSeller} so there is one home for "who is
+ * calling, and may they", and it reads the same token claim by the same rules:
+ * no token is `unauthenticated`, an unknown or missing role is
+ * `permission-denied`, and the sentence names the person who can.
+ */
+export function checkOwner(caller: {
+  readonly uid: string | null;
+  readonly role: unknown;
+}): { readonly ok: true; readonly role: Role; readonly uid: string } | Failure {
+  const seller = checkSeller(caller);
+  if (!seller.ok) {
+    // A Viewer is told the same thing as a Kitchen phone here: this is not a
+    // "you may look but not sell" distinction, it is one action one person does.
+    if (seller.code === "permission-denied") {
+      return fail("permission-denied", "Only Shefin can record a refund.");
+    }
+    return seller;
+  }
+  if (seller.role !== "owner") {
+    return fail("permission-denied", "Only Shefin can record a refund.");
+  }
+  return seller;
+}
+
 /** Brief 7A.2's "Order state" row, one column per fulfilment mode. */
 export function stateAfterPayment(fulfilment: FulfilmentMode): string {
   if (fulfilment === "handedOver") return "delivered";

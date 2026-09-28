@@ -275,6 +275,63 @@ describe("see Money", () => {
   });
 });
 
+/* ── M4.5: recording a refund is the server's, in every role ─────────────── */
+
+/**
+ * Brief §12.3 and CLAUDE.md §3: "Client apps never write `orders.payment`,
+ * `documents`, `counters`, `refunds`... Rules enforce it." The `refunds` block
+ * has been closed since M1.4; this names M4.5's own surface, because M4.5 is
+ * the milestone that gives a human a refund button, and the button must be the
+ * only way in.
+ *
+ * The refusal that matters most for D65 is the last one: the refusal mark on an
+ * order is what keeps a customer's per-person allowance spent, so a client that
+ * could write it could lock any customer out of any batch, or free an allowance
+ * for a jar they still hold.
+ */
+describe("recording a refund (M4.5)", () => {
+  it("takes no client write to refunds, in any role, new document or old", async () => {
+    for (const [name, ctx] of everyRole(who)) {
+      await assertFails(write(ctx, "refunds/cash-o-7f3a2c-1", { ...base, orderId: ORDER_ID, amount: 64_900 }));
+      await assertFails(patch(ctx, "refunds/ref-1", { amount: 1 }));
+      await assertFails(remove(ctx, "refunds/ref-1"));
+      expect(name).toBeTruthy();
+    }
+  });
+
+  it("keeps Kitchen out of refunds even for reading, because a refund is money", async () => {
+    await assertSucceeds(read(who.owner, "refunds/ref-1"));
+    await assertSucceeds(read(who.viewer, "refunds/ref-1"));
+    await assertFails(read(who.kitchen, "refunds/ref-1"));
+    await assertFails(read(who.unauth, "refunds/ref-1"));
+  });
+
+  it("takes no client write to a refund note or a credit note either", async () => {
+    for (const [, ctx] of everyRole(who)) {
+      await assertFails(
+        write(ctx, "documents/LKF-26-27-0001", { ...base, kind: "refundNote", number: "LKF/26-27/0001" }),
+      );
+      await assertFails(
+        write(ctx, "documents/LKC-26-27-0001", { ...base, kind: "creditNote", number: "LKC/26-27/0001" }),
+      );
+    }
+  });
+
+  it("takes no client write to the money or the refusal mark on an order", async () => {
+    for (const [, ctx] of everyRole(who)) {
+      await assertFails(patch(ctx, `orders/${ORDER_ID}`, { "payment.refundedAmount": 64_900 }));
+      await assertFails(patch(ctx, `orders/${ORDER_ID}`, { "payment.status": "refunded" }));
+      await assertFails(patch(ctx, `orders/${ORDER_ID}`, { state: "refunded" }));
+      // D65: the mark that keeps a customer's allowance spent.
+      await assertFails(
+        patch(ctx, `orders/${ORDER_ID}`, {
+          refund: { totalPaise: 64_900, fullyRefunded: true, refusal: { reason: "made up" } },
+        }),
+      );
+    }
+  });
+});
+
 /* ── orders: no client write at all ──────────────────────────────────────── */
 
 describe("orders", () => {

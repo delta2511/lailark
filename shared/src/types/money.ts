@@ -142,7 +142,12 @@ export interface Counter extends BaseDoc {
   readonly fyLabel: string;
 }
 
-/** `refunds/{id}`. */
+/**
+ * `refunds/{id}`. One document per refund actually made, written only by
+ * `recordRefund` (M4.5, brief 12.3), and created must-not-exist so the id is
+ * the idempotency key: `razorpay-<refundId>`, `upi-<reference>`, or
+ * `cash-<orderId>-<n>`.
+ */
 export interface Refund extends BaseDoc {
   readonly orderId: string;
   readonly concernId: string | null;
@@ -152,6 +157,21 @@ export interface Refund extends BaseDoc {
   readonly reference: string | null;
   readonly status: RefundStatus;
   readonly recordedBy: ActorId;
+  /** Brief 12.3's "Amount, note" for cash. Null where none was typed. */
+  readonly note?: string | null;
+  /** The refund note or credit note issued against this refund. */
+  readonly documentNumber?: string | null;
+  readonly documentKind?: DocumentKind | null;
+  /** Jars this refund put back on a batch's paid count, and which batches. */
+  readonly jarsReturned?: number;
+  readonly batchRefs?: readonly string[];
+  /** Why no jar came back, when none did. */
+  readonly jarsHeldBackBecause?: string | null;
+  /** 12.3: the fee the gateway kept. Null when nobody has said what it was. */
+  readonly gatewayFeeUnreturned?: Paise | null;
+  /** D65: the reason, if this refund was marked a refusal when recorded. */
+  readonly refusalReason?: string | null;
+  readonly recordedAt?: Timestamp;
 }
 
 /** `dayCloses/{date}`. The document id is `"YYYY-MM-DD"`. */

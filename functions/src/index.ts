@@ -9,7 +9,7 @@ export { api } from "./api";
 export { answerApproval, onApprovalWritten } from "./approvals";
 export { setRole } from "./auth";
 export { createCheckout, createCounterSale, sweepHolds, voidCounterSale } from "./orders";
-export { billForOrder, onDocumentIssued } from "./money";
+export { billForOrder, markOrderRefusal, onDocumentIssued, recordRefund } from "./money";
 export {
   razorpayWebhook,
   razorpayWebhookWorker,

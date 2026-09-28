@@ -89,6 +89,20 @@ export const LABELS = {
   voided: "Voided",
 } as const;
 
+/**
+ * What a refund note or credit note calls its one line when the refund cannot
+ * honestly be itemised against the order's own lines, which in practice is
+ * every partial refund (M4.5, `money/refundPlan.ts`).
+ *
+ * It is a **description in the goods column**, the way a custom line's is, and
+ * not a sentence: D37 above, a document carries no prose of its own. It lives
+ * here because it is a word a customer reads on a document, and every one of
+ * those lives in this file.
+ */
+export function refundLineWord(fullyRefunded: boolean): string {
+  return fullyRefunded ? "Refund" : "Part refund";
+}
+
 /** Brief 13.2's "Added once GST is on": the inclusive-price line. */
 export const GST_INCLUSIVE_LINE = "Price inclusive of GST.";
 

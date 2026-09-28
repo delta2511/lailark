@@ -274,7 +274,11 @@ export async function readStockClaim(
     if (hold.customerPhone !== customerPhone) continue;
     if (hold.expiresAt > now) customerJars += hold.qty;
   }
-  for (const order of orders.paid) {
+  // D65 and M4.5: the **allowance** list, not the jars list. A refund marked a
+  // refusal gave its jar back and kept this customer's allowance spent, so it
+  // belongs here and not in the count `paidCount` keeps
+  // (`orders/paid.ts` says which question is which).
+  for (const order of orders.spentAllowance) {
     if (order.id === orderId) continue;
     if (order.customerPhone !== customerPhone) continue;
     customerJars += order.jars;
@@ -890,7 +894,10 @@ async function customerJarsInBatch(
     if (hold.expiresAt > args.nowMillis) jarsHeld += hold.qty;
   }
   const orders = await ordersInBatch(tx, db, args.batchRef);
-  for (const order of orders.paid) {
+  // The allowance list, for the same reason `readStockClaim` reads it: D60
+  // makes a reclaim a new claim measured against the limit now, and the limit
+  // is D65's question, not `paidCount`'s.
+  for (const order of orders.spentAllowance) {
     if (order.id === args.orderId) continue;
     if (order.customerPhone !== args.customerPhone) continue;
     jarsHeld += order.jars;

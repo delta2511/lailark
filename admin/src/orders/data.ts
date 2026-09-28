@@ -18,7 +18,7 @@
  * line rather than an empty list a Kitchen reader might mistake for "no
  * bill yet".
  */
-import type { DocumentRecord, Order, Shipment } from "@lailark/shared";
+import type { DocumentRecord, Order, Refund, Shipment } from "@lailark/shared";
 import { collection, doc, onSnapshot, orderBy, query, where, type Unsubscribe } from "firebase/firestore";
 import { useEffect, useState } from "preact/hooks";
 
@@ -28,11 +28,13 @@ import type { Live } from "../products/data";
 export const ORDERS_COLLECTION = "orders";
 export const DOCUMENTS_COLLECTION = "documents";
 export const SHIPMENTS_COLLECTION = "shipments";
+export const REFUNDS_COLLECTION = "refunds";
 
 /** A document as the screen holds it: its id, and the fields it carries. */
 export type OrderDoc = Partial<Order> & { readonly id: string };
 export type DocumentDoc = Partial<DocumentRecord> & { readonly id: string };
 export type ShipmentDoc = Partial<Shipment> & { readonly id: string };
+export type RefundDoc = Partial<Refund> & { readonly id: string };
 
 /** Every order, newest first: the same "newest first" rule brief 17.4 gives batches. */
 export function useOrders(): Live<OrderDoc> {
@@ -190,6 +192,46 @@ export function useShipment(orderId: string | null): SingleShipmentRead {
       () => setState({ shipment: null, loading: false, denied: true }),
     );
     return stop;
+  }, [orderId]);
+
+  return state;
+}
+
+/**
+ * Every `refunds/{id}` recorded against one order (M4.5, brief §12.3).
+ *
+ * `seesMoney()`-gated like `documents`, so this comes back `denied` for
+ * Kitchen. The refund panel is Owner-only anyway, so the screen never renders
+ * this for a role that cannot read it; the `denied` branch is kept because the
+ * rule, not the screen, is what decides.
+ *
+ * Nothing here writes: `refunds` takes no client write in any role
+ * (CLAUDE.md §3), and `refundActions.ts` is the only door.
+ */
+export function useRefundsForOrder(orderId: string | null): Live<RefundDoc> {
+  const [state, setState] = useState<Live<RefundDoc>>({
+    items: [],
+    loading: orderId !== null,
+    denied: false,
+  });
+
+  useEffect(() => {
+    if (orderId === null) {
+      setState({ items: [], loading: false, denied: false });
+      return undefined;
+    }
+    setState({ items: [], loading: true, denied: false });
+    const q = query(collection(db, REFUNDS_COLLECTION), where("orderId", "==", orderId));
+    return onSnapshot(
+      q,
+      (snap) =>
+        setState({
+          items: snap.docs.map((d) => ({ id: d.id, ...d.data() }) as unknown as RefundDoc),
+          loading: false,
+          denied: false,
+        }),
+      () => setState({ items: [], loading: false, denied: true }),
+    );
   }, [orderId]);
 
   return state;

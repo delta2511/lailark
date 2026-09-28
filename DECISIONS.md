@@ -98,6 +98,7 @@ confirm or replace at the next milestone break.
 | D62 | **M3.6 stops at three rounds and is marked `⚠ stuck`. The cap stands** | Asked and answered by Shefin, 25 Sep 2026, after round 3 failed its fresh tester. CLAUDE.md §4.1 step 4 caps the fix loop at three rounds; D54 waived it once for M3.5 and said that was not a precedent. Round 3's tester found a defect that is live on the checkout page today and was outside the three files the round was scoped to: a refused capture counts the jars the customer asked for as jars they own, so a customer refunded under §21.1 is locked out of the batch for its life (A203). Shefin was shown both options, was told the fix is one predicate and that M3.8 builds on the same counter, and chose to stop rather than waive the cap a second time. Round 3's work is committed rather than discarded: it is green, it closes the round 2 tester's overclaim, and it carries D60, which is Shefin's own decision. The defect is written into the M3.6 entry in `TASKS.md`, into A203, and into M5.11 so it reaches the top of the Milestone 3 test note. It is fixed after the break or before launch, not by grinding a fourth round now |
 | D63 | **The private order page's copy is approved as drafted, and it does not tell the customer the order's state** | Asked and answered by Shefin, 25 Sep 2026, during M3.8. `/o/<token>` is the page a customer opens from the link we send them, and nothing is drafted for it anywhere: the brief names the page (§5) and says nothing about what it says, and the story doc drafts no sentence for it, so all of it sat on CLAUDE.md §5's never-assume list. Approved: the heading "Your order"; "We cannot find an order on this link. Do check it, or message us and we will look." for a link that matches nothing; "We cannot show your order just now. Please try again in a moment." for a page that will not load; "Nothing has been issued on this order yet." where the documents go; the labels Order, Placed, Batch, Shipping, Total, Going to, Your jars, Bills and receipts, Open; and the document names Receipt, Bill, Refund note and Credit note. It keeps the D53 voice: says "we", no em dash, and no error tone where nothing has gone wrong. **The order's state is deliberately not shown.** Shefin was offered it and chose to leave it out: it is the largest copy surface on the page, a dozen phrases a customer would have to decode, every one of them a sentence to approve, and the page reads correctly without it. It can be added later without moving anything else. Q28 |
 | D64 | **The notify-me beside a cooking batch is approved as drafted** | Asked and answered by Shefin, 25 Sep 2026, during M3.8. Brief §7.5 drafts the cooking card's own line ("Being cooked now. Unpaid jars go on sale when bottled"), which is used word for word, and then asks for a notify-me next to it without drafting what it says; there is no notify-me anywhere else on the new site to copy from. Approved: the label "Tell me when these jars go on sale", the button "Tell me", and "We have your number. We will tell you when this batch is bottled." after it is tapped. It promises only what the batch lifecycle actually guarantees, and carries no countdown and no scarcity (CLAUDE.md §3). Q29 |
+| D65 | **A refund unwinds both the jar and the customer's allowance, unless the refund is marked a refusal** | Asked and answered by Shefin, 28 Sep 2026, before M4.5. M4.5's spec (brief §12.3) returns the jar to the count if it is not packed, while `orderTookJars` (A241) counts a `refunded` order as having taken jars, so the two would disagree and a refunded customer would keep burning a per-person allowance for a jar they no longer hold. Answered: the refund reverses both. The jar returns to `paidCount` if it is not packed, and a `refunded` order stops counting toward that person's limit for the batch, so they may buy again. There is no loop to abuse, because every refund is the Owner's own manual act. **The exception Shefin asked for: a refund marked as a refusal keeps the allowance spent.** The refusal reason is recorded on the order, it may be set when the refund is recorded, and it may be added afterwards, so an order refunded first and understood later can still be marked. The jar still goes back on sale in that case: refusing a person is not a reason to lose a jar out of a 15-to-40 jar batch. Amends A241: `orderTookJars` must now read the refusal mark, not the state alone |
 
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
@@ -1633,6 +1634,164 @@ break.
   delta of 14 = 21 - 7 confirms it independently. Corrected in both ledgers and in all
   three files that repeated it. Small, but the word "exactly" made it load-bearing in the
   one paragraph that justifies the change. Status: settled.
+
+- A265 (M4.5, 28 Sep): **the yield shortfall landed on the refunded customer, and the cause
+  was one predicate answering two questions.** Found by the M4.5 tester, not by the build.
+  D65 lets a refusal-marked refund put the jar back on sale while the customer's allowance
+  stays spent, so `orderTookJars` (A241) still counted that order while `paidCount` no
+  longer did. `transitions.ts` computes `jarsShort = paidCount - jarCount` and then
+  allocates it over the paid-orders list built from the predicate, so the two stopped
+  describing the same set. Measured: `paidCount = 1`, the list summing to 2 jars, and the
+  whole shortfall allocated to the refused, already-refunded customer, carrying their phone
+  number and brief §7.7's offer of a jar from the next batch or a refund, while the customer
+  actually holding a paid jar that would not exist got no concern at all. Wrong in both
+  directions. `planPause` gave the same person a pause concern too. Fixed by splitting the
+  predicate rather than patching the caller: **`orderHoldsJars`** is what `paidCount`
+  counts, so the yield shortfall, the pause concerns, D32's sending list and the refund's
+  own jar question all read it; **`orderSpentAllowance`** is D65's per-person limit, read by
+  `readStockClaim` and `customerJarsInBatch`. The shared part is private, so a caller cannot
+  ask the merged question any more, and `ordersInBatch` returns `holdsJars` and
+  `spentAllowance` with **no field called `paid`**, because that name is what let a caller
+  take whichever list it was handed. The general point: a predicate named for what it reads
+  rather than for the question it answers will be reused for a question it does not answer.
+  Status: open.
+- A266 (M4.5, 28 Sep): `orderHoldsJars` reads `refund.jarsReturned > 0`, not
+  `fullyRefunded`, because a refund of a packed order is full and returns nothing. Safe
+  only because jars come back all-or-nothing: `refundPlan` returns every jar on a full
+  refund of an unpacked order and none otherwise (`partial-refund`, `already-packed`,
+  `took-no-jars`). Checked empirically by the round-2 tester on a two-batch order, not
+  taken from the code alone: a partial returned 0 of 3, a full returned all 3. If a future
+  path ever returns some jars and not others, this predicate breaks and the invariant test
+  in `functions/test/refunds.test.ts` is what will say so. Status: open.
+- A267 (M4.5, 28 Sep): **a refunded order that was already packed or shipped still holds
+  its jars and still has its allowance freed, and both are right.** No jar came back (brief
+  §12.3's "if not packed"), so the jars are in a box on their way to somebody and the
+  shortfall may still land there; the money has gone back, so the person may buy again.
+  Status: open.
+- A268 (M4.5, 28 Sep): **a partial refund is not a reversal.** Brief §9.1 has one order
+  state for "Refunded, part or full" and there is no `partlyRefunded` order state in
+  `ORDER_STATES`, so a full refund moves the order to `refunded` and a partial one leaves
+  the order's state where it was, recording `payment.status: "partlyRefunded"` and adding
+  to `payment.refundedAmount`. A partial refund moves no count and frees no allowance, not
+  even when the amount would cover a whole jar's price: the conservative direction. Worth
+  Shefin's eye: a partly refunded order therefore does not appear in the Orders screen's
+  Refunded group, only its payment status says so. Status: open.
+- A269 (M4.5, 28 Sep): the jar goes back only when the order is not packed **and** carries
+  no jar number. Both tests, because a hand-over counter sale is `delivered` with no jar
+  numbers, and a packed order that was then paused is in a state the packed list does not
+  name while its jars are in a sealed box. Status: open.
+- A270 (M4.5, 28 Sep): a refund on an order that never took a jar returns none. A242's
+  refused capture has the money on it, `payment.status: "captured"`, state `held`, and not
+  one jar on `paidCount`. The refund is allowed, because the money really arrived and the
+  Owner must be able to send it back, and `jarsReturned` is 0 with
+  `jarsHeldBackBecause: "took-no-jars"`: taking a jar off would take somebody else's.
+  Status: open.
+- A271 (M4.5, 28 Sep): **the unreturned gateway fee is typed by the Owner, and null means
+  unknown.** Settlements are fast-follow (M3.6b) and the refund webhook does not carry the
+  original fee, so there is nothing to compute from. Null rather than 0 when nobody has
+  said what it was, so the batch P&L can tell "not known" from "nothing". A fee above zero
+  is refused when the original payment was not online, and the fee is bounded by
+  `order.paidAmount` rather than by the refund amount, because the fee was charged as a
+  percentage of the payment and that keeps it a real ceiling on a part refund of a few
+  rupees. It **accumulates** on the order (two refunds cost two fees) while each
+  `refunds/{id}` keeps its own, and a later refund naming no fee leaves the earlier figure
+  alone. That last point was a defect the tester found: the field had been written
+  unconditionally, so a second refund wiped a recorded fee to null and the P&L lost a real
+  cost. Status: open.
+- A272 (M4.5, 28 Sep): **the refund note's line items must add up to what is being
+  returned**, which they did not. A ₹300 partial refund on a ₹649 jar issued a credit note
+  reading ₹649 in the goods column and ₹300 at the bottom, dropped every line after the
+  first, and named no batch. A credit note reverses a bill, so its arithmetic has to close.
+  Fixed with one rule in a pure planner: a full refund whose lines reconcile exactly is
+  itemised line for line, with each product's **name** (never its slug, which the first
+  version put on a customer document), its HSN, its printed batch number and its jar
+  numbers; anything that does not reconcile, which in practice is every partial refund,
+  gets one honest line, "Part refund, Prawns and dates, batch 001", with the shipping and
+  discount folded away so the column closes. Status: open.
+- A273 (M4.5, 28 Sep): `refunds/{id}` is the idempotency key, created must-not-exist:
+  `razorpay-<refundId>`, `upi-<reference>`, `cash-<orderId>-<n>`. A gateway refund id and a
+  UPI reference are unique by nature, so a repeat is refused by Firestore rather than by a
+  check. Cash has no such reference, so a second cash refund is a second real event,
+  bounded by the amount ceiling, the fully-refunded refusal and the hold-to-confirm. The
+  clash is answered as `failed-precondition` with a sentence naming what to check, not the
+  HTTP 500 `INTERNAL` the tester first got. Status: open.
+- A274 (M4.5, 28 Sep): M3.6's left hook surfaces on the order, not as a `concerns`
+  document: a gateway refund that matched an order is neither a problem nor a request, no
+  `CONCERN_TYPE` fits it, and brief §12.3 puts the recording on the order screen. It writes
+  `orders/{id}.refund.gatewayPending` plus the existing `audit` entry, drawn as a notice
+  with a prefill button. It writes **no** marker when the refund is already recorded or the
+  order is already fully refunded, and any marker standing is cleared when the order
+  settles by another route: without that, a refund recorded as cash and then confirmed by
+  the gateway left a permanent to-do that nothing could clear. The unmatched case still
+  raises the concern M3.6 built. Status: open.
+- A275 (M4.5, 28 Sep): the refusal mark is **removable**. D65 says it may be added or
+  changed afterwards, and removal is the "changed" case that matters, because a mark made
+  in error would otherwise lock that customer out of the batch for its life.
+  `markOrderRefusal` with `reason: null` takes it off. Owner only, refused for Kitchen, a
+  Viewer and a caller with no token. Status: open.
+- A276 (M4.5, 28 Sep): `recordRefund` refuses outright while GST is on, as
+  `createCounterSale` does rather than as the capture path does. A refund is the Owner's
+  own act at a screen, so refusing is honest: unlike a capture, no money has already
+  arrived that the system must account for either way. Status: open.
+- A277 (M4.5, 28 Sep): **two test gaps, each proved by a mutation that shipped green.**
+  Nothing asserted that `payment.refundedAmount` is cumulative, and `refundedSoFar` is read
+  from that field and nowhere else, so changing it to this refund's own amount let three
+  partial refunds pay out ₹949 on a ₹649 order with the whole suite green. And the gateway
+  fee's value was never asserted, so multiplying it by 100 shipped green, in the one number
+  this task adds for the P&L. Both closed, and both mutations now fail a named test. A third
+  gap found in round 2: every order in the refund tests was a counter sale with no shipping
+  and no discount, so the two lines that fold those away on a partial refund were dead
+  under test and a mutation there also shipped green. The general point, and the reason
+  these are logged as assumptions rather than as fixes: the suite being green says nothing
+  until a mutation has been shown to turn it red. Status: open.
+- A278 (M4.5, 28 Sep): **`jarsOnLine`, because three functions counted a line's jars three
+  different ways.** `jarsInBatch` in `batches/store.ts` took any number including a
+  fraction or a negative, `jarsByBatch` in `refundPlan.ts` took only positive integers, and
+  a third copy in `approvals/recipients.ts` took any number, feeding the jar count a
+  customer reads in a D32 message. On a mixed order the refund returned batch A's jar, so
+  `jarsReturned` was positive and `orderHoldsJars` went false for the whole order including
+  batch B, whose count never moved, leaving batch B holding phantom jars no order claims:
+  the §7.7 harm the split exists to prevent. Not reachable today, because
+  `createCounterSale` and `createCheckout` both validate `qty` and no client may write
+  `orders`, so it needs a corrupt document or a future bug. Closed by construction: one
+  exported `jarsOnLine` read by all three. The property that turns a qty disagreement into
+  phantom jars is that `orderHoldsJars` is a whole-order predicate every caller consumes
+  per batch, and that is now written in its docblock. It does **not** repair a batch whose
+  `paidCount` was already a figure no countable line justified; that is corrupt data, not
+  something a predicate can fix. Status: open.
+- A279 (M4.5, 28 Sep): smaller calls, all assume-freely under CLAUDE.md §5.
+  `refund.totalPaise` deliberately repeats `payment.refundedAmount` so `orderSpentAllowance`
+  can answer off one map, and a test now asserts those two and the summed `refunds`
+  documents all agree. The audit entry for a matched gateway refund carries
+  `recordedBecause`. `refundedAt` was written, declared in no type and read by nothing, so
+  it is gone; `refund.lastRecordedAt` already carried the time. The admin's rupee boxes use
+  `products/productMoney.ts`'s shared `parseRupeesToPaise` through
+  `admin/src/orders/refundMoney.ts`, after the first version defined a second function of
+  the same name with different behaviour. `HoldToConfirm` is the **first** hold-to-confirm
+  control in the admin: brief §17.1 names the pattern and nothing had built it, so it is
+  written as the shared component M4.5b and the broadcast will use, holding for 1200ms.
+  Item A's shipping and discount orders are made by patching three figures that travel
+  together onto a real sale (the fee or discount, the order total, and `payment.amount`,
+  which is what the ceiling is measured against), because §4.2's shipping switch is `free`
+  at launch so no sale this suite can make carries delivery. Status: open.
+- A280 (M4.5, 28 Sep): **a forged token cannot be tested on the emulator**, and this is not
+  a defect. An unsigned JWT claiming `role: "owner"` was accepted, because the Auth emulator
+  by design does not verify signatures; one claiming `role: "kitchen"` was correctly
+  refused, which proves the role gate reads the claim. In production `onCall` verifies the
+  signature against Google's keys before `request.auth` is populated. Recorded so nobody
+  later reads the emulator result as a hole. Status: open.
+- A281 (M4.5, 28 Sep): **nothing in this task messages a customer.** Brief §12.3's "a
+  Razorpay refund reaches the customer in about 5 to 7 working days, the agent says so" is
+  deliberately not built: no send, no `approvals` document, no draft. It waits for the agent
+  milestone. Status: open.
+- A282 (M4.5, 28 Sep): **the done-when is not closed.** It asks for three refunds recorded
+  on staging with the documents existing. All three are driven end to end against the
+  emulator through the same callable, transaction, `counters/{series}` and `documents`
+  write, but four things need Shefin: the functions deploy itself (A246, and there are now
+  four callables that have never had a serving revision), a real Razorpay `refund.processed`
+  delivery with its real payload and signature, the hold under a thumb, and a person
+  looking at a rendered refund note and credit note PDF, where A272's shipping and discount
+  lines are worth the glance. Status: open.
 
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 

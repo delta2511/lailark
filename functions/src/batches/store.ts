@@ -28,7 +28,7 @@ import {
   ORDER_STATES_TERMINAL,
 } from "@lailark/shared";
 
-import { orderTookJars } from "../orders/paid";
+import { jarsOnLine, orderHoldsJars, orderSpentAllowance } from "../orders/paid";
 import type {
   BatchUpdateView,
   BatchView,
@@ -311,6 +311,27 @@ export async function siblingBatches(
 }
 
 /**
+ * What `ordersInBatch` answers. **Two lists, on purpose** (M4.5, D65):
+ *
+ *  - `holdsJars`: the orders still holding jars out of this batch, which is
+ *    the set `batch.paidCount` counts. The yield shortfall, the pause concerns
+ *    and D32's sending list use this one, because all three are about jars.
+ *  - `spentAllowance`: the orders that count against their customer's
+ *    per-person limit. The checkout and reclaim limits use this one.
+ *
+ * They differ in exactly one case, a refund marked a refusal, which is in
+ * `spentAllowance` and not in `holdsJars`. There is deliberately no field
+ * called `paid`: that name was what let a caller take whichever list it
+ * happened to be given.
+ */
+export interface OrdersInBatch {
+  readonly holdsJars: PaidOrderView[];
+  readonly spentAllowance: PaidOrderView[];
+  /** Orders in this batch that are not in a terminal state. */
+  readonly open: number;
+}
+
+/**
  * Orders in this batch. `batchRefs` is the flat array of batch **references**
  * an order touches, which is the only shape Firestore can query (the lines
  * themselves are an array of maps, and those cannot be filtered on).
@@ -326,37 +347,52 @@ export async function ordersInBatch(
   tx: Transaction,
   db: Firestore,
   batchRef: string,
-): Promise<{ readonly paid: PaidOrderView[]; readonly open: number }> {
+): Promise<OrdersInBatch> {
   const found = await tx.get(db.collection(ORDERS).where("batchRefs", "array-contains", batchRef));
   const terminal = ORDER_STATES_TERMINAL as readonly string[];
-  const paid: PaidOrderView[] = [];
+  const holdsJars: PaidOrderView[] = [];
+  const spentAllowance: PaidOrderView[] = [];
   let open = 0;
   for (const doc of found.docs) {
     const state = String(doc.get("state") ?? "");
     if (!terminal.includes(state)) open += 1;
-    // M3.6c, A203: the one predicate, in `orders/paid.ts`. It asks the
-    // order's own state and `paidAt`, and never `payment.status`, which
+    // M3.6c and A203 put "did this order take jars" in one predicate, in
+    // `orders/paid.ts`, because three callers disagreed about it. M4.5 and D65
+    // split that predicate in two, because a refund marked a refusal gives the
+    // jar back and keeps the allowance spent, so the two lists below are not
+    // the same list any more. Read that module's comment before using one
+    // where the other is meant. Neither reads `payment.status`, which
     // `writePaymentOnly` writes onto a refused capture that sold nothing.
-    // Counting one of those would count jars a customer asked for as jars
-    // they own, and refuse them at their next checkout. `voided` is excluded
-    // there too, for the reason brief 7A.6 gives.
-    if (!orderTookJars(doc)) continue;
-    paid.push({
+    const row: PaidOrderView = {
       id: doc.id,
       customerPhone: (doc.get("customerPhone") as string | undefined) ?? null,
       jars: jarsInBatch(doc, batchRef),
       paidAtMillis: millisOf(doc.get("paidAt")) ?? 0,
-    });
+    };
+    if (orderHoldsJars(doc)) holdsJars.push(row);
+    if (orderSpentAllowance(doc)) spentAllowance.push(row);
   }
-  return { paid, open };
+  return { holdsJars, spentAllowance, open };
 }
 
-function jarsInBatch(doc: DocumentSnapshot, batchRef: string): number {
+/**
+ * The jars this order holds in one batch.
+ *
+ * `jarsOnLine` rather than a bare number, and that matters: it is the same test
+ * `money/refundPlan.ts`'s `jarsByBatch` applies when it decides which jars a
+ * refund gives back. The two must agree line for line, because `orderHoldsJars`
+ * is a whole-order predicate and this is what attributes its jars to a
+ * particular batch. See `jarsOnLine` for the phantom jars a disagreement makes.
+ *
+ * Exported only so that agreement can be asserted against `jarsByBatch`
+ * directly, rather than left to both call sites happening to read the same way.
+ */
+export function jarsInBatch(doc: DocumentSnapshot, batchRef: string): number {
   const lines = doc.get("lines");
   if (!Array.isArray(lines)) return 0;
   let total = 0;
   for (const line of lines as Array<Record<string, unknown>>) {
-    if (line?.batchRef === batchRef) total += numberOr(line?.qty, 0);
+    if (line?.batchRef === batchRef) total += jarsOnLine(line?.qty);
   }
   return total;
 }
