@@ -3,7 +3,7 @@
  * Publishes the five policy pages into `policyVersions` (M5.7, D66).
  *
  *   node functions/scripts/publish-policies.mjs --emulator
- *   node functions/scripts/publish-policies.mjs --project lailark-staging
+ *   node functions/scripts/publish-policies.mjs --project tree-quiz-74e04
  *
  * The words are `@lailark/shared`'s `POLICY_PAGES`, the same module the site
  * renders and the same module `createCheckout` derives an order's
@@ -83,7 +83,7 @@ if (args.emulator) {
   if (projectId === "lailark" && !args.force) {
     console.error(
       "publish-policies: refusing to write to the production project (lailark) without " +
-        "--force. Pass --emulator for the local suite, --project lailark-staging for " +
+        "--force. Pass --emulator for the local suite, --project tree-quiz-74e04 for " +
         "staging, or --force if you really mean production.",
     );
     process.exit(2);
