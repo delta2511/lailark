@@ -663,7 +663,9 @@ and the live webhook before the production deploy.
       button. No refund is started from the admin through the Razorpay API, and there is
       no 6-month guard at launch (M4.5b). Done when: three refunds (dashboard, UPI, cash)
       are recorded on staging and the documents exist.
-- [ ] M5.7 [opus] Policy pages: Orders (D2 wording), shipping, terms, privacy, contact
+- [x] M5.7 [opus] Policy pages: Orders (D2 wording), shipping, terms, privacy, contact
+      (25e6dd9; D66 answered before the task; A283 to A286 logged; the "live on staging"
+      half of the done-when waits on Shefin's deploy)
       with grievance officer, each versioned in `policyVersions` and the version
       recorded on every order. Copy reviewed against the story doc voice rules. Brief
       §10.4, §20.4, §20.6. Done when: the pages are live on staging and linked from
