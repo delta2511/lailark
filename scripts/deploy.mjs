@@ -44,9 +44,16 @@ const PROJECTS = { staging: "staging", production: "default" };
 // Read project ids from .firebaserc rather than hard-coding them, so a future
 // repoint (like this one, lailark-staging -> tree-quiz-74e04) is one file.
 const FIREBASERC = JSON.parse(readFileSync(resolve(ROOT, ".firebaserc"), "utf8"));
-const BATCH_URL = {
-  default: "https://lailark.in/batch/001",
-  staging: `https://${FIREBASERC.projects.staging}.web.app/batch/001`,
+// The site ORIGIN per project alias, with no path. checkBatch001() takes a base
+// and appends /batch/001, /batch/1 and /batch/01 itself, so a page URL here asks
+// for https://host/batch/001/batch/001 and fails every live deploy. That is what
+// these held until M5.7: the guard M3.4a wired up correctly was then handed the
+// wrong kind of string, and no test covered this map, so the script suite stayed
+// green while every real deploy ended in a false alarm on the one page printed on
+// 22 jars. scripts/test/deploy.test.mjs now asserts these carry no path.
+const BATCH_BASE = {
+  default: "https://lailark.in",
+  staging: `https://${FIREBASERC.projects.staging}.web.app`,
 };
 
 /** The Firebase/GCP project id a deploy `--project <alias>` targets, per .firebaserc. */
@@ -154,16 +161,17 @@ function hasBuildScript(pkgPath) {
 // pointed at a file that stopped existing at M3.4 (site/public/batch/001/index.html)
 // and threw ENOENT on every real deploy instead of ever running the check. M3.4a
 // replaced it with the one real implementation so the two cannot drift again.
-async function verifyBatch001(url) {
-  const code = await checkBatch001(url);
+// `base` is an origin, not a page URL: checkBatch001 appends the three paths.
+async function verifyBatch001(base) {
+  const code = await checkBatch001(base);
   if (code !== 0) {
     console.error(
-      `\n!!! ${url} failed the /batch/001 check above. Printed jars point here. Fix before anything else.`,
+      `\n!!! ${base}/batch/001 failed the /batch/001 check above. Printed jars point here. Fix before anything else.`,
     );
     exit(2);
     return;
   }
-  console.log(`\n${url} passed the /batch/001 check. Good.`);
+  console.log(`\n${base}/batch/001 passed the /batch/001 check. Good.`);
 }
 
 async function main() {
@@ -301,11 +309,13 @@ async function main() {
   }
 
   // The one check that must never be skipped.
-  if (mode === "live" && targets.includes("customer") && BATCH_URL[alias]) {
+  if (mode === "live" && targets.includes("customer") && BATCH_BASE[alias]) {
     if (DRY_RUN) {
-      console.log(`\n(dry run) would verify ${BATCH_URL[alias]} via scripts/check-batch-001.mjs`);
+      console.log(
+        `\n(dry run) would verify ${BATCH_BASE[alias]}/batch/001 via scripts/check-batch-001.mjs`,
+      );
     } else {
-      await verifyBatch001(BATCH_URL[alias]);
+      await verifyBatch001(BATCH_BASE[alias]);
     }
   }
 

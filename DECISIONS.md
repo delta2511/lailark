@@ -1823,6 +1823,20 @@ break.
   named on it is part of what an order was sold under, and D66 approved all five paths.
   Status: open.
 
+- A287 (M5.7a, 2 Oct): **the deploy-time `/batch/001` guard has been failing on every live
+  customer deploy since M3.4a, and the page was never wrong.** `checkBatch001(base)` takes an
+  origin and appends the three paths itself; `BATCH_URL` in `deploy.mjs` held the full page
+  URL, so the guard fetched `https://host/batch/001/batch/001` and reported three failures
+  and the line "Printed jars point here. Fix before anything else." M3.4a replaced a guard
+  that threw ENOENT with one that ran, and handed it the wrong kind of string. Nothing
+  covered that map: the 46 script tests passed the guard an origin from a local server and
+  never touched `BATCH_URL`, which is why the suite stayed green through it. Fixed by making
+  the map hold origins, renaming it `BATCH_BASE`, and adding two tests that assert the
+  dry-run line names `/batch/001` exactly once per project. Both were mutation-tested: they
+  fail against the old values and the other 46 stay green, which is the blind spot itself.
+  **The cost of this one is not the code.** A false alarm on the single page printed on 22
+  jars, on every deploy, is training to ignore the one check CLAUDE.md §3 says must never be
+  skipped. Status: open.
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 
 Shefin walked the ten steps in `docs/milestones/MILESTONE-2-TEST-ROUND-2.md` and reported

@@ -287,3 +287,34 @@ test("DRY_RUN skips the /batch/001 network check after a live customer deploy an
   assert.equal(status, 0);
   assert.match(stdout, /\(dry run\) would verify https:\/\/lailark\.in\/batch\/001/);
 });
+
+// M5.7. The guard is handed a base ORIGIN, because checkBatch001 appends
+// /batch/001, /batch/1 and /batch/01 to whatever it is given. BATCH_BASE used to
+// hold full page URLs, which asked for /batch/001/batch/001 and failed every live
+// deploy with a message pointing at the one page printed on 22 jars. Nothing
+// covered that map, so the suite stayed green through it. These two assert the
+// deploy names exactly one /batch/001, for each project, which is the shape that
+// can only be true if the base carries no path.
+for (const [projectArg, expected] of [
+  ["production", "https://lailark.in/batch/001"],
+  ["staging", "https://tree-quiz-74e04.web.app/batch/001"],
+]) {
+  test(`the ${projectArg} /batch/001 guard is pointed at the page itself, not at a doubled path`, () => {
+    const { status, stdout } = runDeploy(
+      ["--target", "customer", "--project", projectArg, "--live"],
+      { input: "yes\n" },
+    );
+    assert.equal(status, 0);
+    const line = stdout.split("\n").find((l) => l.includes("would verify"));
+    assert.ok(line, "the dry run should say which URL it would verify");
+    assert.ok(
+      line.includes(expected),
+      `expected the guard to verify ${expected}, got: ${line}`,
+    );
+    assert.equal(
+      line.match(/\/batch\/001/g).length,
+      1,
+      `the URL must name /batch/001 once, not twice: ${line}`,
+    );
+  });
+}

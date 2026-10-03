@@ -664,12 +664,21 @@ and the live webhook before the production deploy.
       no 6-month guard at launch (M4.5b). Done when: three refunds (dashboard, UPI, cash)
       are recorded on staging and the documents exist.
 - [x] M5.7 [opus] Policy pages: Orders (D2 wording), shipping, terms, privacy, contact
-      (25e6dd9; D66 answered before the task; A283 to A286 logged; the "live on staging"
-      half of the done-when waits on Shefin's deploy)
+      (25e6dd9; D66 answered before the task; A283 to A286 logged; done-when closed:
+      Shefin deployed to staging on 2 Oct, all five pages 200 and linked from the footer
+      of every page)
       with grievance officer, each versioned in `policyVersions` and the version
       recorded on every order. Copy reviewed against the story doc voice rules. Brief
       §10.4, §20.4, §20.6. Done when: the pages are live on staging and linked from
       the footer.
+- [x] M5.7a [orchestrator] The deploy-time `/batch/001` guard failed on every live
+      customer deploy, and the page was never wrong. (A287 logged) Found by Shefin's
+      M5.7 staging deploy on 2 Oct: the guard fetched
+      `https://host/batch/001/batch/001` and printed "Printed jars point here. Fix
+      before anything else." `BATCH_URL` held a page URL where `checkBatch001` wants an
+      origin. No test covered that map, so the script suite was green through it. Fixed,
+      renamed `BATCH_BASE`, two mutation-tested regression tests added, and the real
+      guard re-run green against staging.
 - [ ] M5.9 [opus] Hardening, trimmed for launch (D29). App Check on callables and
       Firestore, rate limits on checkout and counts, `maxInstances` audit, Firestore
       scheduled backups and PITR enabled on production, uptime checks on `/`,
