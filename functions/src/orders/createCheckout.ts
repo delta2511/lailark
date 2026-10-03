@@ -54,6 +54,7 @@ import { HoldRefused, readStockClaim, type StockClaim, writeStockClaim } from ".
 import { readStockRelease, writeStockRelease } from "../batches/holds";
 import { BATCHES, heldJarsWithCustomerFrom, PRODUCTS } from "../batches/store";
 import { getAdminApp } from "../lib/admin";
+import { livePolicyVersion } from "../policies/publish";
 import { DEFAULT_MAX_INSTANCES, REGION } from "../lib/options";
 import {
   checkResumableCheckout,
@@ -152,6 +153,12 @@ export const createCheckout = onCall(
     const input = parsed.value;
 
     const db = getFirestore(getAdminApp());
+
+    // M5.7: the policy pages this build publishes, and the version the order
+    // below will carry. Outside the transaction on purpose. It reads and may
+    // write `policyVersions`, which has nothing to do with the jar, and it is
+    // cached per instance so it costs five gets once and nothing after that.
+    const policyVersion = await livePolicyVersion(db);
 
     const held = await db.runTransaction(
       async (tx) => {
@@ -328,11 +335,11 @@ export const createCheckout = onCall(
           customer,
           shipping,
           pincodes,
-          // M5.7 writes the policy pages, and an order will then carry the
-          // version it agreed to. Until then there is no published version
-          // to name, and inventing one would put a lie in the record.
-          // TODO(M5.7): read the published `policyVersions` id here.
-          policyVersion: "",
+          // M5.7, brief §18.1: the version of the five policy pages that was
+          // live when this order was placed. Derived from the pages' own
+          // words, so a later rewrite gets a new id and this order keeps
+          // pointing at what it was actually sold under (D66).
+          policyVersion,
           holdMinutes,
           nowMillis,
           todayIso,

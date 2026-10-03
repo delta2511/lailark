@@ -39,6 +39,9 @@ export const dsPrimitivesCss = `
 .ds-footer p{margin:0 0 var(--ds-space-2)}
 .ds-footer p:last-child{margin-bottom:0}
 .ds-footer a{color:var(--ds-grey)}
+/* The five policy links (M5.7). One row on a phone, wrapping if it must,
+   with no separators drawn: the gap is the separator. */
+.ds-footer__links{display:flex; flex-wrap:wrap; gap:var(--ds-space-4)}
 
 /* Jar-count marks: jars drawn as marks, never written as a number. */
 .ds-jarmarks{display:flex; flex-wrap:wrap; align-items:flex-end; gap:4px}

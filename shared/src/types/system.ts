@@ -18,10 +18,22 @@ export interface User extends BaseDoc {
   readonly active: boolean;
 }
 
-/** `policyVersions/{id}`. An order records which version it agreed to. */
+/**
+ * `policyVersions/{id}`. An order records which version it agreed to.
+ *
+ * M5.7: the id is `{setVersion}-{kind}` (`policyVersionDocId` in
+ * `policies.ts`), so one order's `policyVersion` finds all five of its pages
+ * by id and never by a query. `text` is the page as a customer read it, from
+ * `policyPageText`, and `path` is where it was published, kept on the document
+ * so an old version can still be read against a path that has since been
+ * rewritten.
+ */
 export interface PolicyVersion extends BaseDoc {
   readonly kind: PolicyKind;
   readonly text: string;
+  readonly path: string;
+  /** The `policyVersion` an order of this set's day records. */
+  readonly setVersion: string;
   readonly publishedAt: Timestamp;
 }
 

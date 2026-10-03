@@ -148,7 +148,16 @@ export async function seedFirestore(env: RulesTestEnvironment): Promise<void> {
       put(`users/${OWNER_UID}`, { name: "Shefin", phone: "+917736110087", role: "owner" }),
       put(`users/${KITCHEN_UID}`, { name: "Sumayya", phone: "+919446587027", role: "kitchen" }),
       put(`users/${VIEWER_UID}`, { name: "CA", phone: "+910000000000", role: "viewer" }),
-      put("policyVersions/p1", { ...base, kind: "orders", text: "..." }),
+      // M5.7: the real shape, id and all. A published version's id is
+      // `{setVersion}-{kind}`, and `p1` would not be one.
+      put("policyVersions/p-0000000000000000-orders", {
+        ...base,
+        kind: "orders",
+        text: "Orders\n...",
+        path: "/orders",
+        setVersion: "p-0000000000000000",
+        publishedAt: now,
+      }),
       put("audit/aud-1", { object: `batches/${BATCH_REF}`, action: "update", by: OWNER_UID, at: now }),
     ]);
   });

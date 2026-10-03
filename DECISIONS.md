@@ -99,6 +99,7 @@ confirm or replace at the next milestone break.
 | D63 | **The private order page's copy is approved as drafted, and it does not tell the customer the order's state** | Asked and answered by Shefin, 25 Sep 2026, during M3.8. `/o/<token>` is the page a customer opens from the link we send them, and nothing is drafted for it anywhere: the brief names the page (§5) and says nothing about what it says, and the story doc drafts no sentence for it, so all of it sat on CLAUDE.md §5's never-assume list. Approved: the heading "Your order"; "We cannot find an order on this link. Do check it, or message us and we will look." for a link that matches nothing; "We cannot show your order just now. Please try again in a moment." for a page that will not load; "Nothing has been issued on this order yet." where the documents go; the labels Order, Placed, Batch, Shipping, Total, Going to, Your jars, Bills and receipts, Open; and the document names Receipt, Bill, Refund note and Credit note. It keeps the D53 voice: says "we", no em dash, and no error tone where nothing has gone wrong. **The order's state is deliberately not shown.** Shefin was offered it and chose to leave it out: it is the largest copy surface on the page, a dozen phrases a customer would have to decode, every one of them a sentence to approve, and the page reads correctly without it. It can be added later without moving anything else. Q28 |
 | D64 | **The notify-me beside a cooking batch is approved as drafted** | Asked and answered by Shefin, 25 Sep 2026, during M3.8. Brief §7.5 drafts the cooking card's own line ("Being cooked now. Unpaid jars go on sale when bottled"), which is used word for word, and then asks for a notify-me next to it without drafting what it says; there is no notify-me anywhere else on the new site to copy from. Approved: the label "Tell me when these jars go on sale", the button "Tell me", and "We have your number. We will tell you when this batch is bottled." after it is tapped. It promises only what the batch lifecycle actually guarantees, and carries no countdown and no scarcity (CLAUDE.md §3). Q29 |
 | D65 | **A refund unwinds both the jar and the customer's allowance, unless the refund is marked a refusal** | Asked and answered by Shefin, 28 Sep 2026, before M4.5. M4.5's spec (brief §12.3) returns the jar to the count if it is not packed, while `orderTookJars` (A241) counts a `refunded` order as having taken jars, so the two would disagree and a refunded customer would keep burning a per-person allowance for a jar they no longer hold. Answered: the refund reverses both. The jar returns to `paidCount` if it is not packed, and a `refunded` order stops counting toward that person's limit for the batch, so they may buy again. There is no loop to abuse, because every refund is the Owner's own manual act. **The exception Shefin asked for: a refund marked as a refusal keeps the allowance spent.** The refusal reason is recorded on the order, it may be set when the refund is recorded, and it may be added afterwards, so an order refunded first and understood later can still be marked. The jar still goes back on sale in that case: refusing a person is not a reason to lose a jar out of a 15-to-40 jar batch. Amends A241: `orderTookJars` must now read the refusal mark, not the state alone |
+| D66 | **The identity and contact facts the policy pages need** | Asked and answered by Shefin, 28 Sep 2026, before M5.7. Seller's legal name: **Shefin Muhamed**, a proprietorship trading as Lailark Kitchen (the sales-flow doc §279: proprietorship under personal PAN with FSSAI registration as business proof). Grievance officer under the Consumer Protection (E-Commerce) Rules, 2020: **Shefin Muhamed, co-founder**, reachable on Lailark's own number **+91 88919 23827** and at **founder.lailark@gmail.com**. That email is also the site's published address, the channel for DPDP deletion and access requests, and what Razorpay's activation review will find. Retention on the privacy page, as recommended and approved: order records are kept as long as the law requires for books of account, WhatsApp numbers are kept until the person asks for them to be removed, and nothing else is kept. No fixed period is named. The five permanent paths, approved: `/orders`, `/shipping`, `/terms`, `/privacy`, `/contact`, all linked from the footer. The Orders page copy itself is already settled by D2 and brief §10.4 and is used word for word. **The December entity change (§20.7) gets no mention on the live pages.** Confirmed by Shefin, 28 Sep 2026: the terms page names the current proprietorship and says nothing about a coming change. Because every page is versioned in `policyVersions` and the version is recorded on each order, December is a new version rather than a rewrite, and orders placed before it keep pointing at the terms they were sold under. Nothing on the site promises anything about a future entity |
 
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
@@ -1792,6 +1793,35 @@ break.
   delivery with its real payload and signature, the hold under a thumb, and a person
   looking at a rendered refund note and credit note PDF, where A272's shipping and discount
   lines are worth the glance. Status: open.
+
+- A283 (M5.7, 2 Oct): **`policyVersions` becomes the second collection the public may
+  read**, beside `config/site`, and the first one a stranger may read that an order points
+  at. It is safe because every document in it is a page already published on lailark.in, so
+  a customer who opens the terms their own order names reads what the website shows anybody.
+  The other half is tighter than it was: **no client may write one at all, not even the
+  Owner**, where the M1.8 rule allowed an Owner write. The pages live in the repository and
+  the version is a fingerprint of their words, so a document edited from a phone would
+  change the text under an order that already points at it. Changing a policy is now a
+  commit and a deploy. Status: open.
+- A284 (M5.7, 2 Oct): **`createCheckout` publishes the five documents itself**, once per
+  instance, rather than trusting that somebody ran `publish-policies.mjs` after the deploy.
+  An order's `policyVersion` has to name a document that exists or the record is a dangling
+  reference, and the pages and the function come out of the same build, so the function
+  always knows the live version. The cost is five gets on the first checkout an instance
+  serves, outside the jar transaction. Two instances racing both write the same id with the
+  same text, so the loser overwrites the winner with an identical page and a `publishedAt` a
+  few milliseconds later; nothing reads `publishedAt` for anything but the record. The
+  script stays, so a fresh project has the pages before the first customer rather than a
+  moment after. Status: open.
+- A285 (M5.7, 2 Oct): **a counter sale still records no policy version**, which reaffirms
+  M2.8's assumption rather than closing it. Nobody at the door was shown a web page, and
+  stamping the version the site happened to be serving would record something that did not
+  happen, so `policyVersion` stays an empty string for a door sale. Only a web order carries
+  one. Status: open.
+- A286 (M5.7, 2 Oct): **`POLICY_KINDS` gains `contact`**, where brief §18.1 lists four
+  kinds. The contact page is versioned like the other four because the grievance officer
+  named on it is part of what an order was sold under, and D66 approved all five paths.
+  Status: open.
 
 ### The Milestone 2 round-two break (24 Sep 2026, S)
 

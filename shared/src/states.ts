@@ -314,7 +314,15 @@ export type Role = (typeof ROLES)[number];
 export const PRODUCT_TYPES = ["hero", "pipeline"] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
 
-export const POLICY_KINDS = ["orders", "privacy", "terms", "shipping"] as const;
+/**
+ * The five published policy pages (M5.7, D66). `contact` was added to the
+ * brief's four (§18.1 lists the collection, §20.4 asks for the page): the
+ * Consumer Protection (E-Commerce) Rules want the seller's name, address and
+ * a named grievance officer displayed, Razorpay's activation review looks for
+ * a contact page, and that page is versioned like the other four because the
+ * grievance officer named on it is part of what an order was sold under.
+ */
+export const POLICY_KINDS = ["orders", "shipping", "terms", "privacy", "contact"] as const;
 export type PolicyKind = (typeof POLICY_KINDS)[number];
 
 export const SETTINGS_NAMES = [

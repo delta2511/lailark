@@ -660,9 +660,26 @@ service cloud.firestore {
 
     // The text a customer agreed to, kept forever so an old order can be read
     // against the policy of its day.
+    //
+    // M5.7. Public read: this is the second collection anybody may read,
+    // beside `config/site`, and so the second exception to brief §18.2's
+    // deny-by-default rule. There is nothing private
+    // in it: every document is a page that is published on lailark.in, so a
+    // customer reading the terms their own order names is reading what the
+    // website already shows anybody.
+    //
+    // No client write at all, not even the Owner's. The pages are in the
+    // repository and the version is a fingerprint of their words
+    // (`shared/src/policies.ts`), which is what makes an order's
+    // `policyVersion` mean something: a document edited from a phone would
+    // change the text under an order that already points at it, and the
+    // fingerprint would then name text that no longer matches. They are
+    // written by `createCheckout` and by `publish-policies.mjs`, both through
+    // the Admin SDK, which these rules do not apply to. Changing a policy is a
+    // commit and a deploy, on purpose.
     match /policyVersions/{versionId} {
-      allow read: if isAdmin();
-      allow write: if isOwner();
+      allow read: if true;
+      allow write: if false;
     }
 
     // The undo log. The admin write wrapper (M2.6) appends before/after on

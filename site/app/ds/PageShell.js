@@ -1,3 +1,5 @@
+import { POLICY_PAGES } from "@lailark/shared";
+
 import Lark from "./Lark";
 
 // Header with the lark mark (Flow §10). Referencing Lark keeps the
@@ -13,7 +15,11 @@ export function Header({ className }) {
 }
 
 // Footer: the legal line, character for character as the v0 footer
-// carries it, plus the quiet Orders link (D2, D45).
+// carries it, plus the five policy pages (D2, D45, D66).
+//
+// The links are read from `POLICY_PAGES` rather than typed here, so a page
+// cannot be published without a link to it and a link cannot point at a page
+// that does not exist. `site/tests/policies.spec.js` opens every one of them.
 export function Footer() {
   return (
     <footer className="ds-footer">
@@ -23,8 +29,12 @@ export function Footer() {
         <a href="tel:+918891923827">+91 88919 23827</a>. FSSAI
         21323244000035.
       </p>
-      <p>
-        <a href="/orders">Orders</a>
+      <p className="ds-footer__links">
+        {POLICY_PAGES.map((page) => (
+          <a href={page.path} key={page.path}>
+            {page.footerLabel}
+          </a>
+        ))}
       </p>
     </footer>
   );

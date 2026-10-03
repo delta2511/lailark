@@ -734,9 +734,14 @@ export function planCounterSale(
       refundedAmount: 0,
     },
     shareCodeUsed: null,
-    // ASSUMED (M2.8): a counter sale agrees to no web policy page, because
-    // nobody at the door was shown one. An empty string says that plainly;
-    // an online order carries the version it really agreed to.
+    // ASSUMED (M2.8), and deliberately unchanged by M5.7: a counter sale
+    // agrees to no web policy page, because nobody at the door was shown one.
+    // An empty string says that plainly, and stamping the version the website
+    // happened to be serving would be a record of something that did not
+    // happen. An online order carries the version it really agreed to
+    // (`livePolicyVersion` in `../policies/publish.ts`, wired into
+    // `createCheckout`). The door still has the pages: the jar carries the
+    // number, and every page of the site links all five.
     policyVersion: "",
     kitchenNote: request.kitchenNote,
     draft: false,

@@ -153,6 +153,15 @@ const EXPECTED_EXPORTS = [
   "hasForbiddenDash",
   "FORBIDDEN_DASH_MESSAGE",
   "checkCustomerText",
+  // policies (M5.7)
+  "POLICY_CONTACT",
+  "POLICY_PAGES",
+  "POLICY_SET_VERSION",
+  "policyPage",
+  "policyPageText",
+  "policyLinkTargets",
+  "policySetVersion",
+  "policyVersionDocId",
   // approvals
   "NOT_YET_REMIND_HOUR_KOLKATA",
   "nextMorningMillis",

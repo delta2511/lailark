@@ -177,7 +177,7 @@ describe("notify, the only public write", () => {
   });
 });
 
-describe("config/site, the only public read", () => {
+describe("config/site, one of the two public reads", () => {
   it("is readable by the public", async () => {
     const snap = await assertSucceeds(read(who.unauth, "config/site"));
     expect(snap.data()).toEqual({ notifyCtaVisible: true });
@@ -215,7 +215,7 @@ describe("see everything except Money", () => {
     `conversations/${CUSTOMER_PHONE}/messages/m1`,
     "settings/discountCap",
     "settings/pincodes",
-    "policyVersions/p1",
+    "policyVersions/p-0000000000000000-orders",
     "audit/aud-1",
   ];
 
@@ -1262,9 +1262,31 @@ describe("the audit log", () => {
 });
 
 describe("policy versions", () => {
-  it("are published by the Owner and read by everybody on the admin list", async () => {
-    await assertSucceeds(write(who.owner, "policyVersions/new-1", { ...base, kind: "terms", text: "x" }));
-    await assertFails(write(who.kitchen, "policyVersions/new-2", { ...base, kind: "terms", text: "x" }));
-    await assertSucceeds(read(who.viewer, "policyVersions/p1"));
+  // M5.7. The second public read on the whole database, and the reason it is
+  // safe: every document here is a page that is published on lailark.in, so
+  // there is nothing in it a stranger could not already read. What matters is
+  // the other half, that nobody at all may write one from a client.
+  it("is read by the public, by a stranger with no role, and by every role", async () => {
+    await assertSucceeds(read(who.unauth, "policyVersions/p-0000000000000000-orders"));
+    await assertSucceeds(read(who.noRole, "policyVersions/p-0000000000000000-orders"));
+    for (const [, ctx] of everyRole(who)) {
+      await assertSucceeds(read(ctx, "policyVersions/p-0000000000000000-orders"));
+    }
+  });
+
+  it("takes no client write, not even the Owner's", async () => {
+    // The pages are in the repository and the version is a fingerprint of
+    // their words, so editing the text of a published version from a client
+    // would leave an order pointing at text it was never sold under. They are
+    // written by `createCheckout` and `publish-policies.mjs` through the Admin
+    // SDK, which these rules do not see.
+    const fresh = { ...base, kind: "terms", text: "x", path: "/terms", setVersion: "p-0", publishedAt: now };
+    await assertFails(write(who.owner, "policyVersions/new-1", fresh));
+    await assertFails(write(who.kitchen, "policyVersions/new-2", fresh));
+    await assertFails(write(who.viewer, "policyVersions/new-3", fresh));
+    await assertFails(write(who.noRole, "policyVersions/new-4", fresh));
+    await assertFails(write(who.unauth, "policyVersions/new-5", fresh));
+    await assertFails(patch(who.owner, "policyVersions/p-0000000000000000-orders", { text: "rewritten" }));
+    await assertFails(remove(who.owner, "policyVersions/p-0000000000000000-orders"));
   });
 });
