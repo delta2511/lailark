@@ -680,7 +680,7 @@ and the live webhook before the production deploy.
       renamed `BATCH_BASE`, two mutation-tested regression tests added, and the real
       guard re-run green against staging.
 - [x] M5.7b [orchestrator] The home page and the policy pages, as Shefin read them on
-      3 Oct. (D67 to D76 logged) Not a planned task: ten changes Shefin asked for while
+      3 Oct. (a57c412; D67 to D76 logged) Not a planned task: ten changes Shefin asked for while
       reading the built pages, taken as decisions under CLAUDE.md §4.4 and built in the
       same session. **Policy copy:** the Shipping page names India Post and nothing else,
       and its three parcel paragraphs become one (D67); the terms say "Sometimes a batch
