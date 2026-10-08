@@ -55,7 +55,7 @@ const PRODUCTS = [
   },
   {
     slug: "squid-and-dates",
-    name: "Squid and dates",
+    name: "Squid",
     type: "hero",
     veg: false,
     hsn: "16",
@@ -68,7 +68,7 @@ const PRODUCTS = [
     // D12 and brief 11.5: the flat-fee shipping rule is built onto beef, but
     // the site ships free for everyone at launch, so it is not applied.
     slug: "beef-and-dates",
-    name: "Beef and dates",
+    name: "Beef",
     type: "hero",
     veg: false,
     hsn: "16",

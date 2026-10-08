@@ -16,7 +16,7 @@ import BatchContent from "../app/batch/[nnn]/BatchContent.js";
  */
 const fixtureBatch = {
   number: "002",
-  name: "Squid and dates",
+  name: "Squid",
   facts: [
     "Squid from Beypore, landed 2 January 2027.",
     "Cooked 3 January 2027.",
@@ -56,7 +56,7 @@ describe("formatIngredients (D28: percent renders only when supplied)", () => {
 
 describe("batchTitle / batchDescription", () => {
   it("builds the <title> and description from any batch's own facts, not 001's", () => {
-    assert.equal(batchTitle(fixtureBatch), "Batch 002. Squid and dates. Lailark");
+    assert.equal(batchTitle(fixtureBatch), "Batch 002. Squid. Lailark");
     assert.equal(
       batchDescription(fixtureBatch),
       "Squid from Beypore, landed 2 January 2027. Cooked 3 January 2027. Bottled 5 January 2027. 13 jars, 200 g each."
@@ -69,7 +69,7 @@ describe("BatchContent renders any batch, proving the template is not tied to 00
     const html = renderToStaticMarkup(BatchContent({ batch: fixtureBatch }));
 
     assert.match(html, /Batch 002/);
-    assert.match(html, /Squid and dates/);
+    assert.match(html, /Squid/);
     for (const fact of fixtureBatch.facts) {
       assert.ok(html.includes(fact), `expected rendered HTML to contain fact: ${fact}`);
     }

@@ -73,6 +73,17 @@ If the answer is in none of these, see section 5 (assumptions and questions).
   surprise charges at payment. Every count on the site is computed, never typed.
 - **Rust (#A34A28) is a number colour, never a button or heading. Leaf (#2F5D3A) only
   ever touches a claim.** See the design system, sales flow doc §10.
+- **The home page is the one exception to the design system, and only the home page**
+  (D77, D78). It carries its own palette, its own four web fonts, and a terracotta fill
+  on its "Take a jar" and "Book a jar" buttons, so on that page alone "system faces
+  only", "rust never lands on a button or a heading" and "there is no fifth colour" do
+  not hold. Everything else about it still does: leaf only ever touches a claim, every
+  count is computed, no dark patterns, no em dashes. Every page other than the home page
+  keeps the design system exactly as §10 states it. The home page's CSS and `@font-face`
+  rules are scoped to that page and nothing is added to `tokens.css.js`,
+  `primitives.css.js` or `PageShell.js`, so no other page's bytes move. The fonts are
+  self-hosted woff2 under `site/public/assets/fonts/`, subsetted, `font-display: swap`,
+  with their licences beside them: no request may leave the site.
 - Prices: ₹649 in stock, ₹599 open batch. Never above ₹649 MRP.
 - Region for everything server-side is `asia-south1`. Every function sets
   `maxInstances`.

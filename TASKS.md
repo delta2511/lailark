@@ -714,6 +714,51 @@ and the live webhook before the production deploy.
       §22. The restore drill is fast-follow (M5.9b). Done when: the site and admin e2e
       pass on staging with App Check enforced, backups and PITR show as on, and a test
       uptime alert is configured to fire (Shefin confirms it arrived at the break).
+- [ ] M5.12 [opus] The home page rebuilt to the 8 Oct design (Shefin checks). Brief:
+      `_incoming/home-redesign/PROMPT.md`. Source of truth for layout, wording, colour,
+      type and motion: `_incoming/home-redesign/home-reference.html`, with
+      `HANDOFF.md` beside it and `docs/business/Lailark_Landing_Copy.md` as the copy
+      record. The reference is a design sample: rebuilt inside `site/`, not pasted in.
+      D77 to D86 were taken before the build. Scope is the home page only (D77): its own
+      palette and four self-hosted subsetted woff2 fonts (D78), scoped to that page, with
+      `tokens.css.js`, `primitives.css.js`, `PageShell.js` and every other page's output
+      untouched. The jar video comes off (D79). Squid and beef are renamed everywhere and
+      their generic names follow the new labels, slugs unchanged (D80). Koorka is off the
+      page, still in the data (D81). Sumayya's note returns (D82). The open batch
+      explanation becomes "How a jar reaches you", the D75 pills stay (D83). "Take a jar"
+      in stock, "Book a jar" open, no button while cooking (D84). New hero copy (D85).
+      Nothing typed that the site computes: `ProductCount`, `ProductState`, `JarMarks`,
+      `/api/counts`, `inStockPrice()` and `openBatchPrice()`, with the count's existing
+      word fallbacks kept. Motion is CSS only on one `--breath` clock and all of it stops
+      under `prefers-reduced-motion`; the page is fully readable with no JavaScript and
+      with no scroll-driven animation support. Done when: `npm run build`, lint and
+      `npm test` are green, `npm run check:batch-001` passes against the build, the home
+      page's total transfer size is reported before and after, and Shefin has looked at
+      it on staging and said ok.
+      **BLOCKED (not on Shefin, on the data):** the per-card batch line cannot carry the
+      batch number. `/api/counts` does not publish it and `products.json` does not carry
+      it, so the reference's "Batch 001 · Bottled 4 Sep 2026 · 200 g" ships as "Bottled
+      4 Sep 2026 · 200 g", and as "200 g" alone on an open or cooking batch, which is the
+      mode with no `packedOn`. Putting the number back means adding it to the counts
+      payload, which is a functions change and not in this task.
+      **Built, waiting on Shefin (8 Oct).** Build, lint and `npm test` green; `/batch/001`
+      byte-identical and its two 301s verified against the hosting emulator; A288 to A294
+      logged. Not committed: this is a Shefin-checked task.
+- [ ] M5.13 [opus] Booking stays open while a batch is cooking, to 90%. **Do not start
+      this without Shefin saying so.** It moves money and he has not scheduled it; it is
+      filed here rather than in Fast-follow only because it is a launch-scope question.
+      From D84: he said cooking-now items can also be booked, up to 90%, while in that
+      state. Today brief §7.5 and the carried-over brief decision "₹599 closes at
+      cooking" close booking when the pot goes on, `/api/counts` sends `available: 0` for
+      a cooking batch, and `createCheckout` refuses the order, so the home page's cooking
+      card carries no button. The change touches the batch transaction, `createCheckout`,
+      the counts endpoint, the card copy (brief §7.5's "Being cooked now. Unpaid jars go
+      on sale when bottled." stops being true as written) and the 90% pre-booking cap's
+      interaction with the cooking state. Needs a race test (two callers, one jar, batch
+      cooking) and a fresh [opus] tester. Until then: the pot going on still closes
+      booking, and a customer who asks is told by hand. Done when: a cooking batch can be
+      booked to 90% on staging, the cap holds under the race test, and the card says what
+      is actually true.
 - [ ] M5.11 [sonnet] Launch checklist and Milestone 3 test note, then stop.
       `docs/milestones/LAUNCH.md` from brief §23: what the build has ticked and what only
       Shefin can tick (live Razorpay keys and webhook, production deploy, the first real
@@ -747,6 +792,17 @@ and the live webhook before the production deploy.
       `functions/scripts/publish-policies.mjs` has to be re-run against staging and then
       production after the customer site deploys, or `createCheckout` stamps an order with
       a version whose documents were never published.
+      **From M5.12, `LAUNCH.md` must carry four photographs as things that block the
+      production deploy, not the build.** The redesigned home page ships to staging with
+      four marked placeholders in place of them: Sumayya at the stove (the dark "Two
+      houses" section), one real handwritten card in Sumayya's hand ("A note from
+      Sumayya"), and a jar photograph each for Squid and for Beef. The two jar slots are
+      placeholders rather than the prawns jar because that photograph's label plainly
+      reads Prawns, and a prawns jar on a squid card is a customer being shown the wrong
+      thing. Each placeholder is visible on the page and says what it is waiting for.
+      **Also from M5.12:** the hero photograph is only 448 px wide at source, which is
+      small for a hero, and a larger original should replace
+      `site/public/assets/home-jar-in-hand.webp` before production if one exists.
       Print the production deploy commands; do not run them. Then stop.
 
 ---

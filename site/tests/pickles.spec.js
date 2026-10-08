@@ -6,8 +6,8 @@ import { test, expect } from "@playwright/test";
 
 const HEROES = [
   ["prawns-and-dates", "Prawns and dates"],
-  ["squid-and-dates", "Squid and dates"],
-  ["beef-and-dates", "Beef and dates"],
+  ["squid-and-dates", "Squid"],
+  ["beef-and-dates", "Beef"],
   ["koorka", "Koorka"],
 ];
 

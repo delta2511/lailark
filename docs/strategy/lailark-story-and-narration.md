@@ -105,12 +105,22 @@ The dark band, which by the design rule carries story while paper carries facts 
 anything that takes money, holds the cooking: the two families, Sumayya learning at her
 mother's side, and the fish still coming from Chaliyam. Nothing else competes with it.
 
-Order on the page: hero, what is in the kitchen today, the four jars, **the dark band
-with the two families and the cooking**, the method, how a batch works, the open batch,
-in stock, the batch record, Sumayya's note, the name, footer.
+Order on the page, redesigned 8 Oct 2026 (D77 to D86), replacing the order this section
+carried before: hero, the Malayalam band, the three pickles, **the dark band with the two
+houses and the cooking**, പാകം, how a jar reaches you, the number on your jar, a note
+from Sumayya, the name, footer.
 
-One dark band per page. If a second one ever appears, the page is trying to tell two
-stories.
+What moved, and why. The method is no longer its own section: it is the last paragraph of
+പാകം, beside the salt. "How a batch works", "the open batch" and "in stock" are no longer
+three sections: they are the three steps of "How a jar reaches you" and the two lines
+under it, which is where a first-time visitor actually asks the question (D83, replacing
+D76). "What is in the kitchen today" is gone as a heading; the cards say what they are,
+with one line of text after the list. Sumayya's note is back (D82, reversing D74).
+Koorka is off the page and the page carries three pickles (D81). The jar video is gone
+(D79).
+
+One dark band per page, and on the redesigned home page it is "Two houses". If a second
+one ever appears, the page is trying to tell two stories.
 
 ## 6. Still open
 

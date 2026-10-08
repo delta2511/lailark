@@ -11,17 +11,17 @@
     },
     {
       "slug": "squid-and-dates",
-      "name": "Squid and dates",
+      "name": "Squid",
       "jarGrams": 200,
-      "genericName": "Squid and dates pickle",
+      "genericName": "Squid pickle",
       "seasonStart": null,
       "seasonEnd": null
     },
     {
       "slug": "beef-and-dates",
-      "name": "Beef and dates",
+      "name": "Beef",
       "jarGrams": 200,
-      "genericName": "Beef and dates pickle",
+      "genericName": "Beef pickle",
       "seasonStart": null,
       "seasonEnd": null
     },

@@ -159,6 +159,18 @@ thing.
 Decided 14 Sep 2026. Derived from the printed label, which is the most resolved piece of
 Lailark design that exists.
 
+**The home page is outside this section, and only the home page.** Decided 8 Oct 2026
+(D77, D78), after Shefin and Claude designed a new home page together. That page carries
+a palette and four web fonts of its own, listed in
+`_incoming/home-redesign/HANDOFF.md`, and three of the rules below are suspended on it:
+"system faces only", "rust never lands on a button or a heading", and "there is no fifth
+colour". Its terracotta is #A8481F, it turns to an oil red #B3261E partway down the page,
+and its dark section is #5A140D. Leaf still only ever touches a claim there, every count
+is still computed, and nothing on it is a dark pattern. The fonts are self-hosted and
+subsetted so no request leaves the site. **Everything below is unchanged for every other
+page**, and the home page's own CSS is scoped to it, so the tokens, the primitives and
+the page shell are untouched and no other page's bytes move.
+
 **Palette.** Four colours with one job each, plus two neutrals.
 
 | Colour | Hex | Job |
