@@ -799,11 +799,12 @@ and the live webhook before the production deploy.
       `functions/scripts/publish-policies.mjs` has to be re-run against staging and then
       production after the customer site deploys, or `createCheckout` stamps an order with
       a version whose documents were never published.
-      **From M5.12, `LAUNCH.md` must carry four photographs as things that block the
+      **From M5.12, `LAUNCH.md` must carry three photographs as things that block the
       production deploy, not the build.** The redesigned home page ships to staging with
-      four marked placeholders in place of them: Sumayya at the stove (the dark "Two
-      houses" section), one real handwritten card in Sumayya's hand ("A note from
-      Sumayya"), and a jar photograph each for Squid and for Beef. The two jar slots are
+      three marked placeholders in place of them: one real handwritten card in Sumayya's
+      hand ("A note from Sumayya"), and a jar photograph each for Squid and for Beef.
+      The fourth slot, the dark "Two houses" section, is filled: it carries the painted
+      portrait of Sumayya that Shefin supplied on 8 Oct (D87), not a stove photograph. The two jar slots are
       placeholders rather than the prawns jar because that photograph's label plainly
       reads Prawns, and a prawns jar on a squid card is a customer being shown the wrong
       thing. Each placeholder is visible on the page and says what it is waiting for.

@@ -121,6 +121,7 @@ confirm or replace at the next milestone break.
 | D84 | **The open batch card's button reads "Book a jar". A cooking card gets no button, and opening booking during cooking is its own task** | Asked and answered by Shefin, 8 Oct 2026. The in-stock button is "Take a jar" (the reference). For an open batch he chose "Book a jar", which is the verb the page already uses twice: the step is titled "You book a jar" and reads "You book your jar first, for ₹599". Asked about a "Cooking now" card, he answered that cooking-now items can also be booked, up to 90%, while in that state. **That is not what the code does today:** brief §7.5 closes booking when the pot goes on, the carried-over brief decision is "₹599 closes at cooking", and `/api/counts` sends `available: 0` for a cooking batch, so `createCheckout` would refuse the order. Told so, he chose to leave the home page honest for now and schedule the change separately: the cooking card keeps brief §7.5's line, "Being cooked now. Unpaid jars go on sale when bottled.", plus D64's notify-me, and carries no button. **M5.13 is logged for the change itself** (the counts endpoint, `createCheckout`, the batch transaction and the card copy, with race tests) and is not to be started until he says so, because it moves money |
 | D85 | **The home page's hero is the copy record's own hero paragraph, as the h1. This replaces the lede of D73 on that page** | Shefin, 8 Oct 2026. The h1 is "Oil pickles from our kitchen in Kozhikode. Sumayya makes them by hand, patiently, with fish from Chaliyam and spices in the right measure. One small batch at a time.", marked FINAL in `docs/business/Lailark_Landing_Copy.md`. It replaces both halves of the old hero: the heading "Oil pickles from a house in Kunnamangalam" and D73's lede "Sumayya cooks them in small batches at our home in Kozhikode." The `<meta name="description">` carries the new sentences too, which is the part of D73 that this amends. D73's reasoning survives intact: the page still says "we", never "I", and still names Sumayya without naming her as Shefin's mother in the hero |
 | D86 | **"Just enough." stays in both places in the പാകം section** | Asked and answered by Shefin, 8 Oct 2026. It sits under the salt bowl, where the animation lands on it at the moment the heap comes to full size, and again at the end of the paragraph beside it, after "പാകത്തിന്." He was offered ending the paragraph at the Malayalam and chose to keep both: a reader who cannot read the script gets the meaning in the same breath |
+| D87 | **The "Two houses" slot carries a painted portrait of Sumayya, not a photograph of her at the stove** | Shefin supplied the artwork, 8 Oct 2026. It is a painted bust portrait, cut out on a transparent ground, so it sits straight on the dark section with no frame and no dashed placeholder box. Saved as `site/public/assets/home-sumayya.webp`, 900x1118, 186 KB, lazy-loaded. This closes the first of A288's four photographs; three remain as production blockers. The alt text, "A painted portrait of Sumayya, smiling, in a cream shawl", describes the picture rather than naming her as Shefin's mother, consistent with D73 |
 ## Carried over as decided from the brief §0 and §24.1 (15 Sep 2026, S)
 
 Admin is the master POS for every sale. Shipping free at launch with a switch. Launch
@@ -1881,13 +1882,15 @@ still carrying the two percentages the repo has removed.
 
 - A288 (M5.12, 8 Oct): **the four photographs the redesigned home page needs do not
   exist, and ship to staging as marked placeholders**: Sumayya at the stove, one real
-  handwritten card in her hand, and a jar photograph each for Squid and for Beef. The
+  handwritten card in her hand, and a jar photograph each for Squid and for Beef.
+  **Partly closed by D87, 8 Oct:** the first slot now carries a painted portrait of
+  Sumayya instead of a stove photograph. Three placeholders remain. The
   first two are the reference's own placeholder slots. The second two are a deliberate
   departure from the reference, which reuses the prawns jar on all three cards: that
   photograph's label plainly reads Prawns and carries a prawn drawing, so on a Squid card
   it shows a customer the wrong jar. A placeholder that says what is missing is honest; a
   jar of the wrong pickle is not. M5.11 carries all four as production blockers.
-  Status: open, blocked on photographs only.
+  Status: open on three of the four, blocked on photographs only.
 - A289 (M5.12, 8 Oct): **the card's footer row prints the price and nothing else.** The
   reference puts the grey words "in stock" beside it. The state pill directly above
   already says "In stock", and there is no agreed word for the open or the cooking case,

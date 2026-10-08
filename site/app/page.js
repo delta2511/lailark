@@ -369,7 +369,7 @@ html:has(.hp){ scroll-behavior:smooth }
   margin:64px auto 0; text-align:center; font-size:15px; color:var(--hp-grey);
 }
 
-/* The placeholder slots. Four photographs do not exist yet and every one of
+/* The placeholder slots. Three photographs do not exist yet and every one of
    them blocks the production deploy (M5.11). Each says what it waits for. */
 .hp-ph{
   display:flex; align-items:center; justify-content:center;
@@ -378,11 +378,13 @@ html:has(.hp){ scroll-behavior:smooth }
   border:1px dashed var(--hp-grey); color:var(--hp-grey);
 }
 .hp-ph--jar{ width:177px; height:300px; position:relative; background:#FFFFFF }
-.hp-ph--stove{
-  aspect-ratio:4 / 5;
-  border-color:rgba(250,248,244,.4); color:rgba(250,248,244,.72);
-}
 .hp-ph--card{ aspect-ratio:4 / 3; transform:rotate(-2.5deg); background:#FFFFFF }
+
+/* The painted portrait of Sumayya in the dark "Two houses" section. It is cut
+   out, so the dark ground shows through and the slot needs no frame. */
+.hp-portrait{
+  display:block; width:100%; height:auto; max-width:420px; margin:0 auto;
+}
 
 /* ---------------------------------------------------------------------- */
 /* The one dark section (D79: the hero is no longer the second one).      */
@@ -916,9 +918,15 @@ export default function HomePage() {
             <section id="story" className="hp-dark">
               <div className="hp-wrap hp-split">
                 <div className="hp-split__narrow hp-rv">
-                  <div className="hp-ph hp-ph--stove">
-                    [Photo: Sumayya at the stove]
-                  </div>
+                  <img
+                    className="hp-portrait"
+                    src="/assets/home-sumayya.webp"
+                    alt="A painted portrait of Sumayya, smiling, in a cream shawl"
+                    width={900}
+                    height={1118}
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </div>
                 <div className="hp-split__wide hp-rv">
                   <div className="hp-eyebrow">Where the food comes from</div>
