@@ -1,16 +1,24 @@
 import { Footer, Header } from "./ds/PageShell";
 import Oil from "./ds/Oil";
 import Settle from "./ds/Settle";
-import { ProductCount } from "./_lib/counts";
+import { ProductCount, ProductState } from "./_lib/counts";
 import { inStockPrice, openBatchPrice } from "../lib/money";
 import productContent from "../content/products.json";
 
-// The home page (M3.2). Order fixed by the story doc section 5: hero, what
-// is in the kitchen today, the four jars, the dark band with the two
-// families and the cooking, the method, how a batch works, the open batch,
-// in stock, the batch record, Sumayya's note, the name, footer. The abroad
-// line (brief section 11.6) sits at the very end of the page, after the
-// name, before the footer.
+// The home page (M3.2). Order from the story doc section 5, with two
+// changes Shefin made on 3 Oct 2026: hero, what is in the kitchen today,
+// the four jars, **the open batch**, the dark band with the two families
+// and the cooking, the method, how a batch works, in stock, the batch
+// record, the name, footer. The abroad line (brief section 11.6) sits at
+// the very end of the page, after the name, before the footer.
+//
+// Why "An open batch" moved up, out of the story doc's order: it is the one
+// section that explains a card. Half the jars on this page are paid for
+// before they exist, and a first-time visitor met that idea as a pill
+// reading "Not cooked yet" and then had to scroll past three other
+// sections to find out what it meant. The explanation now sits directly
+// under the cards it explains. "Sumayya's note" is gone from the page
+// entirely, heading and all.
 //
 // One dark band, and only one: if a second appears the page is telling two
 // stories (story doc section 5). Everything else is paper.
@@ -122,16 +130,54 @@ const homeCss = `
 /* The four jars. */
 .home-jars{ display:grid; grid-template-columns:1fr; gap:var(--ds-space-4) }
 @media (min-width:30rem){ .home-jars{ grid-template-columns:1fr 1fr } }
+/* The whole card is the tap target (Shefin, 3 Oct 2026). Still one anchor,
+   the one on the name, stretched over the card by a pseudo-element: a
+   second link would make a screen reader read every card twice, and
+   wrapping the card in an anchor would put a paragraph and a count inside
+   a link. The relative position here is what the overlay anchors to. */
 .home-jar{
+  position:relative;
   display:flex; flex-direction:column; height:100%;
   padding:var(--ds-space-4); border:1px solid var(--ds-hairline); border-radius:4px;
+  transition:border-color .15s ease, background-color .15s ease;
+}
+.home-jar:hover{ border-color:var(--ds-ink) }
+/* The focus ring belongs on the card, not on the few words of the name,
+   because the card is what the link now covers. */
+.home-jar:has(.home-jar__name a:focus-visible){
+  outline:2px solid var(--ds-ink); outline-offset:3px;
 }
 .home-jar__name{
   font-family:var(--ds-font-heading); font-weight:600; font-size:1.1rem;
   line-height:1.3; margin:0;
 }
 .home-jar__name a{ text-decoration:none }
-.home-jar__name a:hover{ text-decoration:underline; text-underline-offset:.2em }
+.home-jar__name a::after{
+  content:""; position:absolute; inset:0; border-radius:4px;
+}
+.home-jar:hover .home-jar__name a{ text-decoration:underline; text-underline-offset:.2em }
+.home-jar__name a:focus-visible{ outline:none }
+
+/* The state pill. Grey on hairline: rust is a number colour and leaf only
+   ever touches a claim (CLAUDE.md section 3), so a label that is neither a
+   number nor a claim gets neither. Mono, like everything on this page that
+   is checked against a jar. It is derived from the live counts payload,
+   never typed, so a card cannot claim a state it is not in. */
+.home-jar__state{
+  display:inline-block; margin:0;
+  font-family:var(--ds-font-mono); font-size:.7rem; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--ds-grey);
+  border:1px solid var(--ds-hairline); border-radius:999px;
+  padding:.15rem .5rem; line-height:1.5;
+}
+/* The slot holds its height before the counts land, so no card moves. */
+.home-jar__stateslot{ min-height:1.55rem; margin:0 0 var(--ds-space-2) }
+
+/* The open batch's one line of mechanism, on the card itself. */
+.home-count__open{
+  font-family:var(--ds-font-body); font-size:.85rem; line-height:1.5;
+  color:var(--ds-grey); margin:var(--ds-space-2) 0 0;
+}
 .home-jar__size{
   font-family:var(--ds-font-mono); font-size:.75rem; color:var(--ds-grey);
   margin:var(--ds-space-1) 0 var(--ds-space-3);
@@ -181,8 +227,7 @@ export default function HomePage() {
                 Oil pickles from a house in Kunnamangalam
               </h1>
               <p className="home-hero__lede">
-                Sumayya cooks them in batches of fifteen to forty jars, by
-                hand.
+                Sumayya cooks them in small batches at our home in Kozhikode.
               </p>
             </div>
 
@@ -214,6 +259,7 @@ export default function HomePage() {
                 <Settle>
                   {productContent.heroes.map((hero) => (
                     <article className="home-jar" key={hero.slug}>
+                      <ProductState slug={hero.slug} />
                       <h3 className="home-jar__name">
                         <a href={`/pickles/${hero.slug}`}>{hero.name}</a>
                       </h3>
@@ -226,6 +272,25 @@ export default function HomePage() {
                   ))}
                 </Settle>
               </div>
+            </div>
+          </section>
+
+          <section className="home-section">
+            <div className="home-col">
+              <h2>An open batch</h2>
+              <p>
+                An open batch has not been cooked yet. The jars are listed, you
+                pay <span className="home-price">{openBatchPrice()}</span> for
+                one, and your jar is kept for you. Once half the batch is paid
+                for we buy what the batch needs and start cooking, and we will
+                send you photos from the kitchen as it happens. We do not put a
+                date on it, because the sea does not keep one.
+              </p>
+              <p>
+                There is no closing time and no draw. The batch fills, and
+                there is a limit of a quarter of it per person, so nobody takes
+                the whole pot.
+              </p>
             </div>
           </section>
 
@@ -285,25 +350,6 @@ export default function HomePage() {
 
           <section className="home-section">
             <div className="home-col">
-              <h2>An open batch</h2>
-              <p>
-                An open batch has not been cooked yet. The jars are listed, you
-                pay <span className="home-price">{openBatchPrice()}</span> for
-                one, and your jar is kept for you. Once half the batch is paid
-                for we buy what the batch needs and start cooking, and we will
-                send you photos from the kitchen as it happens. We do not put a
-                date on it, because the sea does not keep one.
-              </p>
-              <p>
-                There is no closing time and no draw. The batch fills, and
-                there is a limit of a quarter of it per person, so nobody takes
-                the whole pot.
-              </p>
-            </div>
-          </section>
-
-          <section className="home-section">
-            <div className="home-col">
               <h2>In stock</h2>
               <p>
                 There is no stock here, only leftovers. Anything listed as in
@@ -313,7 +359,7 @@ export default function HomePage() {
               </p>
               <p>
                 It goes out the next day, anywhere in India, and shipping is
-                free. Sumayya&apos;s note goes in the box with it.
+                free.
               </p>
             </div>
           </section>
@@ -331,16 +377,6 @@ export default function HomePage() {
                 <a className="home-link" href="/batch/001">
                   Read the batch 001 record
                 </a>
-              </p>
-            </div>
-          </section>
-
-          <section className="home-section">
-            <div className="home-col">
-              <h2>The note in the box</h2>
-              <p>
-                Sumayya writes a note by hand for every box that goes out. Not
-                a printed one.
               </p>
             </div>
           </section>

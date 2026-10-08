@@ -123,6 +123,23 @@ test("the Orders page says brief 10.4's paragraph and the no-fee line", async ({
   expect(body).toContain("+91 88919 23827");
 });
 
+test("the Shipping page names one courier and does not name Shiprocket", async ({
+  page,
+}) => {
+  // Shefin, 3 Oct 2026: the three parcel paragraphs became one, and the
+  // Shiprocket account that is "being set up" is off the page. A page is
+  // not a roadmap.
+  await page.goto("/shipping");
+  const body = (await page.locator("main").innerText()).replace(/\s+/g, " ");
+  expect(body).toContain(
+    "We post through India Post for now. We send the tracking number on WhatsApp " +
+      "once the parcel is booked. The jar is taped and sealed in a small box, " +
+      "marked fragile.",
+  );
+  expect(body).not.toContain("Shiprocket");
+  expect(body).not.toContain("pouch");
+});
+
 test("the contact page names the grievance officer and the two commitments", async ({ page }) => {
   await page.goto("/contact");
   const body = (await page.locator("main").innerText()).replace(/\s+/g, " ");
@@ -137,6 +154,8 @@ test("the privacy page answers what, why, how long, where and how to ask", async
   const body = (await page.locator("main").innerText()).replace(/\s+/g, " ");
   expect(body).toContain("WhatsApp number");
   expect(body).toContain("Mumbai region");
+  // Shefin, 3 Oct 2026: the page no longer says who can open it.
+  expect(body).not.toContain("can open it");
   expect(body).toContain("books of account");
   expect(body).toContain("founder.lailark@gmail.com");
   // Section 20.5 and 20.6: the marketing consent is separate from the

@@ -73,7 +73,12 @@ async function fillTheForm(page) {
   await page.fill("#checkout-city", "Kozhikode");
   await page.fill("#checkout-state", "KL");
   await page.fill("#checkout-pincode", "673571");
-  await page.check("#checkout-updates");
+  // The transactional tick is on when the page loads (Shefin, 3 Oct 2026),
+  // so the form needs nothing done to it here. Asserted rather than
+  // assumed: if it ever ships off again, this fails here rather than
+  // quietly sending `updates: false` to the server.
+  await expect(page.locator("#checkout-updates")).toBeChecked();
+  await expect(page.locator("#checkout-marketing")).not.toBeChecked();
 }
 
 test("the checkout page shows the jar, the price and the total, with no console error", async ({

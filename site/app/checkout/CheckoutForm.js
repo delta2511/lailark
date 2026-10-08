@@ -122,7 +122,14 @@ export default function CheckoutForm() {
     state: "",
     pincode: "",
     email: "",
-    updates: false,
+    // The transactional tick starts on (Shefin, 3 Oct 2026). It is the one
+    // that carries the bill, the jar number and the tracking, which is how
+    // an order reaches somebody at all, so leaving it off meant a customer
+    // could pay and then hear nothing. The counter sale already starts it
+    // on (A92) and the two channels were disagreeing. The marketing tick
+    // stays off, and is the only one that is a choice: nothing about the
+    // order changes either way and buying never depends on it.
+    updates: true,
     marketing: false,
   });
   const [busy, setBusy] = useState(false);

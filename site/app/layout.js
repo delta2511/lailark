@@ -4,7 +4,7 @@ import { dsPrimitivesCss } from "./ds/primitives.css";
 export const metadata = {
   title: "Lailark",
   description:
-    "Oil pickles from a house in Kunnamangalam, Kozhikode. Sumayya cooks them in batches of fifteen to forty jars, by hand.",
+    "Oil pickles from a house in Kunnamangalam. Sumayya cooks them in small batches at our home in Kozhikode.",
   icons: {
     icon: [{ url: "/favicon.ico", sizes: "32x32" }],
   },

@@ -133,11 +133,18 @@ const ORDERS: PolicyPage = {
 };
 
 /**
- * How a jar actually reaches somebody. Brief §11.1 (Shiprocket preferred,
- * India Post first and kept as the fallback), §11.2 (the parcel), §20.4 (the
+ * How a jar actually reaches somebody. Brief §11.2 (the parcel), §20.4 (the
  * total, with shipping, shown before payment) and D12 (shipping free at
  * launch, with a switch). No delivery date is given anywhere, because none is
  * promised: the courier's own estimate is not Lailark's to repeat.
+ *
+ * **India Post only, and no mention of Shiprocket** (Shefin, 3 Oct 2026).
+ * Brief §11.1 prefers Shiprocket once an account exists and keeps India Post
+ * as the fallback, and the page used to say so. A page is not a roadmap: an
+ * account that is "being set up" is nothing a customer can use, and naming it
+ * only raises a question the page then cannot answer. So the courier the
+ * parcel actually goes by is the only one named here. The serviceability
+ * logic in `checkout.ts` is untouched and still knows about both.
  */
 const SHIPPING: PolicyPage = {
   kind: "shipping",
@@ -167,20 +174,10 @@ const SHIPPING: PolicyPage = {
     {
       type: "paragraph",
       text:
-        "We post through India Post for now. A Shiprocket account is being set up, and " +
-        "once it is working most parcels will go that way, with India Post kept for the " +
-        "pincodes Shiprocket does not reach.",
-    },
-    {
-      type: "paragraph",
-      text: "We send the tracking number on WhatsApp once the parcel is booked.",
-    },
-    {
-      type: "paragraph",
-      text:
-        "The jar is taped and sealed in a pouch inside a small box, marked fragile. If " +
-        "it reaches you broken, send us a photo or call on +91 88919 23827 and we will " +
-        "sort it out with you.",
+        "We post through India Post for now. We send the tracking number on WhatsApp " +
+        "once the parcel is booked. The jar is taped and sealed in a small box, marked " +
+        "fragile. If it reaches you broken, send us a photo or call on " +
+        "+91 88919 23827 and we will sort it out with you.",
     },
   ],
 };
@@ -253,8 +250,8 @@ const TERMS: PolicyPage = {
     {
       type: "paragraph",
       text:
-        "Cooking at home means a batch can fail. If we cannot cook one you have paid " +
-        "for, we will call you and sort it out with you.",
+        "Sometimes a batch does not come out right. If we cannot cook one you have " +
+        "paid for, we will call you and sort it out with you.",
     },
     { type: "heading", text: "Changes to these pages" },
     {
@@ -312,8 +309,7 @@ const PRIVACY: PolicyPage = {
     {
       type: "paragraph",
       text:
-        "On Google's Firebase, in their Mumbai region, so it stays in India. Only the " +
-        "two of us who run Lailark can open it.",
+        "On Google's Firebase, in their Mumbai region, so it stays in India.",
     },
     { type: "heading", text: "How long we keep it" },
     {

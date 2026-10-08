@@ -160,6 +160,7 @@ export function ProductCount({ slug }) {
             {inStock ? inStockPrice() : openBatchPrice()}
           </span>
         </p>
+        {inStock ? null : <p className="home-count__open">{OPEN_BATCH_NOTE}</p>}
       </>
     );
   }
@@ -168,6 +169,79 @@ export function ProductCount({ slug }) {
     <div className="home-count" aria-live="polite">
       {body}
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* The state pill on a jar card (Shefin, 3 Oct 2026)                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The one-or-two words a card wears, so a visitor can tell the two modes
+ * apart without reading a paragraph.
+ *
+ * **Why these words.** The pair reads on a single axis, does this jar exist
+ * yet: "In stock" against "Not cooked yet". "Prebook" was the first
+ * suggestion and was dropped on 3 Oct 2026, because prebooking anything else
+ * in India means there is a date and you are early in the queue, and Lailark
+ * gives no date at all (flow §4). A word that raises a question the page
+ * then refuses to answer is worse than a plain one.
+ *
+ * Derived, never typed (CLAUDE.md §3). A card with no trustworthy count
+ * wears no pill rather than guessing one, and `mode: "none"` wears none
+ * either: the line under it already says "Not in the kitchen just now."
+ */
+const STATE_LABELS = {
+  inStock: "In stock",
+  soldOut: "Sold out",
+  open: "Not cooked yet",
+  batchFull: "Batch full",
+  cooking: "Cooking now",
+};
+
+/**
+ * The sentence an open batch's card carries under its count, so the
+ * mechanism is on the card and not only in the section below it: the money
+ * moves now, the jar is kept, and no date is given. Brief §7.1 and the
+ * story doc's own open-batch copy, shortened to a card's width.
+ */
+export const OPEN_BATCH_NOTE = "Pay now, your jar is kept for you. No date.";
+
+/**
+ * Which pill a validated entry wears, or null for none.
+ *
+ * `available` is the field that knows a jar is spoken for, so it decides
+ * sold out rather than `count`. When it cannot be trusted it is null, and
+ * then the comparison falls back to the paid marks against the total, which
+ * is the same question asked with coarser numbers.
+ */
+export function stateLabelFor(entry) {
+  if (!entry || entry.mode === "none") return null;
+  if (entry.mode === "cooking") return STATE_LABELS.cooking;
+  const free =
+    entry.available === null || entry.available === undefined
+      ? entry.mode === "inStock"
+        ? entry.count
+        : entry.total - entry.count
+      : entry.available;
+  if (entry.mode === "inStock") {
+    return free > 0 ? STATE_LABELS.inStock : STATE_LABELS.soldOut;
+  }
+  return free > 0 ? STATE_LABELS.open : STATE_LABELS.batchFull;
+}
+
+/**
+ * The pill slot at the top of a jar card. Like the count slot, its root
+ * node never changes and it holds its own height, so the card does not jump
+ * when the counts land.
+ */
+export function ProductState({ slug }) {
+  const state = useProductDetail(slug);
+  const label = state.status === "ready" ? stateLabelFor(state.entry) : null;
+  return (
+    <p className="home-jar__stateslot">
+      {label ? <span className="home-jar__state">{label}</span> : null}
+    </p>
   );
 }
 

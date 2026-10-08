@@ -5,11 +5,20 @@ import Lark from "./Lark";
 // Header with the lark mark (Flow §10). Referencing Lark keeps the
 // mark's path data in one place for the design system rather than a
 // second hand copy here.
+//
+// The mark and the wordmark are one link home (Shefin, 3 Oct 2026), which
+// is what every visitor already tries. One anchor around both, so a screen
+// reader hears "Lailark, link" once rather than twice, and the mark itself
+// is decorative inside it. The home page links to itself: harmless, and a
+// header that is sometimes a link and sometimes not is worse than one that
+// always is.
 export function Header({ className }) {
   return (
     <header className={["ds-header", className].filter(Boolean).join(" ")}>
-      <Lark size={28} className="ds-header__mark" />
-      <span className="ds-header__name">Lailark</span>
+      <a className="ds-header__home" href="/">
+        <Lark size={28} className="ds-header__mark" title={null} />
+        <span className="ds-header__name">Lailark</span>
+      </a>
     </header>
   );
 }

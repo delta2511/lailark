@@ -679,6 +679,34 @@ and the live webhook before the production deploy.
       origin. No test covered that map, so the script suite was green through it. Fixed,
       renamed `BATCH_BASE`, two mutation-tested regression tests added, and the real
       guard re-run green against staging.
+- [x] M5.7b [orchestrator] The home page and the policy pages, as Shefin read them on
+      3 Oct. (D67 to D76 logged) Not a planned task: ten changes Shefin asked for while
+      reading the built pages, taken as decisions under CLAUDE.md §4.4 and built in the
+      same session. **Policy copy:** the Shipping page names India Post and nothing else,
+      and its three parcel paragraphs become one (D67); the terms say "Sometimes a batch
+      does not come out right" (D68); the privacy page drops "Only the two of us who run
+      Lailark can open it." (D69). **The header:** the lark mark and the wordmark are one
+      link home on every page, the mark made decorative inside it so a screen reader
+      hears "Lailark, link" once (D70). **The home page:** the whole jar card is the tap
+      target, stretched from the title's anchor rather than a second link (D71); the lede
+      is "Sumayya cooks them in small batches at our home in Kozhikode.", in the
+      `<meta name="description">` too (D73); "The note in the box" is gone, heading and
+      all, and the in-stock section no longer mentions it, leaving nine headings (D74);
+      every jar card wears a pill derived from `/api/counts`, never typed, reading on one
+      axis, does this jar exist yet: "In stock", "Not cooked yet", "Cooking now", "Sold
+      out", "Batch full", with "Pay now, your jar is kept for you. No date." under an
+      open batch's count (D75); "An open batch" moves under the jar cards, because it is
+      the section that explains a card (D76). **Checkout:** the WhatsApp tick starts
+      ticked, which is how an order reaches anybody at all and is what the counter sale
+      already did (A92), and the marketing tick stays off (D72). The Shiprocket
+      serviceability logic in `shared/src/checkout.ts` is untouched: D67 is what the page
+      says, not what the code knows. **One thing this owes the launch checklist:** the
+      policy version is a hash of the page text, so D67, D68 and D69 mint a new version,
+      and `functions/scripts/publish-policies.mjs` must be re-run against staging and
+      production after this deploys, or an order stamps a version whose documents are not
+      published. M5.11 carries it. Done when: build and lint exit 0 and `npm test` is
+      green, with the pills, the header link, the stretched card target, the two ticks and
+      the three policy edits each covered by a test.
 - [ ] M5.9 [opus] Hardening, trimmed for launch (D29). App Check on callables and
       Firestore, rate limits on checkout and counts, `maxInstances` audit, Firestore
       scheduled backups and PITR enabled on production, uptime checks on `/`,
@@ -713,6 +741,12 @@ and the live webhook before the production deploy.
       customer site is deployed once from this branch. That is a one-time cost, and the
       checklist names it so the first red check after launch is not read as drift on the
       one page printed on 22 jars.
+      **From M5.7b, `LAUNCH.md` must carry one more line Shefin ticks:** D67, D68 and D69
+      changed the wording of the shipping, terms and privacy pages, and the policy version
+      is a hash of that wording, so the set now has a new version.
+      `functions/scripts/publish-policies.mjs` has to be re-run against staging and then
+      production after the customer site deploys, or `createCheckout` stamps an order with
+      a version whose documents were never published.
       Print the production deploy commands; do not run them. Then stop.
 
 ---

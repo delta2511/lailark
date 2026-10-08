@@ -15,10 +15,18 @@ export const dsPrimitivesCss = `
   width:100%; max-width:var(--ds-measure); margin-inline:auto;
   padding:var(--ds-space-5) var(--ds-space-4) var(--ds-space-4);
 }
-.ds-header__mark{width:28px; height:auto; display:block; color:var(--ds-ink); flex:none}
+/* The mark and the wordmark are one link home. It inherits its colour, so
+   the home page's paper-on-ink header keeps working without a second rule,
+   and it carries no underline: the mark is the affordance. */
+.ds-header__home{
+  display:inline-flex; align-items:center; gap:var(--ds-space-2);
+  color:inherit; text-decoration:none; border-radius:3px;
+}
+.ds-header__home:focus-visible{ outline:2px solid currentColor; outline-offset:4px }
+.ds-header__mark{width:28px; height:auto; display:block; color:currentColor; flex:none}
 .ds-header__name{
   font-family:var(--ds-font-heading); font-size:1rem; font-weight:600;
-  letter-spacing:.06em; color:var(--ds-ink);
+  letter-spacing:.06em; color:currentColor;
 }
 
 /* Main. */

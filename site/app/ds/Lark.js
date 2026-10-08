@@ -6,16 +6,23 @@
 // M3.2 replaced the v0 home page, which carried its own inline copy of
 // this path data, so this component and public/assets/lark.svg are now
 // the only two places it lives.
+// `title={null}` makes the mark decorative: no role, no name, hidden from
+// assistive tech. The header needs that, because the mark sits inside the
+// same link as the word "Lailark" and a named mark made it read "Lailark
+// Lailark, link".
 export default function Lark({ size = 32, className, title = "Lailark" }) {
   const height = Math.round(size * (74.98 / 73.43) * 100) / 100;
+  const decorative = title === null || title === "";
   return (
     <svg
       viewBox="0 0 73.43 74.98"
       width={size}
       height={height}
       fill="currentColor"
-      role="img"
-      aria-label={title}
+      role={decorative ? undefined : "img"}
+      aria-label={decorative ? undefined : title}
+      aria-hidden={decorative ? "true" : undefined}
+      focusable={decorative ? "false" : undefined}
       className={className}
     >
       <g>
