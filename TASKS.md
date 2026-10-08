@@ -714,7 +714,7 @@ and the live webhook before the production deploy.
       §22. The restore drill is fast-follow (M5.9b). Done when: the site and admin e2e
       pass on staging with App Check enforced, backups and PITR show as on, and a test
       uptime alert is configured to fire (Shefin confirms it arrived at the break).
-- [ ] M5.12 [opus] The home page rebuilt to the 8 Oct design (Shefin checks). Brief:
+- [x] M5.12 [opus] The home page rebuilt to the 8 Oct design (Shefin checks). Brief:
       `_incoming/home-redesign/PROMPT.md`. Source of truth for layout, wording, colour,
       type and motion: `_incoming/home-redesign/home-reference.html`, with
       `HANDOFF.md` beside it and `docs/business/Lailark_Landing_Copy.md` as the copy
@@ -741,9 +741,16 @@ and the live webhook before the production deploy.
       4 Sep 2026 · 200 g", and as "200 g" alone on an open or cooking batch, which is the
       mode with no `packedOn`. Putting the number back means adding it to the counts
       payload, which is a functions change and not in this task.
-      **Built, waiting on Shefin (8 Oct).** Build, lint and `npm test` green; `/batch/001`
-      byte-identical and its two 301s verified against the hosting emulator; A288 to A294
-      logged. Not committed: this is a Shefin-checked task.
+      **Done (0b90b87), 8 Oct.** Build, lint and `npm test` green; `/batch/001`
+      byte-identical and its two 301s verified against the hosting emulator; D77 to D86
+      and A288 to A294 logged. Shefin deployed to staging himself, where the deploy's own
+      guard passed the three `/batch/001` checks, and looked at the page. **Three things
+      he still owes an answer on**, carried here so they are not lost: whether batch 001
+      is 22 jars or 23 (the record card prints 22 from `001.json`, which is what the
+      printed label says); whether a larger original exists for the hero photograph, which
+      is only 448 px wide at source; and whether `₹649` should keep appearing twice on an
+      in-stock card, once in the count reading and once in the footer row (the first comes
+      from `counts.js`, shared with the product pages).
 - [ ] M5.13 [opus] Booking stays open while a batch is cooking, to 90%. **Do not start
       this without Shefin saying so.** It moves money and he has not scheduled it; it is
       filed here rather than in Fast-follow only because it is a launch-scope question.
